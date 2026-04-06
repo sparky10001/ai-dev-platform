@@ -1,0 +1,31 @@
+#!/bin/bash
+###################################################################
+# ai — Stable AI interface
+# The ONLY thing that never changes.
+# Everything else is replaceable.
+###################################################################
+
+set -e
+
+# Load environment
+if [ -f .env ]; then
+    export $(grep -v '^#' .env | xargs) 2>/dev/null || true
+fi
+
+COMMAND=$1
+shift
+
+if [ -z "$COMMAND" ]; then
+    echo "Usage: ai [run|explain|refactor|fix|query] <args>"
+    exit 1
+fi
+
+ADAPTER="./scripts/adapters/${AI_ADAPTER:-goose}.sh"
+
+if [ ! -f "$ADAPTER" ]; then
+    echo "❌ Adapter not found: $ADAPTER"
+    echo "   Run: make openai | make local | make mock"
+    exit 1
+fi
+
+bash "$ADAPTER" "$COMMAND" "$@"
