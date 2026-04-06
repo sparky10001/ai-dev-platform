@@ -7,7 +7,7 @@
   "postCreateCommand": "/bin/bash .devcontainer/post-create.sh",
   "mounts": [
   "source=/home/labadmin/ai-dev-platform,target=/workspace,type=bind,consistency=cached"
-  ]
+  ],
   "customizations": {
     "vscode": {
       "extensions": [

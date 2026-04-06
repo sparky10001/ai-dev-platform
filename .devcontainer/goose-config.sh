@@ -1,5 +1,5 @@
 #!/bin/bash
-###################################################################
+##################################################################
 # goose-config.sh — Configure Goose AI agent
 #
 # Called automatically by:
@@ -7,7 +7,7 @@
 #   - switch-model.sh (on provider switch)
 #
 # Reads from environment variables set in .env
-###################################################################
+##################################################################
 
 echo "🦆 Configuring Goose..."
 
