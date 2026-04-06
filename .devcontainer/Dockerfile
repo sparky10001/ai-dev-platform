@@ -1,14 +1,17 @@
 ###################################################################
 # AI Dev Platform — Dev Container Dockerfile
-#
-# Base: Ubuntu 22.04 (devcontainers)
-# Includes: Python, Node.js, Goose, common dev tools
+# Base: Ubuntu 22.04
 ###################################################################
 
 FROM mcr.microsoft.com/devcontainers/base:ubuntu-22.04
 
+# ---- Create workspace folder ----
+RUN mkdir -p /workspace
+WORKDIR /workspace
+
 # ---- Base tools ----
 RUN apt-get update && apt-get install -y \
+    bash \
     curl \
     git \
     jq \
@@ -22,26 +25,28 @@ RUN apt-get update && apt-get install -y \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# ---- Node.js 20 ----
-RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
-    && apt-get install -y nodejs \
-    && apt-get clean
+# ✅ Ensure /bin/sh points to bash (must be ROOT)
+RUN ln -sf /bin/bash /bin/sh
 
-# ---- Python packages ----
-RUN pip3 install --break-system-packages \
-    requests \
-    python-dotenv \
-    httpx
+# ---- Python virtual environment ----
+RUN python3 -m venv /opt/venv \
+    && /opt/venv/bin/pip install --upgrade pip \
+    && /opt/venv/bin/pip install \
+        requests \
+        python-dotenv \
+        httpx
 
-# ---- Goose ----
-# Official install — https://block.github.io/goose
+# Add venv bin to PATH
+ENV PATH="/opt/venv/bin:${PATH}"
+
+# ---- Goose CLI ----
 RUN curl -fsSL https://github.com/block/goose/releases/latest/download/goose-linux-x86_64 \
     -o /usr/local/bin/goose \
     && chmod +x /usr/local/bin/goose \
     || echo "⚠️ Goose install failed — install manually after container starts"
 
-# ---- Environment ----
-ENV PATH="/usr/local/bin:/home/vscode/.local/bin:${PATH}"
-
-# ---- Non-root user (devcontainers standard) ----
+# ---- Switch to non-root vscode user ----
 USER vscode
+
+# Ensure bash is used for RUN/CMD after this point
+SHELL ["/bin/bash", "-c"]

@@ -4,14 +4,28 @@
     "dockerfile": "Dockerfile"
   },
   "remoteUser": "vscode",
-  "postCreateCommand": "bash .devcontainer/post-create.sh",
+  "postCreateCommand": "/bin/bash .devcontainer/post-create.sh",
+  "mounts": [
+  "source=/home/labadmin/ai-dev-platform,target=/workspace,type=bind,consistency=cached"
+  ]
   "customizations": {
     "vscode": {
       "extensions": [
         "ms-vscode-remote.remote-containers",
         "ms-python.python",
-        "esbenp.prettier-vscode"
-      ]
+        "esbenp.prettier-vscode",
+        "ms-azuretools.vscode-docker"
+      ],
+      "settings": {
+        "python.defaultInterpreterPath": "/opt/venv/bin/python",
+        "python.terminal.activateEnvironment": true,
+        "editor.tabSize": 2,
+        "editor.insertSpaces": true
+      }
     }
+  },
+  "forwardPorts": [3000],
+  "remoteEnv": {
+    "PATH": "/opt/venv/bin:/usr/local/bin:${containerEnv:PATH}"
   }
 }

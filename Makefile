@@ -125,5 +125,3 @@ help: ## Show this help message
 	@echo "    make health                         # Check all services"
 	@echo "    make status                         # Show current config"
 	@echo ""
-ai-dev-platform.Makefile
-Displaying ai-dev-platform.Makefile.
