@@ -1,18 +1,12 @@
 #!/bin/bash
 ###################################################################
-# ai — Stable AI Interface (Runtime v5)
+# ai — Stable AI Interface (Runtime v5.5)
 #
-# Contract-driven runtime for pluggable AI adapters
-# Supports:
-#   - JSON contract adapters
-#   - Legacy adapters (plain text)
-#   - Tool execution loop
-#
-# Production features:
-#   - Safe JSON parsing
-#   - Tool execution sandbox hook
-#   - Loop protection
-#   - Timeout + retries ready
+# Improvements:
+#   - Structured tool result injection (JSON)
+#   - Single-pass JSON parsing (performance)
+#   - Structured trace logging (optional)
+#   - Stronger tool validation
 ###################################################################
 
 set -euo pipefail
@@ -21,6 +15,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ENV_FILE="${SCRIPT_DIR}/../.env"
 ADAPTERS_DIR="${SCRIPT_DIR}/adapters"
 TOOL_EXECUTOR="${SCRIPT_DIR}/../runtime/tool_executor.sh"
+TRACE_LOG="${SCRIPT_DIR}/../.ai_trace.log"
 
 # ---- Load environment safely ----
 if [ -f "$ENV_FILE" ]; then
@@ -85,15 +80,31 @@ if [ ! -f "$ADAPTER" ]; then
     exit 1
 fi
 
-# ---- JSON helpers (robust) ----
-json_get() {
-    local expr="$1"
-    local data="$2"
-    echo "$data" | jq -r "$expr // empty" 2>/dev/null || echo ""
+# ---- JSON helpers (single-pass safe) ----
+parse_json() {
+    echo "$1" | jq -e . 2>/dev/null || return 1
 }
 
-is_json() {
-    echo "$1" | jq -e . >/dev/null 2>&1
+json_get() {
+    local expr="$1"
+    echo "$PARSED_JSON" | jq -r "$expr // empty"
+}
+
+# ---- Trace logging (structured) ----
+log_event() {
+    local event="$1"
+    local data="$2"
+
+    jq -n \
+      --arg step "$step" \
+      --arg event "$event" \
+      --arg data "$data" \
+      '{
+        step: ($step | tonumber),
+        event: $event,
+        data: $data,
+        timestamp: now
+      }' >> "$TRACE_LOG" 2>/dev/null || true
 }
 
 # ---- Runtime execution engine ----
@@ -109,6 +120,7 @@ runtime_execute() {
     local tool_name=""
     local tool_input=""
     local last_tool=""
+    local PARSED_JSON=""
 
     while [ "$step" -le "$MAX_STEPS" ]; do
 
@@ -117,30 +129,28 @@ runtime_execute() {
             break
         fi
 
-        if [ "$TRACE" -eq 1 ]; then
-            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-            echo "🔁 Step $step / $MAX_STEPS"
-            echo "📥 Input: $input"
-        fi
+        [ "$TRACE" -eq 1 ] && echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        [ "$TRACE" -eq 1 ] && echo "🔁 Step $step / $MAX_STEPS"
+        [ "$TRACE" -eq 1 ] && echo "📥 Input: $input"
+
+        log_event "step_start" "$input"
 
         # ---- Execute adapter ----
         if ! raw_output=$(timeout "$AI_TIMEOUT" "$ADAPTER" "$command" "$input"); then
             echo "❌ Adapter failed or timed out (${AI_TIMEOUT}s)"
+            log_event "adapter_error" "timeout_or_failure"
             exit 1
         fi
 
-        if [ -z "$raw_output" ]; then
-            [ "$TRACE" -eq 1 ] && echo "⚠️ Empty adapter output"
-            break
-        fi
+        [ -z "$raw_output" ] && break
 
-        # ---- Parse JSON vs legacy ----
-        if is_json "$raw_output"; then
-            status=$(json_get '.status' "$raw_output")
-            clean_output=$(json_get '.output' "$raw_output")
-            next_input=$(json_get '.next_input' "$raw_output")
-            tool_name=$(json_get '.tool_call.name' "$raw_output")
-            tool_input=$(echo "$raw_output" | jq -c '.tool_call.input // {}' 2>/dev/null || echo "{}")
+        # ---- Parse JSON once ----
+        if PARSED_JSON=$(parse_json "$raw_output"); then
+            status=$(json_get '.status')
+            clean_output=$(json_get '.output')
+            next_input=$(json_get '.next_input')
+            tool_name=$(json_get '.tool_call.name')
+            tool_input=$(echo "$PARSED_JSON" | jq -c '.tool_call.input // {}')
         else
             status="done"
             clean_output="$raw_output"
@@ -148,60 +158,72 @@ runtime_execute() {
             tool_name=""
         fi
 
-        # ---- Trace ----
-        if [ "$TRACE" -eq 1 ]; then
-            echo "📤 Output: $clean_output"
-            echo "📊 Status: ${status:-done}"
-        fi
+        [ "$TRACE" -eq 1 ] && echo "📤 Output: $clean_output"
+        [ "$TRACE" -eq 1 ] && echo "📊 Status: ${status:-done}"
+
+        log_event "adapter_output" "$clean_output"
 
         # ==========================================================
-        # 🔥 TOOL EXECUTION BLOCK (production-ready)
+        # 🔥 TOOL EXECUTION BLOCK (v5.5 upgraded)
         # ==========================================================
         if [ "$status" = "tool_call" ]; then
 
             if [ -z "$tool_name" ] || [ "$tool_name" = "null" ]; then
                 echo "❌ Invalid tool call (missing name)"
+                log_event "tool_error" "missing_name"
                 return 1
             fi
 
             # ---- Loop protection ----
             if [ "$tool_name" = "$last_tool" ]; then
-                echo "⚠️ Repeated tool call detected: $tool_name — stopping"
+                echo "⚠️ Repeated tool call detected: $tool_name"
+                log_event "tool_loop_detected" "$tool_name"
                 return 1
             fi
 
             last_tool="$tool_name"
 
-            if [ "$TRACE" -eq 1 ]; then
-                echo "🛠️ Tool call: $tool_name"
-                echo "📦 Input: $tool_input"
-            fi
+            [ "$TRACE" -eq 1 ] && echo "🛠️ Tool call: $tool_name"
+            [ "$TRACE" -eq 1 ] && echo "📦 Input: $tool_input"
+
+            log_event "tool_call" "$tool_name"
 
             if [ ! -f "$TOOL_EXECUTOR" ]; then
-                echo "❌ Tool executor not found: $TOOL_EXECUTOR"
+                echo "❌ Tool executor not found"
                 return 1
             fi
 
             # ---- Execute tool ----
             if ! TOOL_RESULT=$(bash "$TOOL_EXECUTOR" "$tool_name" "$tool_input"); then
                 echo "❌ Tool execution failed"
+                log_event "tool_error" "execution_failed"
                 return 1
             fi
 
-            if [ "$TRACE" -eq 1 ]; then
-                echo "📤 Tool raw result:"
-                echo "$TOOL_RESULT"
-            fi
+            [ "$TRACE" -eq 1 ] && echo "📤 Tool result:"
+            [ "$TRACE" -eq 1 ] && echo "$TOOL_RESULT"
 
-            # ---- Parse tool result ----
-            if is_json "$TOOL_RESULT"; then
-                tool_output=$(json_get '.output' "$TOOL_RESULT")
+            log_event "tool_result" "$TOOL_RESULT"
+
+            # ---- Normalize tool output ----
+            if parse_json "$TOOL_RESULT" >/dev/null 2>&1; then
+                tool_output=$(echo "$TOOL_RESULT" | jq -r '.output // .')
             else
                 tool_output="$TOOL_RESULT"
             fi
 
-            # Feed result back into loop
-            input="$tool_output"
+            # ---- Structured injection (CRITICAL FIX) ----
+            input=$(jq -n \
+              --arg tool "$tool_name" \
+              --arg result "$tool_output" \
+              --arg command "$command" \
+              '{
+                type: "tool_result",
+                tool: $tool,
+                result: $result,
+                next_task: $command
+              }')
+
             ((step++))
             continue
         fi
@@ -211,7 +233,7 @@ runtime_execute() {
         case "${status:-done}" in
 
             done)
-                echo "$clean_output"
+                [ "$TRACE" -eq 0 ] && echo "$clean_output"
                 return 0
                 ;;
 
