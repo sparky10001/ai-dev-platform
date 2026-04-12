@@ -6,12 +6,13 @@ Adapters are the bridge between the stable `ai` interface and specific AI agents
 
 ## Active Adapter
 
-`ai.sh` is a symlink pointing to the currently active adapter:
+Adapters are selected via AI_ADAPTER in .env.
 
-```bash
-ls -la scripts/adapters/ai.sh
-# ai.sh -> goose.sh   (currently using Goose)
-# ai.sh -> mock.sh    (offline mode)
+Example:
+  AI_ADAPTER=goose
+  AI_ADAPTER=mock
+
+The scripts/ai wrapper dynamically loads the adapter.
 ```
 
 Switch adapters via:
@@ -72,7 +73,6 @@ esac
 Activate it:
 ```bash
 chmod +x scripts/adapters/my-agent.sh
-ln -sf adapters/my-agent.sh scripts/adapters/ai.sh
 ```
 
 **The interface is stable. Everything else is replaceable.**

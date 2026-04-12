@@ -20,7 +20,7 @@ Developer
 ./scripts/ai run "your task"     ← Never changes
     │
     ▼
-scripts/adapters/ai.sh           ← Swappable adapter
+scripts/ai                       ← Stable AI interface (routes via AI_ADAPTER)
     │
     ▼
 Goose │ Mock │ (your agent)      ← Replaceable agent
@@ -167,9 +167,8 @@ ai-dev-platform/
 │   ├── goose-config.sh      — Goose provider configuration
 │   └── post-create.sh       — Automatic setup on container creation
 ├── scripts/
-│   ├── ai                   — ⭐ Stable AI interface (never changes)
+│   ├── ai                   — ⭐ Stable AI interface (loads adapter dynamically)
 │   ├── adapters/
-│   │   ├── ai.sh            — Active adapter symlink
 │   │   ├── goose.sh         — Goose AI agent adapter
 │   │   ├── mock.sh          — Offline/testing adapter
 │   │   └── README.md        — Adapter documentation
@@ -231,8 +230,8 @@ esac
 ```
 
 Then activate it:
-```bash
-ln -sf scripts/adapters/your-agent.sh scripts/adapters/ai.sh
+# Set in .env
+AI_ADAPTER=your-agent
 ```
 
 That's it. Your agent is now the active provider. 😄

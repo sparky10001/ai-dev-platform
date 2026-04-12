@@ -1,37 +1,44 @@
 #!/bin/bash
 ###################################################################
-# switch-model.sh — Switch active AI provider
+# switch-model.sh — Switch active AI provider (production-ready)
 #
 # Usage:
 #   ./scripts/switch-model.sh openai
-#   ./scripts/switch-model.sh colab
+#   ./scripts/switch-model.sh http
 #   ./scripts/switch-model.sh local
+#   ./scripts/switch-model.sh colab
 #   ./scripts/switch-model.sh mock
 #   ./scripts/switch-model.sh mock-local
 #
+# Design:
+#   - No symlinks
+#   - No goose configure
+#   - Adapter selected via .env only
 ###################################################################
 
-set -e
+set -euo pipefail
 
-PROVIDER=$1
+PROVIDER=${1:-}
 ENV_FILE="$(dirname "$0")/../.env"
-ADAPTERS_DIR="$(dirname "$0")/adapters"
 
 # ---- Validate ----
 if [ -z "$PROVIDER" ]; then
-    echo "Usage: switch-model.sh [openai|colab|local|mock|mock-local]"
+    echo "Usage: switch-model.sh [openai|http|colab|local|mock|mock-local]"
     exit 1
 fi
 
-# ---- Load current .env ----
+# ---- Load env safely ----
 if [ -f "$ENV_FILE" ]; then
-    export $(grep -v '^#' "$ENV_FILE" | xargs) 2>/dev/null || true
+    set -a
+    source "$ENV_FILE"
+    set +a
 fi
 
 # ---- Helpers ----
 update_env() {
-    local key=$1
-    local val=$2
+    local key="$1"
+    local val="$2"
+
     if grep -q "^${key}=" "$ENV_FILE" 2>/dev/null; then
         sed -i "s|^${key}=.*|${key}=${val}|" "$ENV_FILE"
     else
@@ -39,27 +46,13 @@ update_env() {
     fi
 }
 
-set_goose_adapter() {
-    update_env "AI_ADAPTER" "goose"
-    ln -sf "${ADAPTERS_DIR}/goose.sh" "${ADAPTERS_DIR}/ai.sh"
-}
-
-set_mock_adapter() {
-    update_env "AI_ADAPTER" "mock"
-    ln -sf "${ADAPTERS_DIR}/mock.sh" "${ADAPTERS_DIR}/ai.sh"
-}
-
-configure_goose_endpoint() {
-    local endpoint=$1
-    goose configure provider openai-compatible 2>/dev/null || true
-    goose configure base_url "$endpoint" 2>/dev/null || true
-}
-
 test_endpoint() {
-    local endpoint=$1
+    local endpoint="$1"
+
     echo ""
     echo "🔍 Testing endpoint..."
-    if curl -s --max-time 3 "${endpoint}/models" > /dev/null; then
+
+    if curl -s --max-time 3 "${endpoint}/models" > /dev/null 2>&1; then
         echo "✅ Endpoint reachable"
     else
         echo "⚠️  Endpoint not reachable — check server"
@@ -71,107 +64,127 @@ echo "🔄 Switching provider to: $PROVIDER"
 
 case "$PROVIDER" in
 
-  openai)
+# ---------------------------------------------------------------
+# 🌐 OpenAI (Goose only)
+# ---------------------------------------------------------------
+openai)
     update_env "MODEL_PROVIDER" "openai"
     update_env "MODEL_ENDPOINT" "https://api.openai.com/v1"
-
-    set_goose_adapter
-    configure_goose_endpoint "https://api.openai.com/v1"
+    update_env "AI_ADAPTER" "goose"
 
     echo "✅ Provider:  OpenAI"
     echo "   Endpoint:  https://api.openai.com/v1"
     echo "   Adapter:   goose"
 
-    if [ -z "$OPENAI_API_KEY" ]; then
-        echo "⚠️  OPENAI_API_KEY is not set — edit .env before running"
+    if [ -z "${OPENAI_API_KEY:-}" ]; then
+        echo ""
+        echo "⚠️  OPENAI_API_KEY is not set"
+        echo "   Edit .env before running"
     fi
-
-    test_endpoint "https://api.openai.com/v1"
     ;;
 
-  colab)
-    if [ -z "$COLAB_URL" ]; then
-        read -rp "📡 Paste your Colab ngrok URL: " COLAB_URL
-        if [ -z "$COLAB_URL" ]; then
-            echo "❌ COLAB_URL is required for Colab provider"
-            exit 1
-        fi
+# ---------------------------------------------------------------
+# 🔗 HTTP (universal, no dependencies)
+# ---------------------------------------------------------------
+http)
+    # If endpoint is empty OR invalid, force default
+    if [ -z "$MODEL_ENDPOINT" ] || [ "$MODEL_ENDPOINT" = "none" ]; then
+        MODEL_ENDPOINT="http://127.0.0.1:8000/v1"
     fi
 
-    update_env "MODEL_PROVIDER" "colab"
-    update_env "COLAB_URL" "$COLAB_URL"
-    update_env "MODEL_ENDPOINT" "${COLAB_URL}/v1"
+    update_env "MODEL_PROVIDER" "http"
+    update_env "MODEL_ENDPOINT" "$MODEL_ENDPOINT"
+    update_env "AI_ADAPTER" "http-agent"
 
-    set_goose_adapter
-    configure_goose_endpoint "${COLAB_URL}/v1"
+    echo "✅ Adapter: http-agent (dependency-free)"
+    echo "   Endpoint: $MODEL_ENDPOINT"
 
-    echo "✅ Provider:  Colab GPU"
-    echo "   Endpoint:  ${COLAB_URL}/v1"
-    echo "   Adapter:   goose"
-
-    test_endpoint "${COLAB_URL}/v1"
+    test_endpoint "$MODEL_ENDPOINT"
     ;;
 
-  local)
-    LOCAL_ENDPOINT=${MODEL_ENDPOINT:-"http://host.docker.internal:11434/v1"}
+# ---------------------------------------------------------------
+# 🖥️ Local (Ollama / private-ai-stack)
+# ---------------------------------------------------------------
+local)
+    LOCAL_ENDPOINT="${MODEL_ENDPOINT:-http://host.docker.internal:11434/v1}"
 
     update_env "MODEL_PROVIDER" "local"
     update_env "MODEL_ENDPOINT" "$LOCAL_ENDPOINT"
+    update_env "AI_ADAPTER" "http-agent"
 
-    set_goose_adapter
-    configure_goose_endpoint "$LOCAL_ENDPOINT"
-
-    echo "✅ Provider:  Local Ollama"
+    echo "✅ Provider:  Local model"
     echo "   Endpoint:  $LOCAL_ENDPOINT"
-    echo "   Adapter:   goose"
+    echo "   Adapter:   http-agent"
 
     echo ""
-    echo "   Tip: Set MODEL_ENDPOINT in .env to override default"
+    echo "   Tip: Override MODEL_ENDPOINT in .env if needed"
 
     test_endpoint "$LOCAL_ENDPOINT"
     ;;
 
-  mock)
-    update_env "MODEL_PROVIDER" "mock"
-    update_env "MODEL_ENDPOINT" "none"
+# ---------------------------------------------------------------
+# ☁️ Colab proxy
+# ---------------------------------------------------------------
+colab)
+    if [ -z "${COLAB_URL:-}" ]; then
+        echo "❌ COLAB_URL not set"
+        echo "   Set it in .env or export before running"
+        exit 1
+    fi
 
-    set_mock_adapter
+    update_env "MODEL_PROVIDER" "colab"
+    update_env "MODEL_ENDPOINT" "${COLAB_URL}/v1"
+    update_env "AI_ADAPTER" "http-agent"
 
-    echo "✅ Provider:  Mock (offline mode)"
-    echo "   Adapter:   mock"
-    echo "   No AI calls will be made"
+    echo "✅ Provider:  Colab GPU"
+    echo "   Endpoint:  ${COLAB_URL}/v1"
+    echo "   Adapter:   http-agent"
+
+    test_endpoint "${COLAB_URL}/v1"
     ;;
 
-  mock-local)
+# ---------------------------------------------------------------
+# 🧪 Mock (offline)
+# ---------------------------------------------------------------
+mock)
+    update_env "MODEL_PROVIDER" "mock"
+    update_env "MODEL_ENDPOINT" "none"
+    update_env "AI_ADAPTER" "mock"
+
+    echo "✅ Provider:  Mock (offline)"
+    echo "   Adapter:   mock"
+    echo "   No network calls"
+    ;;
+
+# ---------------------------------------------------------------
+# 🧪 Mock-local (OpenAI-compatible server)
+# ---------------------------------------------------------------
+mock-local)
     update_env "MODEL_PROVIDER" "mock-local"
     update_env "MODEL_ENDPOINT" "http://127.0.0.1:8000/v1"
+    update_env "AI_ADAPTER" "http-agent"
 
-    set_goose_adapter
-    configure_goose_endpoint "http://127.0.0.1:8000/v1"
-
-    echo "✅ Provider:  Mock OpenAI server (local)"
+    echo "✅ Provider:  Mock OpenAI server"
     echo "   Endpoint:  http://127.0.0.1:8000/v1"
-    echo "   Adapter:   goose"
+    echo "   Adapter:   http-agent"
+
     echo ""
     echo "   ⚠️  Start server first: make mock-server"
 
     test_endpoint "http://127.0.0.1:8000/v1"
     ;;
 
-  *)
+# ---------------------------------------------------------------
+# ❌ Unknown
+# ---------------------------------------------------------------
+*)
     echo "❌ Unknown provider: $PROVIDER"
-    echo "   Options: openai | colab | local | mock | mock-local"
+    echo "   Options: openai | http | colab | local | mock | mock-local"
     exit 1
     ;;
+
 esac
 
-# ---- Optional Goose config script ----
-GOOSE_CONFIG="$(dirname "$0")/../.devcontainer/goose-config.sh"
-if [ -f "$GOOSE_CONFIG" ] && [ "$PROVIDER" != "mock" ]; then
-    source "$ENV_FILE" 2>/dev/null || true
-    bash "$GOOSE_CONFIG"
-fi
-
 echo ""
-echo "   Run 'make status' to confirm active configuration"
+echo "   Run 'make status' to confirm configuration"
 echo ""

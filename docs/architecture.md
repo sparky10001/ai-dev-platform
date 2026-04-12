@@ -25,7 +25,7 @@
                ▼
 ┌─────────────────────────────────────┐
 │      Adapter Layer                  │  ← SWAPPABLE
-│   scripts/adapters/ai.sh (symlink)  │
+│   scripts/adapters/*.sh             │
 │                                     │
 │   goose.sh  │  mock.sh  │  (yours)  │
 └──────────────┬──────────────────────┘
@@ -43,7 +43,6 @@
 │                                     │
 │  OpenAI │ Colab GPU │ Local │ Mock  │
 └─────────────────────────────────────┘
-```
 
 ---
 
@@ -58,7 +57,6 @@
 
 ### Adapter Layer — `scripts/adapters/`
 - Translates interface commands to agent-specific calls
-- `ai.sh` is a symlink — points to the active adapter
 - Adding a new agent = adding a new adapter file
 - All adapters implement the same command set
 
@@ -83,8 +81,8 @@ Developer types:
 scripts/ai:
   1. Loads .env
   2. Validates command ("fix")
-  3. Resolves adapter: scripts/adapters/ai.sh → goose.sh
-  4. Calls: bash goose.sh fix "broken import in agent_runner.py"
+  3. Resolves adapter via AI_ADAPTER (e.g., goose)
+  4. Calls: scripts/adapters/goose.sh fix "broken import..."
 
 goose.sh:
   5. Injects project context if ACTIVE_PROJECT set
@@ -111,9 +109,6 @@ switch-model.sh local
     │     MODEL_PROVIDER=local
     │     MODEL_ENDPOINT=http://host.docker.internal:11434/v1
     │     AI_ADAPTER=goose
-    │
-    ├── Updates symlink:
-    │     scripts/adapters/ai.sh → goose.sh
     │
     └── Calls goose-config.sh:
           goose config set provider openai-compatible
@@ -156,7 +151,7 @@ ai-dev-platform
 
 1. Create `scripts/adapters/your-agent.sh`
 2. Implement: `run`, `explain`, `refactor`, `fix`, `query`
-3. Activate: `ln -sf adapters/your-agent.sh adapters/ai.sh`
+3. Activate via .env:
 4. Add `make your-agent` target to Makefile
 
 **No other files change. The interface is stable.**

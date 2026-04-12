@@ -7,25 +7,37 @@
 
 set -e
 
-# Load environment
-if [ -f .env ]; then
-    export $(grep -v '^#' .env | xargs) 2>/dev/null || true
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ENV_FILE="${SCRIPT_DIR}/../.env"
+ADAPTERS_DIR="${SCRIPT_DIR}/adapters"
+
+# ---- Load environment safely ----
+if [ -f "$ENV_FILE" ]; then
+    set -a
+    source "$ENV_FILE"
+    set +a
 fi
 
 COMMAND=$1
-shift
+shift || true
 
 if [ -z "$COMMAND" ]; then
     echo "Usage: ai [run|explain|refactor|fix|query] <args>"
     exit 1
 fi
 
-ADAPTER="./scripts/adapters/${AI_ADAPTER:-goose}.sh"
+# Default to goose if not set
+ADAPTER_NAME="${AI_ADAPTER:-goose}"
+ADAPTER="${ADAPTERS_DIR}/${ADAPTER_NAME}.sh"
 
+# ---- Validate adapter ----
 if [ ! -f "$ADAPTER" ]; then
-    echo "❌ Adapter not found: $ADAPTER"
+    echo "❌ Adapter not found: $ADAPTER_NAME"
+    echo "   Expected: $ADAPTER"
     echo "   Run: make openai | make local | make mock"
     exit 1
 fi
 
-bash "$ADAPTER" "$COMMAND" "$@"
+# ---- Execute ----
+INPUT="$*"
+exec bash "$ADAPTER" "$COMMAND" "$INPUT"

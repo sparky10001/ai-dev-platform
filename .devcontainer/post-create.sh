@@ -69,18 +69,6 @@ if [ -f "$ROOT_DIR/Makefile" ]; then
     echo "✅ Make setup complete"
 fi
 
-# ---- Adapter symlink ----
-echo ""
-echo "🔧 Configuring adapter: $AI_ADAPTER"
-ADAPTERS_DIR="$ROOT_DIR/scripts/adapters"
-if [ -f "$ADAPTERS_DIR/${AI_ADAPTER}.sh" ]; then
-    ln -sf "$ADAPTERS_DIR/${AI_ADAPTER}.sh" "$ADAPTERS_DIR/ai.sh"
-    echo "✅ Adapter symlink → ${AI_ADAPTER}.sh"
-else
-    echo "⚠️  Adapter not found: ${AI_ADAPTER}.sh — defaulting to mock"
-    ln -sf "$ADAPTERS_DIR/mock.sh" "$ADAPTERS_DIR/ai.sh"
-fi
-
 # ---- Goose CLI configuration ----
 echo ""
 echo "🔧 Configuring AI provider: $MODEL_PROVIDER"

@@ -57,7 +57,8 @@ echo ""
 
 # ---- Adapter symlink ----
 info "Checking adapter..."
-ADAPTER_LINK="$(dirname "$0")/adapters/ai.sh"
+ADAPTER="${AI_ADAPTER:-goose}"
+echo "Adapter: $ADAPTER"
 if [ -L "$ADAPTER_LINK" ]; then
     TARGET=$(readlink "$ADAPTER_LINK")
     pass "Adapter symlink → $TARGET"

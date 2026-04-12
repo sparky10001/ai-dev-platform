@@ -34,7 +34,11 @@ RUN python3 -m venv /opt/venv \
     && /opt/venv/bin/pip install \
         requests \
         python-dotenv \
-        httpx
+        httpx \
+    && /opt/venv/bin/pip install \
+        fastapi \
+        pydantic \
+        uvicorn  # ← Added for mock_openai.py server
 
 # Add venv bin to PATH
 ENV PATH="/opt/venv/bin:${PATH}"
