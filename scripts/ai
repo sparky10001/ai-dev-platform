@@ -1,15 +1,26 @@
 #!/bin/bash
 ###################################################################
-# ai — Stable AI interface
-# The ONLY thing that never changes.
-# Everything else is replaceable.
+# ai — Stable AI Interface (Runtime v5)
+#
+# Contract-driven runtime for pluggable AI adapters
+# Supports:
+#   - JSON contract adapters
+#   - Legacy adapters (plain text)
+#   - Tool execution loop
+#
+# Production features:
+#   - Safe JSON parsing
+#   - Tool execution sandbox hook
+#   - Loop protection
+#   - Timeout + retries ready
 ###################################################################
 
-set -e
+set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ENV_FILE="${SCRIPT_DIR}/../.env"
 ADAPTERS_DIR="${SCRIPT_DIR}/adapters"
+TOOL_EXECUTOR="${SCRIPT_DIR}/../runtime/tool_executor.sh"
 
 # ---- Load environment safely ----
 if [ -f "$ENV_FILE" ]; then
@@ -18,26 +29,218 @@ if [ -f "$ENV_FILE" ]; then
     set +a
 fi
 
-COMMAND=$1
+# ---- Args ----
+COMMAND=${1:-}
 shift || true
 
 if [ -z "$COMMAND" ]; then
     echo "Usage: ai [run|explain|refactor|fix|query] <args>"
+    echo ""
+    echo "Options:"
+    echo "  --trace           Show execution steps"
+    echo "  --max-steps=N     Limit execution loop (default: 1)"
+    echo "  --budget=N        Max iterations allowed"
     exit 1
 fi
 
-# Default to goose if not set
+# ---- Defaults ----
+TRACE=0
+MAX_STEPS=1
+BUDGET=""
+AI_TIMEOUT="${AI_TIMEOUT:-30}"
+
+# ---- Parse flags ----
+ARGS=()
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --trace)
+            TRACE=1
+            shift
+            ;;
+        --max-steps=*)
+            MAX_STEPS="${1#*=}"
+            shift
+            ;;
+        --budget=*)
+            BUDGET="${1#*=}"
+            shift
+            ;;
+        *)
+            ARGS+=("$1")
+            shift
+            ;;
+    esac
+done
+
+INPUT="${ARGS[*]}"
+
+# ---- Adapter selection ----
 ADAPTER_NAME="${AI_ADAPTER:-goose}"
 ADAPTER="${ADAPTERS_DIR}/${ADAPTER_NAME}.sh"
 
-# ---- Validate adapter ----
 if [ ! -f "$ADAPTER" ]; then
     echo "❌ Adapter not found: $ADAPTER_NAME"
-    echo "   Expected: $ADAPTER"
-    echo "   Run: make openai | make local | make mock"
+    echo "Expected: $ADAPTER"
     exit 1
 fi
 
+# ---- JSON helpers (robust) ----
+json_get() {
+    local expr="$1"
+    local data="$2"
+    echo "$data" | jq -r "$expr // empty" 2>/dev/null || echo ""
+}
+
+is_json() {
+    echo "$1" | jq -e . >/dev/null 2>&1
+}
+
+# ---- Runtime execution engine ----
+runtime_execute() {
+    local command="$1"
+    local input="$2"
+
+    local step=1
+    local raw_output=""
+    local status=""
+    local clean_output=""
+    local next_input=""
+    local tool_name=""
+    local tool_input=""
+    local last_tool=""
+
+    while [ "$step" -le "$MAX_STEPS" ]; do
+
+        if [ -n "$BUDGET" ] && [ "$step" -gt "$BUDGET" ]; then
+            [ "$TRACE" -eq 1 ] && echo "⚠️ Budget limit reached"
+            break
+        fi
+
+        if [ "$TRACE" -eq 1 ]; then
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo "🔁 Step $step / $MAX_STEPS"
+            echo "📥 Input: $input"
+        fi
+
+        # ---- Execute adapter ----
+        if ! raw_output=$(timeout "$AI_TIMEOUT" "$ADAPTER" "$command" "$input"); then
+            echo "❌ Adapter failed or timed out (${AI_TIMEOUT}s)"
+            exit 1
+        fi
+
+        if [ -z "$raw_output" ]; then
+            [ "$TRACE" -eq 1 ] && echo "⚠️ Empty adapter output"
+            break
+        fi
+
+        # ---- Parse JSON vs legacy ----
+        if is_json "$raw_output"; then
+            status=$(json_get '.status' "$raw_output")
+            clean_output=$(json_get '.output' "$raw_output")
+            next_input=$(json_get '.next_input' "$raw_output")
+            tool_name=$(json_get '.tool_call.name' "$raw_output")
+            tool_input=$(echo "$raw_output" | jq -c '.tool_call.input // {}' 2>/dev/null || echo "{}")
+        else
+            status="done"
+            clean_output="$raw_output"
+            next_input=""
+            tool_name=""
+        fi
+
+        # ---- Trace ----
+        if [ "$TRACE" -eq 1 ]; then
+            echo "📤 Output: $clean_output"
+            echo "📊 Status: ${status:-done}"
+        fi
+
+        # ==========================================================
+        # 🔥 TOOL EXECUTION BLOCK (production-ready)
+        # ==========================================================
+        if [ "$status" = "tool_call" ]; then
+
+            if [ -z "$tool_name" ] || [ "$tool_name" = "null" ]; then
+                echo "❌ Invalid tool call (missing name)"
+                return 1
+            fi
+
+            # ---- Loop protection ----
+            if [ "$tool_name" = "$last_tool" ]; then
+                echo "⚠️ Repeated tool call detected: $tool_name — stopping"
+                return 1
+            fi
+
+            last_tool="$tool_name"
+
+            if [ "$TRACE" -eq 1 ]; then
+                echo "🛠️ Tool call: $tool_name"
+                echo "📦 Input: $tool_input"
+            fi
+
+            if [ ! -f "$TOOL_EXECUTOR" ]; then
+                echo "❌ Tool executor not found: $TOOL_EXECUTOR"
+                return 1
+            fi
+
+            # ---- Execute tool ----
+            if ! TOOL_RESULT=$(bash "$TOOL_EXECUTOR" "$tool_name" "$tool_input"); then
+                echo "❌ Tool execution failed"
+                return 1
+            fi
+
+            if [ "$TRACE" -eq 1 ]; then
+                echo "📤 Tool raw result:"
+                echo "$TOOL_RESULT"
+            fi
+
+            # ---- Parse tool result ----
+            if is_json "$TOOL_RESULT"; then
+                tool_output=$(json_get '.output' "$TOOL_RESULT")
+            else
+                tool_output="$TOOL_RESULT"
+            fi
+
+            # Feed result back into loop
+            input="$tool_output"
+            ((step++))
+            continue
+        fi
+        # ==========================================================
+
+        # ---- Execution state machine ----
+        case "${status:-done}" in
+
+            done)
+                echo "$clean_output"
+                return 0
+                ;;
+
+            error)
+                echo "❌ Adapter error:"
+                echo "$clean_output"
+                return 1
+                ;;
+
+            continue|running)
+                if [ -n "$next_input" ]; then
+                    input="$next_input"
+                else
+                    input="$clean_output"
+                fi
+                ;;
+
+            *)
+                echo "⚠️ Unknown status: $status"
+                echo "$clean_output"
+                return 1
+                ;;
+        esac
+
+        ((step++))
+    done
+
+    echo "$clean_output"
+}
+
 # ---- Execute ----
-INPUT="$*"
-exec bash "$ADAPTER" "$COMMAND" "$INPUT"
+runtime_execute "$COMMAND" "$INPUT"
