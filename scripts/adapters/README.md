@@ -12,7 +12,7 @@ Example:
   AI_ADAPTER=goose
   AI_ADAPTER=mock
 
-The scripts/ai wrapper dynamically loads the adapter.
+The scripts/runtime.sh wrapper dynamically loads the adapter.
 ```
 
 Switch adapters via:

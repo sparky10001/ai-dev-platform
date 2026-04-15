@@ -1,72 +1,100 @@
 #!/bin/bash
 ###################################################################
-# goose.sh — Contract-based Goose Adapter (production)
+# goose.sh — Contract-based Goose Adapter (v4 unified)
 #
-# Stateless, CI-safe, no interactive config
-# Fully compatible with runtime v3 contract
+# Features:
+# - Uses shared _base.sh contract
+# - Safe retry handling
+# - No non-zero exits
+# - Context-aware prompting
+# - Fully aligned with runtime + other adapters
 ###################################################################
 
 set -euo pipefail
 
-GOOSE_BIN="${GOOSE_BIN:-goose}"
-
-# ---- Validate Goose ----
-if ! command -v "$GOOSE_BIN" >/dev/null 2>&1; then
-    echo '{
-      "status": "error",
-      "output": "Goose not installed",
-      "next_input": null,
-      "tool_call": null,
-      "meta": { "adapter": "goose" }
-    }'
-    exit 0
-fi
-
 COMMAND="${1:-}"
-shift || true
+INPUT="${2:-}"
 
-INPUT="$*"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# ---- Adapter identity ----
+ADAPTER_NAME="goose"
+
+# ---- Load shared base ----
+source "${SCRIPT_DIR}/_base.sh"
+
+# ---- Config ----
+GOOSE_BIN="${GOOSE_BIN:-goose}"
+ENV_FILE="${SCRIPT_DIR}/../../.env"
 
 # ---- Load env ----
-ENV_FILE="$(dirname "$0")/../../.env"
 if [ -f "$ENV_FILE" ]; then
     set -a
     source "$ENV_FILE"
     set +a
 fi
 
-# ---- Validate provider ----
-if [ "${MODEL_PROVIDER:-openai}" != "openai" ]; then
-    echo '{
-      "status": "error",
-      "output": "Goose only supports MODEL_PROVIDER=openai",
-      "next_input": null,
-      "tool_call": null,
-      "meta": { "adapter": "goose" }
-    }'
-    exit 0
-fi
-
 MODEL="${MODEL_NAME:-gpt-4o-mini}"
 RETRIES="${AI_RETRIES:-2}"
 
-# ---- Context ----
-CONTEXT=""
-[ -n "${ACTIVE_PROJECT:-}" ] && CONTEXT="[Project: $ACTIVE_PROJECT] "
+# ================================================================
+# 🧠 VALIDATION
+# ================================================================
 
-# ---- Build prompt ----
-case "$COMMAND" in
-  run)      PROMPT="${CONTEXT}${INPUT}" ;;
-  fix)      PROMPT="${CONTEXT}Fix this issue: ${INPUT}" ;;
-  explain)  PROMPT="${CONTEXT}Explain this: ${INPUT}" ;;
-  refactor) PROMPT="${CONTEXT}Refactor the following: ${INPUT}" ;;
-  query)    PROMPT="${CONTEXT}${INPUT}" ;;
-  *)
-    PROMPT="${CONTEXT}${INPUT}"
-    ;;
-esac
+# Missing command
+if [ -z "$COMMAND" ]; then
+    build_response "error" "Missing command" "invalid_request"
+    adapter_exit
+fi
 
-# ---- Retry loop ----
+# Goose binary check
+if ! command -v "$GOOSE_BIN" >/dev/null 2>&1; then
+    build_response "error" "Goose not installed" "system_failure"
+    adapter_exit
+fi
+
+# Provider check
+if [ "${MODEL_PROVIDER:-openai}" != "openai" ]; then
+    build_response "error" \
+      "Goose requires MODEL_PROVIDER=openai" \
+      "invalid_request"
+    adapter_exit
+fi
+
+# ================================================================
+# 🧠 TOOL RESULT HANDLING (future-proofing)
+# ================================================================
+# Goose doesn't support tools natively (yet),
+# but we gracefully handle injected tool results
+
+if echo "$INPUT" | jq -e '.type == "tool_result"' >/dev/null 2>&1; then
+    TOOL_NAME=$(echo "$INPUT" | jq -r '.tool')
+    TOOL_RESULT=$(echo "$INPUT" | jq -r '.result')
+
+    PROMPT="Tool '$TOOL_NAME' returned:\n$TOOL_RESULT\n\nContinue the task."
+else
+    # ---- Context ----
+    CONTEXT=""
+    [ -n "${ACTIVE_PROJECT:-}" ] && CONTEXT="[Project: $ACTIVE_PROJECT] "
+
+    # ---- Prompt builder ----
+    case "$COMMAND" in
+      run)      PROMPT="${CONTEXT}${INPUT}" ;;
+      fix)      PROMPT="${CONTEXT}Fix this:\n${INPUT}" ;;
+      explain)  PROMPT="${CONTEXT}Explain clearly:\n${INPUT}" ;;
+      refactor) PROMPT="${CONTEXT}Refactor this:\n${INPUT}" ;;
+      query)    PROMPT="${CONTEXT}${INPUT}" ;;
+      *)
+        build_response "error" "Unknown command: $COMMAND" "invalid_request"
+        adapter_exit
+        ;;
+    esac
+fi
+
+# ================================================================
+# 🚀 EXECUTION LOOP
+# ================================================================
+
 ATTEMPT=1
 RESPONSE=""
 
@@ -86,36 +114,24 @@ while [ "$ATTEMPT" -le "$RETRIES" ]; do
     ATTEMPT=$((ATTEMPT + 1))
 done
 
-# ---- Handle failure ----
+# ================================================================
+# ❌ FAILURE
+# ================================================================
+
 if [ -z "$RESPONSE" ]; then
-    jq -n \
-      --arg msg "Goose failed after $RETRIES attempts" \
-      '{
-        status: "error",
-        output: $msg,
-        next_input: null,
-        tool_call: null,
-        meta: {
-          adapter: "goose",
-          retries: '"$RETRIES"'
-        }
-      }'
-    exit 0
+    build_response \
+      "error" \
+      "Goose failed after $RETRIES attempts" \
+      "api_error" \
+      "{\"retries\":$RETRIES}"
+    adapter_exit
 fi
 
-# ---- Emit contract JSON ----
-jq -n \
-  --arg output "$RESPONSE" \
-  --arg model "$MODEL" \
-  '{
-    status: "done",
-    output: $output,
-    next_input: null,
-    tool_call: null,
-    meta: {
-      adapter: "goose",
-      model: $model,
-      mode: "cli",
-      timestamp: (now | todate)
-    }
-  }'
+# ================================================================
+# ✅ SUCCESS
+# ================================================================
+
+build_response "done" "$RESPONSE" "" \
+  "{\"model\":\"$MODEL\",\"mode\":\"cli\"}"
+
+adapter_exit

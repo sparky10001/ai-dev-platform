@@ -1,0 +1,77 @@
+#!/bin/bash
+###################################################################
+# ai — Root CLI (stable interface)
+#
+# Responsibilities:
+#   - Argument parsing (light)
+#   - Environment overrides
+#   - UX / help / version
+#   - Delegation to runtime
+###################################################################
+
+set -euo pipefail
+
+VERSION="1.0.0"
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+RUNTIME="${SCRIPT_DIR}/scripts/runtime.sh"
+
+# ---- Defaults ----
+TRACE=0
+ADAPTER=""
+SHOW_VERSION=0
+
+# ---- Parse global flags (before command) ----
+ARGS=()
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --trace)
+            TRACE=1
+            shift
+            ;;
+        --adapter=*)
+            ADAPTER="${1#*=}"
+            shift
+            ;;
+        --version)
+            SHOW_VERSION=1
+            shift
+            ;;
+        --help|-h)
+            echo "Usage: ai <command> [args]"
+            echo ""
+            echo "Commands:"
+            echo "  run | explain | fix | refactor | query"
+            echo ""
+            echo "Global Options:"
+            echo "  --trace            Enable step tracing"
+            echo "  --adapter=NAME     Override adapter"
+            echo "  --version          Show version"
+            exit 0
+            ;;
+        *)
+            ARGS+=("$1")
+            shift
+            ;;
+    esac
+done
+
+# ---- Version ----
+if [ "$SHOW_VERSION" -eq 1 ]; then
+    echo "ai version $VERSION"
+    exit 0
+fi
+
+# ---- Validate command ----
+if [ ${#ARGS[@]} -eq 0 ]; then
+    echo "Usage: ai <command> [args]"
+    exit 1
+fi
+
+# ---- Inject env overrides ----
+[ "$TRACE" -eq 1 ] && export AI_TRACE=1
+[ -n "$ADAPTER" ] && export AI_ADAPTER="$ADAPTER"
+
+# ---- Execute runtime ----
+exec bash "$RUNTIME" "${ARGS[@]}"

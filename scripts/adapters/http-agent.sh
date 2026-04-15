@@ -1,21 +1,26 @@
 #!/bin/bash
 ###################################################################
-# http-agent.sh — Contract-based HTTP AI adapter
+# http-agent.sh — Contract-based HTTP adapter (v4 production)
 #
-# Dependency-light (curl + jq)
-# OpenAI-compatible API
-# Fully aligned with runtime contract
+# Fully aligned with _base.sh + runtime contract
 ###################################################################
 
 set -euo pipefail
 
-COMMAND="${1:-}"
-INPUT="${2:-}"
+# ---- Adapter identity ----
+ADAPTER_NAME="http-agent"
 
-# ---- Load env safely ----
+# ---- Paths ----
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ENV_FILE="${SCRIPT_DIR}/../../.env"
 
+# ---- Load base ----
+source "${SCRIPT_DIR}/_base.sh"
+
+COMMAND="${1:-}"
+INPUT="${2:-}"
+
+# ---- Load env ----
 if [ -f "$ENV_FILE" ]; then
     set -a
     source "$ENV_FILE"
@@ -30,111 +35,112 @@ TIMEOUT="${AI_TIMEOUT:-30}"
 TEMPERATURE="${MODEL_TEMPERATURE:-0.7}"
 JSON_MODE="${AI_JSON_MODE:-false}"
 
+# ---- Validate ----
+if [ -z "$COMMAND" ]; then
+    build_response "error" "Missing command" "invalid_request"
+    adapter_exit
+fi
+
+# ---- Context ----
 CONTEXT=""
 [ -n "${ACTIVE_PROJECT:-}" ] && CONTEXT="[Project: $ACTIVE_PROJECT] "
 
-# ---- Validate ----
-if [ -z "$COMMAND" ]; then
-    jq -n '{
-      status: "error",
-      output: "Missing command",
-      next_input: null,
-      tool_call: null,
-      meta: { adapter: "http-agent" }
-    }'
-    exit 1
-fi
-
-# ---- Prompt builder ----
+# ---- Prompt ----
 case "$COMMAND" in
   run)      PROMPT="${CONTEXT}${INPUT}" ;;
-  fix)      PROMPT="${CONTEXT}Fix this issue: ${INPUT}" ;;
-  explain)  PROMPT="${CONTEXT}Explain this: ${INPUT}" ;;
-  refactor) PROMPT="${CONTEXT}Refactor: ${INPUT}" ;;
+  fix)      PROMPT="${CONTEXT}Fix this:\n${INPUT}" ;;
+  explain)  PROMPT="${CONTEXT}Explain clearly:\n${INPUT}" ;;
+  refactor) PROMPT="${CONTEXT}Refactor this:\n${INPUT}" ;;
   query)    PROMPT="${CONTEXT}${INPUT}" ;;
   *)
-    jq -n --arg cmd "$COMMAND" '{
-      status: "error",
-      output: ("Unknown command: " + $cmd),
-      next_input: null,
-      tool_call: null,
-      meta: { adapter: "http-agent" }
-    }'
-    exit 1
+    build_response "error" "Unknown command: $COMMAND" "invalid_request"
+    adapter_exit
     ;;
 esac
 
-# ---- Build request body safely ----
-BODY=$(jq -n \
-  --arg model "$MODEL" \
-  --arg content "$PROMPT" \
-  --argjson temp "$TEMPERATURE" \
-  '{
-    model: $model,
-    messages: [
-      { role: "user", content: $content }
-    ],
-    temperature: $temp
-  }')
+# ---- Build request (safe jq) ----
+build_payload() {
+  if [ "$JSON_MODE" = "true" ]; then
+    jq -n \
+      --arg model "$MODEL" \
+      --arg prompt "$PROMPT" \
+      --argjson temp "$TEMPERATURE" \
+      '{
+        model: $model,
+        messages: [
+          { role: "user", content: $prompt }
+        ],
+        temperature: $temp,
+        response_format: { type: "json_object" }
+      }'
+  else
+    jq -n \
+      --arg model "$MODEL" \
+      --arg prompt "$PROMPT" \
+      --argjson temp "$TEMPERATURE" \
+      '{
+        model: $model,
+        messages: [
+          { role: "user", content: $prompt }
+        ],
+        temperature: $temp
+      }'
+  fi
+}
 
-# Optional JSON mode
-if [ "$JSON_MODE" = "true" ]; then
-  BODY=$(echo "$BODY" | jq '. + {response_format: {type: "json_object"}}')
-fi
-
-# ---- Request loop ----
-COUNT=0
-RESPONSE=""
-
-while [ "$COUNT" -lt "$RETRIES" ]; do
-
-  RESPONSE=$(curl -s \
+# ---- Single request ----
+request_once() {
+  curl -sS \
     --max-time "$TIMEOUT" \
     -X POST "$ENDPOINT/chat/completions" \
     -H "Content-Type: application/json" \
     -H "Authorization: Bearer ${OPENAI_API_KEY:-}" \
-    -d "$BODY" || true)
+    -d "$(build_payload)" || true
+}
 
-  if echo "$RESPONSE" | jq -e '.choices' >/dev/null 2>&1; then
-      break
+# ---- Retry loop ----
+attempt=1
+while [ "$attempt" -le "$RETRIES" ]; do
+
+  RESPONSE="$(request_once)"
+
+  # ---- Validate JSON ----
+  if ! json_valid "$RESPONSE"; then
+    sleep $((attempt * 2))
+    attempt=$((attempt + 1))
+    continue
   fi
 
-  COUNT=$((COUNT + 1))
-  sleep 1
+  # ---- SUCCESS ----
+  if echo "$RESPONSE" | jq -e '.choices[0].message.content' >/dev/null 2>&1; then
+    OUTPUT=$(echo "$RESPONSE" | jq -r '.choices[0].message.content // ""')
+
+    build_response "done" "$OUTPUT" "" \
+      "$(jq -n --arg endpoint "$ENDPOINT" '{endpoint: $endpoint}')"
+
+    adapter_exit
+  fi
+
+  # ---- ERROR ----
+  if echo "$RESPONSE" | jq -e '.error' >/dev/null 2>&1; then
+    ERR_MSG=$(echo "$RESPONSE" | jq -r '.error.message // "Unknown error"')
+    ERR_TYPE_RAW=$(echo "$RESPONSE" | jq -r '.error.type // "api_error"')
+    ERR_TYPE=$(classify_error "$ERR_TYPE_RAW" "$ERR_MSG")
+
+    case "$ERR_TYPE" in
+      invalid_api_key|insufficient_quota|invalid_request)
+        build_response "error" "$ERR_MSG" "$ERR_TYPE"
+        adapter_exit
+        ;;
+    esac
+  fi
+
+  sleep $((attempt * 2))
+  attempt=$((attempt + 1))
 done
 
-# ---- Failure ----
-if ! echo "$RESPONSE" | jq -e '.choices' >/dev/null 2>&1; then
-  jq -n \
-    --arg err "API request failed after ${RETRIES} attempts" \
-    --arg resp "$RESPONSE" \
-    '{
-      status: "error",
-      output: ($err + "\n" + $resp),
-      next_input: null,
-      tool_call: null,
-      meta: {
-        adapter: "http-agent",
-        endpoint: "failed"
-      }
-    }'
-  exit 1
-fi
+# ---- Final failure ----
+build_response "error" "HTTP request failed after $RETRIES attempts" "api_error" \
+  "$(jq -n --arg endpoint "$ENDPOINT" '{endpoint: $endpoint}')"
 
-# ---- Extract content safely ----
-CONTENT=$(echo "$RESPONSE" | jq -r '.choices[0].message.content // ""')
-
-# ---- Emit contract ----
-jq -n \
-  --arg output "$CONTENT" \
-  '{
-    status: "done",
-    output: $output,
-    next_input: null,
-    tool_call: null,
-    meta: {
-      adapter: "http-agent",
-      mode: "http",
-      timestamp: (now | todate)
-    }
-  }'
+adapter_exit

@@ -19,7 +19,7 @@
 setup: ## Initialize environment from template
 	@echo "🔧 Setting up AI Dev Platform..."
 	@cp -n .env.example .env 2>/dev/null || true
-	@chmod +x scripts/ai
+	@chmod +x tools/*.sh
 	@chmod +x scripts/*.sh
 	@chmod +x scripts/adapters/*.sh
 	@echo "✅ Setup complete — edit .env to configure your provider"
@@ -203,21 +203,21 @@ validate:
 
 	@echo "Step 1️⃣  — Mock adapter (no network)"
 	@make mock --no-print-directory
-	@./scripts/ai run "validation test step 1"
+	@./scripts/runtime.sh run "validation test step 1"
 
 	@echo ""
 	@echo "Step 2️⃣  — HTTP adapter (no Goose)"
 	@make mock-server-bg --no-print-directory
 	@sleep 2
 	@make http --no-print-directory
-	@./scripts/ai run "validation test step 2"
+	@./scripts/runtime.sh run "validation test step 2"
 
 	@echo ""
 	@echo "Step 3️⃣  — Mock server (local API)"
 	@make mock-server-bg --no-print-directory
 	@sleep 2
 	@make mock-local --no-print-directory
-	@./scripts/ai run "validation test step 3"
+	@./scripts/runtime.sh run "validation test step 3"
 	@make mock-server-stop --no-print-directory
 
 	@echo ""
@@ -228,19 +228,19 @@ validate:
 ###################################################################
 
 ai-run: ## Run AI agent with command  (CMD="your task here")
-	@./scripts/ai run "$(CMD)"
+	@./scripts/runtime.sh run "$(CMD)"
 
 ai-fix: ## Ask AI to fix an issue    (ISSUE="describe the problem")
-	@./scripts/ai fix "$(ISSUE)"
+	@./scripts/runtime.sh fix "$(ISSUE)"
 
 ai-explain: ## Ask AI to explain      (TOPIC="what to explain")
-	@./scripts/ai explain "$(TOPIC)"
+	@./scripts/runtime.sh explain "$(TOPIC)"
 
 ai-refactor: ## Ask AI to refactor    (TARGET="what to refactor")
-	@./scripts/ai refactor "$(TARGET)"
+	@./scripts/runtime.sh refactor "$(TARGET)"
 
 ai-query: ## Ask AI a question        (Q="your question")
-	@./scripts/ai query "$(Q)"
+	@./scripts/runtime.sh query "$(Q)"
 
 ###################################################################
 # Project Context
