@@ -1,13 +1,13 @@
 #!/bin/bash
 ###################################################################
-# openai.sh — Contract-Based OpenAI Adapter (Production v5)
+# openai.sh — Contract-Based OpenAI Adapter (v6 production)
 #
-# Features:
-# - Full _base.sh integration
-# - Tool-aware prompting
-# - Tool result handling (CRITICAL)
+# FULLY ALIGNED with http-agent v5:
+# - Tool-aware prompting (clean + structured)
+# - Tool result handling (first-class)
+# - Tool call extraction (CRITICAL)
 # - Safe retry + JSON validation
-# - Pattern-aligned with http-agent.sh v4.1
+# - Contract-safe outputs
 ###################################################################
 
 set -euo pipefail
@@ -18,6 +18,7 @@ ADAPTER_NAME="openai"
 # ---- Paths ----
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ENV_FILE="${SCRIPT_DIR}/../../.env"
+TOOL_EXECUTOR="${SCRIPT_DIR}/../tool_executor.py"
 
 # ---- Load base ----
 source "${SCRIPT_DIR}/_base.sh"
@@ -40,16 +41,25 @@ TEMPERATURE="${MODEL_TEMPERATURE:-0.7}"
 MAX_TOKENS="${MODEL_MAX_TOKENS:-512}"
 JSON_MODE="${AI_JSON_MODE:-false}"
 RETRIES="${AI_RETRIES:-3}"
+TIMEOUT="${AI_TIMEOUT:-30}"
 
 # ================================================================
 # 🧠 TOOL RESULT HANDLING (CRITICAL)
 # ================================================================
 if echo "$INPUT" | jq -e '.type == "tool_result"' >/dev/null 2>&1; then
 
-  TOOL_NAME=$(echo "$INPUT" | jq -r '.tool')
-  TOOL_RESULT=$(echo "$INPUT" | jq -r '.result')
+  TOOL_NAME=$(echo "$INPUT" | jq -r '.tool // "unknown"')
+  TOOL_RESULT=$(echo "$INPUT" | jq -r '.result // ""')
 
-  PROMPT="Tool '${TOOL_NAME}' returned:\n${TOOL_RESULT}\n\nContinue the task."
+  PROMPT="A tool was used.
+
+Tool: ${TOOL_NAME}
+Result:
+${TOOL_RESULT}
+
+Decide the next step:
+- If the task is complete, provide the final answer.
+- If more data is needed, call another tool."
 
 else
 
@@ -69,32 +79,75 @@ else
   [ -n "${ACTIVE_PROJECT:-}" ] && CONTEXT="[Project: $ACTIVE_PROJECT] "
 
   # ================================================================
-  # 🔌 TOOL-AWARE PROMPTING (STANDARDIZED)
+  # 🔌 TOOL DISCOVERY (CLEAN + SAFE)
   # ================================================================
-  TOOL_CONTEXT=""
+  TOOL_BLOCK=""
 
-  if command -v python3 >/dev/null 2>&1 && [ -f "${SCRIPT_DIR}/../tool_executor.py" ]; then
-      TOOL_METADATA=$(python3 "${SCRIPT_DIR}/../tool_executor.py" "__list_tools__" 2>/dev/null || echo "[]")
+  if command -v python3 >/dev/null 2>&1 && [ -f "$TOOL_EXECUTOR" ]; then
 
-      TOOL_CONTEXT="\n\nAvailable tools:\n${TOOL_METADATA}\n\nUse tools when appropriate."
+      RAW_TOOLS=$(python3 "$TOOL_EXECUTOR" --list-tools 2>/dev/null || echo '{"tools":{}}')
+
+      if echo "$RAW_TOOLS" | jq -e '.tools' >/dev/null 2>&1; then
+          TOOL_BLOCK=$(echo "$RAW_TOOLS" | jq -r '
+            if (.tools | length) == 0 then
+              ""
+            else
+              "Available tools:\n" +
+              (
+                .tools
+                | to_entries
+                | map("- " + .value.name + ": " + (.value.description // ""))
+                | join("\n")
+              )
+            end
+          ')
+      fi
   fi
 
-  # ---- Prompt builder ----
+  # ================================================================
+  # 🧠 TOOL USAGE INSTRUCTIONS (CRITICAL)
+  # ================================================================
+  SYSTEM_INSTRUCTIONS="You are an AI assistant with access to tools.
+
+When you need external data, you MUST call a tool.
+
+To call a tool, respond ONLY with valid JSON:
+{
+  \"status\": \"tool_call\",
+  \"tool_call\": {
+    \"name\": \"tool_name\",
+    \"input\": { ... }
+  }
+}
+
+Rules:
+- Do NOT include explanations when calling tools
+- ONLY output JSON for tool calls
+- If no tool is needed, respond normally"
+
+  # ---- Prompt ----
   case "$COMMAND" in
-    run)      PROMPT="${CONTEXT}${INPUT}${TOOL_CONTEXT}" ;;
-    fix)      PROMPT="${CONTEXT}Fix this:\n${INPUT}${TOOL_CONTEXT}" ;;
-    explain)  PROMPT="${CONTEXT}Explain clearly:\n${INPUT}${TOOL_CONTEXT}" ;;
-    refactor) PROMPT="${CONTEXT}Refactor this:\n${INPUT}${TOOL_CONTEXT}" ;;
-    query)    PROMPT="${CONTEXT}${INPUT}${TOOL_CONTEXT}" ;;
+    run)      USER_PROMPT="${INPUT}" ;;
+    fix)      USER_PROMPT="Fix this:\n${INPUT}" ;;
+    explain)  USER_PROMPT="Explain clearly:\n${INPUT}" ;;
+    refactor) USER_PROMPT="Refactor this:\n${INPUT}" ;;
+    query)    USER_PROMPT="${INPUT}" ;;
     *)
       build_response "error" "Unknown command: $COMMAND" "invalid_request"
       adapter_exit
       ;;
   esac
+
+  PROMPT="${SYSTEM_INSTRUCTIONS}
+
+${CONTEXT}${TOOL_BLOCK}
+
+User request:
+${USER_PROMPT}"
 fi
 
 # ================================================================
-# 📦 BUILD REQUEST (MATCHES HTTP AGENT)
+# 📦 BUILD REQUEST
 # ================================================================
 build_payload() {
   if [ "$JSON_MODE" = "true" ]; then
@@ -134,7 +187,7 @@ build_payload() {
 # ---- Single request ----
 request_once() {
   curl -sS \
-    --max-time 30 \
+    --max-time "$TIMEOUT" \
     -X POST "$ENDPOINT/chat/completions" \
     -H "Authorization: Bearer $API_KEY" \
     -H "Content-Type: application/json" \
@@ -142,21 +195,19 @@ request_once() {
 }
 
 # ================================================================
-# 🔁 RETRY LOOP (IDENTICAL PATTERN)
+# 🔁 RETRY LOOP
 # ================================================================
 attempt=1
 while [ "$attempt" -le "$RETRIES" ]; do
 
   RESPONSE="$(request_once)"
 
-  # ---- Empty response guard ----
   if [ -z "$RESPONSE" ]; then
     sleep $((attempt * 2))
     attempt=$((attempt + 1))
     continue
   fi
 
-  # ---- Validate JSON ----
   if ! json_valid "$RESPONSE"; then
     sleep $((attempt * 2))
     attempt=$((attempt + 1))
@@ -166,6 +217,24 @@ while [ "$attempt" -le "$RETRIES" ]; do
   # ---- SUCCESS ----
   if echo "$RESPONSE" | jq -e '.choices[0].message.content' >/dev/null 2>&1; then
     OUTPUT=$(echo "$RESPONSE" | jq -r '.choices[0].message.content // ""')
+
+    # Empty guard
+    if [ -z "$OUTPUT" ]; then
+      sleep $((attempt * 2))
+      attempt=$((attempt + 1))
+      continue
+    fi
+
+    # 🔥 Tool call detection (CRITICAL)
+    TOOL_CALL_JSON=$(extract_tool_call "$OUTPUT" || true)
+
+    if [ -n "$TOOL_CALL_JSON" ]; then
+      TOOL_NAME=$(echo "$TOOL_CALL_JSON" | jq -r '.name')
+      TOOL_INPUT=$(echo "$TOOL_CALL_JSON" | jq -c '.input // {}')
+
+      build_tool_call "$TOOL_NAME" "$TOOL_INPUT" "Model requested tool"
+      adapter_exit
+    fi
 
     build_response "done" "$OUTPUT" "" \
       "$(jq -n --arg model "$MODEL" --arg endpoint "$ENDPOINT" '{model: $model, endpoint: $endpoint, mode: "openai"}')"

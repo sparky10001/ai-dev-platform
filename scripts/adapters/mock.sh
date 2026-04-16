@@ -1,8 +1,12 @@
 #!/bin/bash
 ###################################################################
-# mock.sh — Contract-based Mock AI Adapter (v5.1 production)
+# mock.sh — Contract-based Mock AI Adapter (v6 production)
 #
-# Fully aligned with openai/http-agent pattern
+# Fully aligned with http-agent/openai adapters
+# - Tool-aware prompting (human-readable)
+# - Tool result handling (first-class)
+# - Deterministic behavior
+# - Contract-safe outputs
 ###################################################################
 
 set -euo pipefail
@@ -30,38 +34,100 @@ if echo "$INPUT" | jq -e '.type == "tool_result"' >/dev/null 2>&1; then
   TOOL_NAME=$(echo "$INPUT" | jq -r '.tool // "unknown"')
   TOOL_RESULT=$(echo "$INPUT" | jq -r '.result // ""')
 
-  build_response "done" "[MOCK] Tool '$TOOL_NAME' completed:\n$TOOL_RESULT" "" \
-    '{"mode":"tool_complete"}'
+  PROMPT="A tool was used.
 
-  adapter_exit
-fi
+Tool: ${TOOL_NAME}
+Result:
+${TOOL_RESULT}
 
-# ---- Validate ----
-if [ -z "$COMMAND" ]; then
-  build_response "error" "Missing command" "invalid_request"
-  adapter_exit
+Decide the next step."
+
+else
+
+  # ---- Validate ----
+  if [ -z "$COMMAND" ]; then
+    build_response "error" "Missing command" "invalid_request"
+    adapter_exit
+  fi
+
+  # ---- Context ----
+  CONTEXT=""
+  [ -n "${ACTIVE_PROJECT:-}" ] && CONTEXT="[Project: $ACTIVE_PROJECT] "
+
+  # ================================================================
+  # 🔌 TOOL DISCOVERY (PARITY WITH REAL ADAPTERS)
+  # ================================================================
+  TOOL_BLOCK=""
+
+  if command -v python3 >/dev/null 2>&1 && [ -f "${SCRIPT_DIR}/../tool_executor.py" ]; then
+
+      RAW_TOOLS=$(python3 "${SCRIPT_DIR}/../tool_executor.py" --list-tools 2>/dev/null || echo '{"tools":{}}')
+
+      if echo "$RAW_TOOLS" | jq -e '.tools' >/dev/null 2>&1; then
+          TOOL_BLOCK=$(echo "$RAW_TOOLS" | jq -r '
+            if (.tools | length) == 0 then
+              ""
+            else
+              "Available tools:\n" +
+              (
+                .tools
+                | to_entries
+                | map("- " + .value.name + ": " + (.value.description // ""))
+                | join("\n")
+              )
+            end
+          ')
+      fi
+  fi
+
+  # ================================================================
+  # 🧠 TOOL USAGE INSTRUCTIONS (PARITY)
+  # ================================================================
+  SYSTEM_INSTRUCTIONS="You are an AI assistant with access to tools.
+
+When you need external data, you MUST call a tool.
+
+To call a tool, respond ONLY with valid JSON:
+{
+  \"status\": \"tool_call\",
+  \"tool_call\": {
+    \"name\": \"tool_name\",
+    \"input\": { ... }
+  }
+}
+
+Rules:
+- Do NOT include explanations when calling tools
+- ONLY output JSON for tool calls
+- If no tool is needed, respond normally"
+
+  # ---- Prompt ----
+  case "$COMMAND" in
+    run)      USER_PROMPT="${INPUT}" ;;
+    fix)      USER_PROMPT="Fix this:\n${INPUT}" ;;
+    explain)  USER_PROMPT="Explain clearly:\n${INPUT}" ;;
+    refactor) USER_PROMPT="Refactor this:\n${INPUT}" ;;
+    query)    USER_PROMPT="${INPUT}" ;;
+    *)
+      build_response "error" "Unknown command: $COMMAND" "invalid_request"
+      adapter_exit
+      ;;
+  esac
+
+  PROMPT="${SYSTEM_INSTRUCTIONS}
+
+${CONTEXT}${TOOL_BLOCK}
+
+User request:
+${USER_PROMPT}"
 fi
 
 # ================================================================
-# 🔌 TOOL-AWARE PROMPT SIMULATION (PARITY FEATURE)
-# ================================================================
-TOOL_CONTEXT=""
-
-if command -v python3 >/dev/null 2>&1 && [ -f "${SCRIPT_DIR}/../tool_executor.py" ]; then
-    TOOL_METADATA=$(python3 "${SCRIPT_DIR}/../tool_executor.py" --list-tools 2>/dev/null || echo "[]")
-
-    TOOL_CONTEXT="\n\nAvailable tools:\n${TOOL_METADATA}\n\nUse tools when appropriate."
-fi
-
-# ================================================================
-# 🧠 BEHAVIOR SIMULATION ENGINE
+# 🧠 MOCK EXECUTION ENGINE
 # ================================================================
 
 case "$COMMAND" in
 
-# ---------------------------------------------------------------
-# 🏃 RUN
-# ---------------------------------------------------------------
 run)
 
   # 🔁 Loop simulation
@@ -70,13 +136,12 @@ run)
     adapter_exit
   fi
 
-  # 🛠️ Tool call simulation (keyword trigger)
+  # 🛠️ Tool triggers
   if [[ "$LOWER_INPUT" == *"tool"* ]]; then
     build_tool_call "read_file" '{"path":"README.md"}' "Calling mock tool"
     adapter_exit
   fi
 
-  # 📂 File intent simulation
   if [[ "$LOWER_INPUT" == *"read"* && "$LOWER_INPUT" == *"readme"* ]]; then
     build_tool_call "read_file" '{"path":"README.md"}' "Reading README"
     adapter_exit
@@ -87,52 +152,36 @@ run)
     adapter_exit
   fi
 
-  # ✍️ Write simulation
   if [[ "$LOWER_INPUT" == *"write"* ]]; then
     build_tool_call "write_file" '{"path":"tmp/mock.txt","content":"mock data"}' "Writing file"
     adapter_exit
   fi
 
-  # ✅ Default behavior (include tool context for parity)
-  build_response "done" "[MOCK RUN] Executing: $INPUT${TOOL_CONTEXT}"
+  # ✅ Default
+  build_response "done" "[MOCK RUN] ${PROMPT}"
   adapter_exit
   ;;
 
-# ---------------------------------------------------------------
-# 📘 EXPLAIN
-# ---------------------------------------------------------------
 explain)
-  build_response "done" "[MOCK EXPLAIN] $INPUT${TOOL_CONTEXT}"
+  build_response "done" "[MOCK EXPLAIN] ${PROMPT}"
   adapter_exit
   ;;
 
-# ---------------------------------------------------------------
-# 🛠️ FIX
-# ---------------------------------------------------------------
 fix)
-  build_response "done" "[MOCK FIX] $INPUT${TOOL_CONTEXT}"
+  build_response "done" "[MOCK FIX] ${PROMPT}"
   adapter_exit
   ;;
 
-# ---------------------------------------------------------------
-# ♻️ REFACTOR
-# ---------------------------------------------------------------
 refactor)
-  build_response "done" "[MOCK REFACTOR] $INPUT${TOOL_CONTEXT}"
+  build_response "done" "[MOCK REFACTOR] ${PROMPT}"
   adapter_exit
   ;;
 
-# ---------------------------------------------------------------
-# 🔎 QUERY
-# ---------------------------------------------------------------
 query)
-  build_response "done" "[MOCK QUERY] $INPUT${TOOL_CONTEXT}"
+  build_response "done" "[MOCK QUERY] ${PROMPT}"
   adapter_exit
   ;;
 
-# ---------------------------------------------------------------
-# ❌ UNKNOWN
-# ---------------------------------------------------------------
 *)
   build_response "error" "[MOCK ERROR] Unknown command: $COMMAND" "invalid_request"
   adapter_exit

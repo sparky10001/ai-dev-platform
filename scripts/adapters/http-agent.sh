@@ -1,27 +1,22 @@
 #!/bin/bash
 ###################################################################
-# http-agent.sh — Contract-based HTTP adapter (v5 production)
+# http-agent.sh — Contract-based HTTP adapter (v5.1 production)
 #
-# Features:
-# - Full _base.sh integration
-# - Clean tool-aware prompting (human-readable)
-# - Correct tool discovery (--list-tools)
-# - Strong tool-call instruction system
-# - Robust tool result continuation
-# - Safe retry + JSON validation
+# Fully hardened:
+# - Tool-aware prompting
+# - Safe tool execution lifecycle
+# - Robust retry + parsing
+# - Contract-safe outputs
 ###################################################################
 
 set -euo pipefail
 
-# ---- Adapter identity ----
 ADAPTER_NAME="http-agent"
 
-# ---- Paths ----
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ENV_FILE="${SCRIPT_DIR}/../../.env"
 TOOL_EXECUTOR="${SCRIPT_DIR}/../tool_executor.py"
 
-# ---- Load base ----
 source "${SCRIPT_DIR}/_base.sh"
 
 COMMAND="${1:-}"
@@ -29,9 +24,9 @@ INPUT="${2:-}"
 
 # ---- Load env ----
 if [ -f "$ENV_FILE" ]; then
-    set -a
-    source "$ENV_FILE"
-    set +a
+  set -a
+  source "$ENV_FILE"
+  set +a
 fi
 
 # ---- Config ----
@@ -43,12 +38,12 @@ TEMPERATURE="${MODEL_TEMPERATURE:-0.7}"
 JSON_MODE="${AI_JSON_MODE:-false}"
 
 # ================================================================
-# 🧠 TOOL RESULT HANDLING (CRITICAL)
+# 🧠 TOOL RESULT HANDLING
 # ================================================================
 if echo "$INPUT" | jq -e '.type == "tool_result"' >/dev/null 2>&1; then
 
-  TOOL_NAME=$(echo "$INPUT" | jq -r '.tool')
-  TOOL_RESULT=$(echo "$INPUT" | jq -r '.result')
+  TOOL_NAME=$(echo "$INPUT" | jq -r '.tool // "unknown"')
+  TOOL_RESULT=$(echo "$INPUT" | jq -r '.result // ""')
 
   PROMPT="A tool was used.
 
@@ -57,53 +52,51 @@ Result:
 ${TOOL_RESULT}
 
 Decide the next step:
-- If the task is complete, provide the final answer.
-- If more data is needed, call another tool."
+- If the task is complete, provide the final answer
+- If more data is needed, call another tool"
 
 else
 
-  # ---- Validate ----
   if [ -z "$COMMAND" ]; then
-      build_response "error" "Missing command" "invalid_request"
-      adapter_exit
+    build_response "error" "Missing command" "invalid_request"
+    adapter_exit
   fi
 
-  # ---- Context ----
   CONTEXT=""
-  [ -n "${ACTIVE_PROJECT:-}" ] && CONTEXT="[Project: $ACTIVE_PROJECT] "
+  [ -n "${ACTIVE_PROJECT:-}" ] && CONTEXT="[Project: $ACTIVE_PROJECT]"
 
   # ================================================================
-  # 🔌 TOOL DISCOVERY (CLEAN + SAFE)
+  # 🔌 TOOL DISCOVERY
   # ================================================================
   TOOL_BLOCK=""
 
   if command -v python3 >/dev/null 2>&1 && [ -f "$TOOL_EXECUTOR" ]; then
+    RAW_TOOLS=$(python3 "$TOOL_EXECUTOR" --list-tools 2>/dev/null || echo '{"tools":{}}')
 
-      RAW_TOOLS=$(python3 "$TOOL_EXECUTOR" --list-tools 2>/dev/null || echo '{}')
-
-      if echo "$RAW_TOOLS" | jq -e '.tools' >/dev/null 2>&1; then
-          TOOL_BLOCK=$(echo "$RAW_TOOLS" | jq -r '
-            if (.tools | length) == 0 then
-              ""
-            else
-              "Available tools:\n" +
-              (
-                .tools
-                | to_entries
-                | map("- " + .value.name + ": " + (.value.description // ""))
-                | join("\n")
-              )
-            end
-          ')
-      fi
+    if echo "$RAW_TOOLS" | jq -e '.tools' >/dev/null 2>&1; then
+      TOOL_BLOCK=$(echo "$RAW_TOOLS" | jq -r '
+        if (.tools | length) == 0 then
+          ""
+        else
+          "Available tools:\n" +
+          (
+            .tools
+            | to_entries
+            | map("- " + .value.name + ": " + (.value.description // ""))
+            | join("\n")
+          )
+        end
+      ')
+    fi
   fi
 
   # ================================================================
-  # 🧠 TOOL USAGE INSTRUCTIONS (CRITICAL)
+  # 🧠 TOOL INSTRUCTIONS
   # ================================================================
   SYSTEM_INSTRUCTIONS="You are an AI assistant with access to tools.
 
-When you need external data, you MUST call a tool.
+If the task involves files, directories, or external data,
+you MUST call a tool instead of guessing.
 
 To call a tool, respond ONLY with valid JSON:
 {
@@ -115,11 +108,10 @@ To call a tool, respond ONLY with valid JSON:
 }
 
 Rules:
+- Output ONLY JSON when calling tools
 - Do NOT include explanations when calling tools
-- ONLY output JSON for tool calls
 - If no tool is needed, respond normally"
 
-  # ---- Prompt ----
   case "$COMMAND" in
     run)      USER_PROMPT="${INPUT}" ;;
     fix)      USER_PROMPT="Fix this:\n${INPUT}" ;;
@@ -134,14 +126,16 @@ Rules:
 
   PROMPT="${SYSTEM_INSTRUCTIONS}
 
-${CONTEXT}${TOOL_BLOCK}
+${CONTEXT}
+
+${TOOL_BLOCK}
 
 User request:
 ${USER_PROMPT}"
 fi
 
 # ================================================================
-# 📦 BUILD REQUEST
+# 📦 REQUEST BUILDER
 # ================================================================
 build_payload() {
   if [ "$JSON_MODE" = "true" ]; then
@@ -151,9 +145,7 @@ build_payload() {
       --argjson temp "$TEMPERATURE" \
       '{
         model: $model,
-        messages: [
-          { role: "user", content: $prompt }
-        ],
+        messages: [{ role: "user", content: $prompt }],
         temperature: $temp,
         response_format: { type: "json_object" }
       }'
@@ -164,17 +156,14 @@ build_payload() {
       --argjson temp "$TEMPERATURE" \
       '{
         model: $model,
-        messages: [
-          { role: "user", content: $prompt }
-        ],
+        messages: [{ role: "user", content: $prompt }],
         temperature: $temp
       }'
   fi
 }
 
-# ---- Single request ----
 request_once() {
-  curl -sS \
+  curl -sS --fail-with-body \
     --max-time "$TIMEOUT" \
     -X POST "$ENDPOINT/chat/completions" \
     -H "Content-Type: application/json" \
@@ -204,10 +193,29 @@ while [ "$attempt" -le "$RETRIES" ]; do
 
   # ---- SUCCESS ----
   if echo "$RESPONSE" | jq -e '.choices[0].message.content' >/dev/null 2>&1; then
+
     OUTPUT=$(echo "$RESPONSE" | jq -r '.choices[0].message.content // ""')
 
+    if [ -z "$OUTPUT" ]; then
+      sleep $((attempt * 2))
+      attempt=$((attempt + 1))
+      continue
+    fi
+
+    # ---- Tool call detection ----
+    TOOL_CALL_JSON=$(extract_tool_call "$OUTPUT" || true)
+
+    if [ -n "$TOOL_CALL_JSON" ]; then
+      TOOL_NAME=$(echo "$TOOL_CALL_JSON" | jq -r '.name')
+      TOOL_INPUT=$(echo "$TOOL_CALL_JSON" | jq -c '.input // {}')
+
+      build_tool_call "$TOOL_NAME" "$TOOL_INPUT" "Model requested tool"
+      adapter_exit
+    fi
+
     build_response "done" "$OUTPUT" "" \
-      "$(jq -n --arg endpoint "$ENDPOINT" '{endpoint: $endpoint, mode: "http"}')"
+      "$(jq -n --arg endpoint "$ENDPOINT" --arg model "$MODEL" \
+        '{endpoint: $endpoint, model: $model, mode: "http"}')"
 
     adapter_exit
   fi

@@ -1,14 +1,8 @@
 #!/bin/bash
 ###################################################################
-# goose.sh — Contract-based Goose Adapter (v5 production)
+# goose.sh — Contract-based Goose Adapter (v5.2 production)
 #
-# Features:
-# - Full _base.sh integration (single contract authority)
-# - Tool-aware prompting (via tool_executor.py)
-# - Tool result handling (runtime-compatible)
-# - Hardened retry loop (no empty/garbage responses)
-# - Timeout protection (prevents hanging CLI)
-# - Zero non-zero exits (CI-safe)
+# Fully aligned with http-agent + openai adapters
 ###################################################################
 
 set -euo pipefail
@@ -40,69 +34,89 @@ RETRIES="${AI_RETRIES:-2}"
 TIMEOUT="${AI_TIMEOUT:-60}"
 
 # ================================================================
-# 🧠 VALIDATION
-# ================================================================
-
-if [ -z "$COMMAND" ]; then
-    build_response "error" "Missing command" "invalid_request"
-    adapter_exit
-fi
-
-if ! command -v "$GOOSE_BIN" >/dev/null 2>&1; then
-    build_response "error" "Goose not installed" "system_failure"
-    adapter_exit
-fi
-
-if [ "${MODEL_PROVIDER:-openai}" != "openai" ]; then
-    build_response "error" \
-      "Goose requires MODEL_PROVIDER=openai" \
-      "invalid_request"
-    adapter_exit
-fi
-
-# ================================================================
-# 🧠 TOOL RESULT HANDLING (CRITICAL)
+# 🧠 TOOL RESULT HANDLING (FIRST)
 # ================================================================
 if echo "$INPUT" | jq -e '.type == "tool_result"' >/dev/null 2>&1; then
 
     TOOL_NAME=$(echo "$INPUT" | jq -r '.tool // "unknown"')
     TOOL_RESULT=$(echo "$INPUT" | jq -r '.result // ""')
 
-    PROMPT="Tool '${TOOL_NAME}' returned:\n${TOOL_RESULT}\n\nContinue solving the task using this result."
+    PROMPT="Tool '${TOOL_NAME}' returned:
+${TOOL_RESULT}
+
+Continue solving the task using this result."
 
 else
+
+    # ---- Validate ----
+    if [ -z "$COMMAND" ]; then
+        build_response "error" "Missing command" "invalid_request"
+        adapter_exit
+    fi
+
+    if ! command -v "$GOOSE_BIN" >/dev/null 2>&1; then
+        build_response "error" "Goose not installed" "system_failure"
+        adapter_exit
+    fi
+
+    if [ "${MODEL_PROVIDER:-openai}" != "openai" ]; then
+        build_response "error" \
+          "Goose requires MODEL_PROVIDER=openai" \
+          "invalid_request"
+        adapter_exit
+    fi
 
     # ---- Context ----
     CONTEXT=""
     [ -n "${ACTIVE_PROJECT:-}" ] && CONTEXT="[Project: $ACTIVE_PROJECT] "
 
     # ================================================================
-    # 🔌 TOOL-AWARE PROMPTING (FIXED + STANDARDIZED)
+    # 🔌 TOOL DISCOVERY (ALIGNED)
     # ================================================================
-    TOOL_CONTEXT=""
+    TOOL_BLOCK=""
 
     if command -v python3 >/dev/null 2>&1 && [ -f "${SCRIPT_DIR}/../tool_executor.py" ]; then
-        TOOL_METADATA=$(python3 "${SCRIPT_DIR}/../tool_executor.py" --list-tools 2>/dev/null || echo "{}")
 
-        TOOL_CONTEXT="\n\nAvailable tools (JSON):\n${TOOL_METADATA}\n\nUse tools when appropriate."
+        RAW_TOOLS=$(python3 "${SCRIPT_DIR}/../tool_executor.py" --list-tools 2>/dev/null || echo '{"tools":{}}')
+
+        if echo "$RAW_TOOLS" | jq -e '.tools' >/dev/null 2>&1; then
+            TOOL_BLOCK=$(echo "$RAW_TOOLS" | jq -r '
+              if (.tools | length) == 0 then
+                ""
+              else
+                "Available tools:\n" +
+                (
+                  .tools
+                  | to_entries
+                  | map("- " + .value.name + ": " + (.value.description // ""))
+                  | join("\n")
+                )
+              end
+            ')
+        fi
     fi
 
     # ---- Prompt builder ----
     case "$COMMAND" in
-      run)      PROMPT="${CONTEXT}${INPUT}${TOOL_CONTEXT}" ;;
-      fix)      PROMPT="${CONTEXT}Fix this:\n${INPUT}${TOOL_CONTEXT}" ;;
-      explain)  PROMPT="${CONTEXT}Explain clearly:\n${INPUT}${TOOL_CONTEXT}" ;;
-      refactor) PROMPT="${CONTEXT}Refactor this:\n${INPUT}${TOOL_CONTEXT}" ;;
-      query)    PROMPT="${CONTEXT}${INPUT}${TOOL_CONTEXT}" ;;
+      run)      USER_PROMPT="${INPUT}" ;;
+      fix)      USER_PROMPT="Fix this:\n${INPUT}" ;;
+      explain)  USER_PROMPT="Explain clearly:\n${INPUT}" ;;
+      refactor) USER_PROMPT="Refactor this:\n${INPUT}" ;;
+      query)    USER_PROMPT="${INPUT}" ;;
       *)
         build_response "error" "Unknown command: $COMMAND" "invalid_request"
         adapter_exit
         ;;
     esac
+
+    PROMPT="${CONTEXT}${TOOL_BLOCK}
+
+User request:
+${USER_PROMPT}"
 fi
 
 # ================================================================
-# 🚀 EXECUTION LOOP (HARDENED)
+# 🚀 EXECUTION LOOP
 # ================================================================
 
 ATTEMPT=1
@@ -136,6 +150,20 @@ if [ -z "$RESPONSE" ] || ! echo "$RESPONSE" | grep -q '[^[:space:]]'; then
       "api_error" \
       "{\"retries\":$RETRIES}"
     adapter_exit
+fi
+
+# ================================================================
+# 🔥 TOOL CALL DETECTION (CRITICAL PARITY)
+# ================================================================
+
+TOOL_CALL_JSON=$(extract_tool_call "$RESPONSE" || true)
+
+if [ -n "$TOOL_CALL_JSON" ]; then
+  TOOL_NAME=$(echo "$TOOL_CALL_JSON" | jq -r '.name')
+  TOOL_INPUT=$(echo "$TOOL_CALL_JSON" | jq -c '.input // {}')
+
+  build_tool_call "$TOOL_NAME" "$TOOL_INPUT" "Model requested tool"
+  adapter_exit
 fi
 
 # ================================================================
