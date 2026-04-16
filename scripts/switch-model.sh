@@ -1,19 +1,12 @@
 #!/bin/bash
 ###################################################################
-# switch-model.sh — Switch active AI provider (production-ready)
-#
-# Usage:
-#   ./scripts/switch-model.sh openai
-#   ./scripts/switch-model.sh http
-#   ./scripts/switch-model.sh local
-#   ./scripts/switch-model.sh colab
-#   ./scripts/switch-model.sh mock
-#   ./scripts/switch-model.sh mock-local
+# switch-model.sh — Switch active AI provider (v3 hardened)
 #
 # Design:
-#   - No symlinks
-#   - No goose configure
-#   - Adapter selected via .env only
+#   - Explicit provider ↔ adapter mapping
+#   - Centralized endpoint testing
+#   - No hidden coupling
+#   - Deterministic .env updates
 ###################################################################
 
 set -euo pipefail
@@ -23,11 +16,11 @@ ENV_FILE="$(dirname "$0")/../.env"
 
 # ---- Validate ----
 if [ -z "$PROVIDER" ]; then
-    echo "Usage: switch-model.sh [openai|http|colab|local|mock|mock-local]"
+    echo "Usage: switch-model.sh [openai|openai-goose|http|colab|local|mock|mock-local]"
     exit 1
 fi
 
-# ---- Load env safely ----
+# ---- Load env ----
 if [ -f "$ENV_FILE" ]; then
     set -a
     source "$ENV_FILE"
@@ -62,19 +55,25 @@ test_endpoint() {
 echo ""
 echo "🔄 Switching provider to: $PROVIDER"
 
+# ---- Defaults (used for centralized testing) ----
+SHOULD_TEST_ENDPOINT=true
+ENDPOINT_TO_TEST=""
+
 case "$PROVIDER" in
 
 # ---------------------------------------------------------------
-# 🌐 OpenAI (Goose only)
+# 🌐 OpenAI (Direct Adapter)
 # ---------------------------------------------------------------
 openai)
     update_env "MODEL_PROVIDER" "openai"
     update_env "MODEL_ENDPOINT" "https://api.openai.com/v1"
-    update_env "AI_ADAPTER" "goose"
+    update_env "AI_ADAPTER" "openai"
 
     echo "✅ Provider:  OpenAI"
     echo "   Endpoint:  https://api.openai.com/v1"
-    echo "   Adapter:   goose"
+    echo "   Adapter:   openai"
+
+    SHOULD_TEST_ENDPOINT=false
 
     if [ -z "${OPENAI_API_KEY:-}" ]; then
         echo ""
@@ -84,11 +83,25 @@ openai)
     ;;
 
 # ---------------------------------------------------------------
-# 🔗 HTTP (universal, no dependencies)
+# 🦆 OpenAI via Goose (Agent Mode)
+# ---------------------------------------------------------------
+openai-goose)
+    update_env "MODEL_PROVIDER" "openai"
+    update_env "MODEL_ENDPOINT" "https://api.openai.com/v1"
+    update_env "AI_ADAPTER" "goose"
+
+    echo "✅ Provider:  OpenAI"
+    echo "   Endpoint:  https://api.openai.com/v1"
+    echo "   Adapter:   goose (agent mode)"
+
+    SHOULD_TEST_ENDPOINT=false
+    ;;
+
+# ---------------------------------------------------------------
+# 🔗 HTTP (universal adapter)
 # ---------------------------------------------------------------
 http)
-    # If endpoint is empty OR invalid, force default
-    if [ -z "$MODEL_ENDPOINT" ] || [ "$MODEL_ENDPOINT" = "none" ]; then
+    if [ -z "${MODEL_ENDPOINT:-}" ] || [ "$MODEL_ENDPOINT" = "none" ]; then
         MODEL_ENDPOINT="http://127.0.0.1:8000/v1"
     fi
 
@@ -99,11 +112,11 @@ http)
     echo "✅ Adapter: http-agent (dependency-free)"
     echo "   Endpoint: $MODEL_ENDPOINT"
 
-    test_endpoint "$MODEL_ENDPOINT"
+    ENDPOINT_TO_TEST="$MODEL_ENDPOINT"
     ;;
 
 # ---------------------------------------------------------------
-# 🖥️ Local (Ollama / private-ai-stack)
+# 🖥️ Local (Ollama / private stack)
 # ---------------------------------------------------------------
 local)
     LOCAL_ENDPOINT="${MODEL_ENDPOINT:-http://host.docker.internal:11434/v1}"
@@ -119,7 +132,7 @@ local)
     echo ""
     echo "   Tip: Override MODEL_ENDPOINT in .env if needed"
 
-    test_endpoint "$LOCAL_ENDPOINT"
+    ENDPOINT_TO_TEST="$LOCAL_ENDPOINT"
     ;;
 
 # ---------------------------------------------------------------
@@ -132,15 +145,17 @@ colab)
         exit 1
     fi
 
+    ENDPOINT="${COLAB_URL}/v1"
+
     update_env "MODEL_PROVIDER" "colab"
-    update_env "MODEL_ENDPOINT" "${COLAB_URL}/v1"
+    update_env "MODEL_ENDPOINT" "$ENDPOINT"
     update_env "AI_ADAPTER" "http-agent"
 
     echo "✅ Provider:  Colab GPU"
-    echo "   Endpoint:  ${COLAB_URL}/v1"
+    echo "   Endpoint:  $ENDPOINT"
     echo "   Adapter:   http-agent"
 
-    test_endpoint "${COLAB_URL}/v1"
+    ENDPOINT_TO_TEST="$ENDPOINT"
     ;;
 
 # ---------------------------------------------------------------
@@ -154,24 +169,28 @@ mock)
     echo "✅ Provider:  Mock (offline)"
     echo "   Adapter:   mock"
     echo "   No network calls"
+
+    SHOULD_TEST_ENDPOINT=false
     ;;
 
 # ---------------------------------------------------------------
 # 🧪 Mock-local (OpenAI-compatible server)
 # ---------------------------------------------------------------
 mock-local)
+    ENDPOINT="http://127.0.0.1:8000/v1"
+
     update_env "MODEL_PROVIDER" "mock-local"
-    update_env "MODEL_ENDPOINT" "http://127.0.0.1:8000/v1"
+    update_env "MODEL_ENDPOINT" "$ENDPOINT"
     update_env "AI_ADAPTER" "http-agent"
 
     echo "✅ Provider:  Mock OpenAI server"
-    echo "   Endpoint:  http://127.0.0.1:8000/v1"
+    echo "   Endpoint:  $ENDPOINT"
     echo "   Adapter:   http-agent"
 
     echo ""
     echo "   ⚠️  Start server first: make mock-server"
 
-    test_endpoint "http://127.0.0.1:8000/v1"
+    ENDPOINT_TO_TEST="$ENDPOINT"
     ;;
 
 # ---------------------------------------------------------------
@@ -179,11 +198,18 @@ mock-local)
 # ---------------------------------------------------------------
 *)
     echo "❌ Unknown provider: $PROVIDER"
-    echo "   Options: openai | http | colab | local | mock | mock-local"
+    echo "   Options: openai | openai-goose | http | colab | local | mock | mock-local"
     exit 1
     ;;
 
 esac
+
+# ---------------------------------------------------------------
+# 🔍 Centralized Endpoint Test
+# ---------------------------------------------------------------
+if [ "$SHOULD_TEST_ENDPOINT" = true ] && [ -n "$ENDPOINT_TO_TEST" ]; then
+    test_endpoint "$ENDPOINT_TO_TEST"
+fi
 
 echo ""
 echo "   Run 'make status' to confirm configuration"
