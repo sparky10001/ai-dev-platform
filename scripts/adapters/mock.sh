@@ -1,11 +1,11 @@
 #!/bin/bash
 ###################################################################
-# mock.sh — Contract-based Mock AI Adapter (v4 production)
+# mock.sh — Contract-based Mock AI Adapter (v5 production)
 #
 # Purpose:
 # - Deterministic offline testing
-# - Loop + tool simulation
-# - Proper tool lifecycle handling
+# - Full tool lifecycle simulation
+# - Tool-aware prompting compatibility
 # - CI-safe behavior
 ###################################################################
 
@@ -28,16 +28,16 @@ if [ -z "$COMMAND" ]; then
   adapter_exit
 fi
 
-# ---- Normalize input ----
-LOWER_INPUT=$(echo "$INPUT" | tr '[:upper:]' '[:lower:]')
+# ---- Normalize input safely ----
+LOWER_INPUT=$(echo "$INPUT" | tr '[:upper:]' '[:lower:]' 2>/dev/null || echo "")
 
 # ================================================================
-# 🧠 TOOL RESULT HANDLING (CRITICAL FIX)
+# 🧠 TOOL RESULT HANDLING (CRITICAL)
 # ================================================================
 if echo "$INPUT" | jq -e '.type == "tool_result"' >/dev/null 2>&1; then
 
-  TOOL_NAME=$(echo "$INPUT" | jq -r '.tool')
-  TOOL_RESULT=$(echo "$INPUT" | jq -r '.result')
+  TOOL_NAME=$(echo "$INPUT" | jq -r '.tool // "unknown"')
+  TOOL_RESULT=$(echo "$INPUT" | jq -r '.result // ""')
 
   build_response "done" "[MOCK] Tool '$TOOL_NAME' completed:\n$TOOL_RESULT" "" \
     '{"mode":"tool_complete"}'
@@ -58,18 +58,34 @@ run)
 
   # 🔁 Loop simulation
   if [[ "$LOWER_INPUT" == *"loop"* ]]; then
-    build_response "continue" "[MOCK] Looping..." "" \
-      '{"mode":"loop"}'
+    build_response "continue" "[MOCK] Looping..." "" '{"mode":"loop"}'
     adapter_exit
   fi
 
-  # 🛠️ Tool call simulation
+  # 🛠️ Tool call simulation (explicit keyword trigger)
   if [[ "$LOWER_INPUT" == *"tool"* ]]; then
     build_tool_call "read_file" '{"path":"README.md"}' "Calling mock tool"
     adapter_exit
   fi
 
-  # ✅ Normal execution
+  # 📂 File-related intent simulation (tool-aware behavior)
+  if [[ "$LOWER_INPUT" == *"read"* && "$LOWER_INPUT" == *"readme"* ]]; then
+    build_tool_call "read_file" '{"path":"README.md"}' "Reading README"
+    adapter_exit
+  fi
+
+  if [[ "$LOWER_INPUT" == *"list"* ]]; then
+    build_tool_call "list_files" '{"path":""}' "Listing files"
+    adapter_exit
+  fi
+
+  # ✍️ Write simulation
+  if [[ "$LOWER_INPUT" == *"write"* ]]; then
+    build_tool_call "write_file" '{"path":"tmp/mock.txt","content":"mock data"}' "Writing file"
+    adapter_exit
+  fi
+
+  # ✅ Default behavior
   build_response "done" "[MOCK RUN] Executing: $INPUT"
   adapter_exit
   ;;
