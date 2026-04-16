@@ -1,12 +1,13 @@
 #!/bin/bash
 ###################################################################
-# openai.sh — Contract-Based OpenAI Adapter (Production v4.1)
+# openai.sh — Contract-Based OpenAI Adapter (Production v5)
 #
 # Features:
 # - Full _base.sh integration
 # - Tool-aware prompting
 # - Tool result handling (CRITICAL)
 # - Safe retry + JSON validation
+# - Pattern-aligned with http-agent.sh v4.1
 ###################################################################
 
 set -euo pipefail
@@ -14,15 +15,17 @@ set -euo pipefail
 # ---- Adapter identity ----
 ADAPTER_NAME="openai"
 
-# ---- Load base ----
+# ---- Paths ----
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ENV_FILE="${SCRIPT_DIR}/../../.env"
+
+# ---- Load base ----
 source "${SCRIPT_DIR}/_base.sh"
 
 COMMAND="${1:-}"
 INPUT="${2:-}"
 
 # ---- Load env ----
-ENV_FILE="${SCRIPT_DIR}/../../.env"
 if [ -f "$ENV_FILE" ]; then
     set -a
     source "$ENV_FILE"
@@ -50,9 +53,9 @@ if echo "$INPUT" | jq -e '.type == "tool_result"' >/dev/null 2>&1; then
 
 else
 
-  # ---- Validate inputs ----
+  # ---- Validate ----
   if [ -z "$COMMAND" ]; then
-    build_response "error" "No command provided" "invalid_request"
+    build_response "error" "Missing command" "invalid_request"
     adapter_exit
   fi
 
@@ -66,7 +69,7 @@ else
   [ -n "${ACTIVE_PROJECT:-}" ] && CONTEXT="[Project: $ACTIVE_PROJECT] "
 
   # ================================================================
-  # 🔌 TOOL-AWARE PROMPTING
+  # 🔌 TOOL-AWARE PROMPTING (STANDARDIZED)
   # ================================================================
   TOOL_CONTEXT=""
 
@@ -79,19 +82,19 @@ else
   # ---- Prompt builder ----
   case "$COMMAND" in
     run)      PROMPT="${CONTEXT}${INPUT}${TOOL_CONTEXT}" ;;
-    explain)  PROMPT="${CONTEXT}Explain clearly:\n${INPUT}${TOOL_CONTEXT}" ;;
     fix)      PROMPT="${CONTEXT}Fix this:\n${INPUT}${TOOL_CONTEXT}" ;;
+    explain)  PROMPT="${CONTEXT}Explain clearly:\n${INPUT}${TOOL_CONTEXT}" ;;
     refactor) PROMPT="${CONTEXT}Refactor this:\n${INPUT}${TOOL_CONTEXT}" ;;
     query)    PROMPT="${CONTEXT}${INPUT}${TOOL_CONTEXT}" ;;
     *)
-      build_response "error" "Unknown command" "invalid_request"
+      build_response "error" "Unknown command: $COMMAND" "invalid_request"
       adapter_exit
       ;;
   esac
 fi
 
 # ================================================================
-# 📦 Payload builder (SAFE via jq)
+# 📦 BUILD REQUEST (MATCHES HTTP AGENT)
 # ================================================================
 build_payload() {
   if [ "$JSON_MODE" = "true" ]; then
@@ -102,13 +105,13 @@ build_payload() {
       --argjson max_tokens "$MAX_TOKENS" \
       '{
         model: $model,
+        messages: [
+          { role: "system", content: "You are a helpful AI assistant." },
+          { role: "user", content: $prompt }
+        ],
         temperature: $temp,
         max_tokens: $max_tokens,
-        response_format: {type: "json_object"},
-        messages: [
-          {role: "system", content: "You are a helpful AI assistant."},
-          {role: "user", content: $prompt}
-        ]
+        response_format: { type: "json_object" }
       }'
   else
     jq -n \
@@ -118,33 +121,35 @@ build_payload() {
       --argjson max_tokens "$MAX_TOKENS" \
       '{
         model: $model,
-        temperature: $temp,
-        max_tokens: $max_tokens,
         messages: [
-          {role: "system", content: "You are a helpful AI assistant."},
-          {role: "user", content: $prompt}
-        ]
+          { role: "system", content: "You are a helpful AI assistant." },
+          { role: "user", content: $prompt }
+        ],
+        temperature: $temp,
+        max_tokens: $max_tokens
       }'
   fi
 }
 
 # ---- Single request ----
 request_once() {
-  curl -sS "$ENDPOINT/chat/completions" \
+  curl -sS \
+    --max-time 30 \
+    -X POST "$ENDPOINT/chat/completions" \
     -H "Authorization: Bearer $API_KEY" \
     -H "Content-Type: application/json" \
     -d "$(build_payload)" || true
 }
 
 # ================================================================
-# 🔁 Retry loop
+# 🔁 RETRY LOOP (IDENTICAL PATTERN)
 # ================================================================
 attempt=1
 while [ "$attempt" -le "$RETRIES" ]; do
 
   RESPONSE="$(request_once)"
 
-  # ---- Empty guard ----
+  # ---- Empty response guard ----
   if [ -z "$RESPONSE" ]; then
     sleep $((attempt * 2))
     attempt=$((attempt + 1))
@@ -163,7 +168,7 @@ while [ "$attempt" -le "$RETRIES" ]; do
     OUTPUT=$(echo "$RESPONSE" | jq -r '.choices[0].message.content // ""')
 
     build_response "done" "$OUTPUT" "" \
-      "$(jq -n --arg model "$MODEL" --arg endpoint "$ENDPOINT" '{model: $model, endpoint: $endpoint}')"
+      "$(jq -n --arg model "$MODEL" --arg endpoint "$ENDPOINT" '{model: $model, endpoint: $endpoint, mode: "openai"}')"
 
     adapter_exit
   fi
@@ -187,7 +192,9 @@ while [ "$attempt" -le "$RETRIES" ]; do
 done
 
 # ================================================================
-# ❌ Final failure
+# ❌ FINAL FAILURE
 # ================================================================
-build_response "error" "OpenAI request failed after $RETRIES attempts" "api_error"
+build_response "error" "OpenAI request failed after $RETRIES attempts" "api_error" \
+  "$(jq -n --arg endpoint "$ENDPOINT" '{endpoint: $endpoint}')"
+
 adapter_exit

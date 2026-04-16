@@ -1,13 +1,14 @@
 #!/bin/bash
 ###################################################################
-# goose.sh — Contract-based Goose Adapter (v4.1 production)
+# goose.sh — Contract-based Goose Adapter (v5 production)
 #
 # Features:
-# - Full _base.sh integration
-# - Tool-aware prompting
-# - Tool result handling
-# - Safe retry handling
-# - CLI-based execution (Goose)
+# - Full _base.sh integration (single contract authority)
+# - Tool-aware prompting (via tool_executor.py)
+# - Tool result handling (runtime-compatible)
+# - Hardened retry loop (no empty/garbage responses)
+# - Timeout protection (prevents hanging CLI)
+# - Zero non-zero exits (CI-safe)
 ###################################################################
 
 set -euo pipefail
@@ -36,6 +37,7 @@ fi
 
 MODEL="${MODEL_NAME:-gpt-4o-mini}"
 RETRIES="${AI_RETRIES:-2}"
+TIMEOUT="${AI_TIMEOUT:-60}"
 
 # ================================================================
 # 🧠 VALIDATION
@@ -59,12 +61,12 @@ if [ "${MODEL_PROVIDER:-openai}" != "openai" ]; then
 fi
 
 # ================================================================
-# 🧠 TOOL RESULT HANDLING
+# 🧠 TOOL RESULT HANDLING (CRITICAL)
 # ================================================================
 if echo "$INPUT" | jq -e '.type == "tool_result"' >/dev/null 2>&1; then
 
-    TOOL_NAME=$(echo "$INPUT" | jq -r '.tool')
-    TOOL_RESULT=$(echo "$INPUT" | jq -r '.result')
+    TOOL_NAME=$(echo "$INPUT" | jq -r '.tool // "unknown"')
+    TOOL_RESULT=$(echo "$INPUT" | jq -r '.result // ""')
 
     PROMPT="Tool '${TOOL_NAME}' returned:\n${TOOL_RESULT}\n\nContinue solving the task using this result."
 
@@ -75,14 +77,14 @@ else
     [ -n "${ACTIVE_PROJECT:-}" ] && CONTEXT="[Project: $ACTIVE_PROJECT] "
 
     # ================================================================
-    # 🔌 TOOL-AWARE PROMPTING
+    # 🔌 TOOL-AWARE PROMPTING (FIXED + STANDARDIZED)
     # ================================================================
     TOOL_CONTEXT=""
 
     if command -v python3 >/dev/null 2>&1 && [ -f "${SCRIPT_DIR}/../tool_executor.py" ]; then
-        TOOL_METADATA=$(python3 "${SCRIPT_DIR}/../tool_executor.py" "__list_tools__" 2>/dev/null || echo "[]")
+        TOOL_METADATA=$(python3 "${SCRIPT_DIR}/../tool_executor.py" --list-tools 2>/dev/null || echo "{}")
 
-        TOOL_CONTEXT="\n\nAvailable tools:\n${TOOL_METADATA}\n\nUse tools when appropriate."
+        TOOL_CONTEXT="\n\nAvailable tools (JSON):\n${TOOL_METADATA}\n\nUse tools when appropriate."
     fi
 
     # ---- Prompt builder ----
@@ -100,7 +102,7 @@ else
 fi
 
 # ================================================================
-# 🚀 EXECUTION LOOP
+# 🚀 EXECUTION LOOP (HARDENED)
 # ================================================================
 
 ATTEMPT=1
@@ -108,14 +110,14 @@ RESPONSE=""
 
 while [ "$ATTEMPT" -le "$RETRIES" ]; do
 
-    RESPONSE=$(echo "$PROMPT" | "$GOOSE_BIN" run \
+    RESPONSE=$(echo "$PROMPT" | timeout "$TIMEOUT" "$GOOSE_BIN" run \
         --no-session \
         --provider openai \
         --model "$MODEL" \
         --text - 2>/dev/null || true)
 
-    # ---- Empty guard ----
-    if [ -n "$RESPONSE" ]; then
+    # ---- Empty / garbage guard ----
+    if [ -n "$RESPONSE" ] && echo "$RESPONSE" | grep -q '[^[:space:]]'; then
         break
     fi
 
@@ -127,7 +129,7 @@ done
 # ❌ FAILURE
 # ================================================================
 
-if [ -z "$RESPONSE" ]; then
+if [ -z "$RESPONSE" ] || ! echo "$RESPONSE" | grep -q '[^[:space:]]'; then
     build_response \
       "error" \
       "Goose failed after $RETRIES attempts" \
@@ -141,6 +143,9 @@ fi
 # ================================================================
 
 build_response "done" "$RESPONSE" "" \
-  "{\"model\":\"$MODEL\",\"mode\":\"cli\",\"provider\":\"goose\"}"
+  "$(jq -n \
+    --arg model "$MODEL" \
+    --arg provider "goose" \
+    '{model: $model, mode: "cli", provider: $provider}')"
 
 adapter_exit

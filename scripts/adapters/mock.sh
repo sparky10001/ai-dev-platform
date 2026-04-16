@@ -1,12 +1,8 @@
 #!/bin/bash
 ###################################################################
-# mock.sh — Contract-based Mock AI Adapter (v5 production)
+# mock.sh — Contract-based Mock AI Adapter (v5.1 production)
 #
-# Purpose:
-# - Deterministic offline testing
-# - Full tool lifecycle simulation
-# - Tool-aware prompting compatibility
-# - CI-safe behavior
+# Fully aligned with openai/http-agent pattern
 ###################################################################
 
 set -euo pipefail
@@ -22,17 +18,12 @@ ADAPTER_NAME="mock"
 # ---- Load shared base ----
 source "${SCRIPT_DIR}/_base.sh"
 
-# ---- Validate ----
-if [ -z "$COMMAND" ]; then
-  build_response "error" "Missing command" "invalid_request"
-  adapter_exit
-fi
-
 # ---- Normalize input safely ----
+INPUT="${INPUT:-}"
 LOWER_INPUT=$(echo "$INPUT" | tr '[:upper:]' '[:lower:]' 2>/dev/null || echo "")
 
 # ================================================================
-# 🧠 TOOL RESULT HANDLING (CRITICAL)
+# 🧠 TOOL RESULT HANDLING (MUST COME FIRST)
 # ================================================================
 if echo "$INPUT" | jq -e '.type == "tool_result"' >/dev/null 2>&1; then
 
@@ -43,6 +34,23 @@ if echo "$INPUT" | jq -e '.type == "tool_result"' >/dev/null 2>&1; then
     '{"mode":"tool_complete"}'
 
   adapter_exit
+fi
+
+# ---- Validate ----
+if [ -z "$COMMAND" ]; then
+  build_response "error" "Missing command" "invalid_request"
+  adapter_exit
+fi
+
+# ================================================================
+# 🔌 TOOL-AWARE PROMPT SIMULATION (PARITY FEATURE)
+# ================================================================
+TOOL_CONTEXT=""
+
+if command -v python3 >/dev/null 2>&1 && [ -f "${SCRIPT_DIR}/../tool_executor.py" ]; then
+    TOOL_METADATA=$(python3 "${SCRIPT_DIR}/../tool_executor.py" --list-tools 2>/dev/null || echo "[]")
+
+    TOOL_CONTEXT="\n\nAvailable tools:\n${TOOL_METADATA}\n\nUse tools when appropriate."
 fi
 
 # ================================================================
@@ -62,13 +70,13 @@ run)
     adapter_exit
   fi
 
-  # 🛠️ Tool call simulation (explicit keyword trigger)
+  # 🛠️ Tool call simulation (keyword trigger)
   if [[ "$LOWER_INPUT" == *"tool"* ]]; then
     build_tool_call "read_file" '{"path":"README.md"}' "Calling mock tool"
     adapter_exit
   fi
 
-  # 📂 File-related intent simulation (tool-aware behavior)
+  # 📂 File intent simulation
   if [[ "$LOWER_INPUT" == *"read"* && "$LOWER_INPUT" == *"readme"* ]]; then
     build_tool_call "read_file" '{"path":"README.md"}' "Reading README"
     adapter_exit
@@ -85,8 +93,8 @@ run)
     adapter_exit
   fi
 
-  # ✅ Default behavior
-  build_response "done" "[MOCK RUN] Executing: $INPUT"
+  # ✅ Default behavior (include tool context for parity)
+  build_response "done" "[MOCK RUN] Executing: $INPUT${TOOL_CONTEXT}"
   adapter_exit
   ;;
 
@@ -94,7 +102,7 @@ run)
 # 📘 EXPLAIN
 # ---------------------------------------------------------------
 explain)
-  build_response "done" "[MOCK EXPLAIN] $INPUT"
+  build_response "done" "[MOCK EXPLAIN] $INPUT${TOOL_CONTEXT}"
   adapter_exit
   ;;
 
@@ -102,7 +110,7 @@ explain)
 # 🛠️ FIX
 # ---------------------------------------------------------------
 fix)
-  build_response "done" "[MOCK FIX] $INPUT"
+  build_response "done" "[MOCK FIX] $INPUT${TOOL_CONTEXT}"
   adapter_exit
   ;;
 
@@ -110,7 +118,7 @@ fix)
 # ♻️ REFACTOR
 # ---------------------------------------------------------------
 refactor)
-  build_response "done" "[MOCK REFACTOR] $INPUT"
+  build_response "done" "[MOCK REFACTOR] $INPUT${TOOL_CONTEXT}"
   adapter_exit
   ;;
 
@@ -118,7 +126,7 @@ refactor)
 # 🔎 QUERY
 # ---------------------------------------------------------------
 query)
-  build_response "done" "[MOCK QUERY] $INPUT"
+  build_response "done" "[MOCK QUERY] $INPUT${TOOL_CONTEXT}"
   adapter_exit
   ;;
 
