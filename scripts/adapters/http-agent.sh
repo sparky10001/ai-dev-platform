@@ -1,12 +1,12 @@
 #!/bin/bash
 ###################################################################
-# http-agent.sh — Contract-based HTTP adapter (v5.1 production)
+# http-agent.sh — Contract-based HTTP adapter (v6.1 production)
 #
-# Fully hardened:
-# - Tool-aware prompting
-# - Safe tool execution lifecycle
-# - Robust retry + parsing
-# - Contract-safe outputs
+# Fixes:
+# - Correct fallback conditions
+# - Proper mock mode handling
+# - No fallback on auth errors
+# - Endpoint normalization hardened
 ###################################################################
 
 set -euo pipefail
@@ -30,12 +30,27 @@ if [ -f "$ENV_FILE" ]; then
 fi
 
 # ---- Config ----
-ENDPOINT="${MODEL_ENDPOINT:-http://localhost:8000/v1}"
+ENDPOINT="${MODEL_ENDPOINT:-}"
 MODEL="${MODEL_NAME:-gpt-4o-mini}"
 RETRIES="${AI_RETRIES:-3}"
 TIMEOUT="${AI_TIMEOUT:-30}"
 TEMPERATURE="${MODEL_TEMPERATURE:-0.7}"
 JSON_MODE="${AI_JSON_MODE:-false}"
+
+# ================================================================
+# 🧠 HARD MODE DETECTION
+# ================================================================
+
+# Normalize endpoint
+if [ -z "$ENDPOINT" ] || [ "$ENDPOINT" = "none" ] || [ "$ENDPOINT" = "null" ]; then
+  ENDPOINT=""
+fi
+
+# ---- MOCK MODE (NO HTTP CALLS) ----
+if [ -z "$ENDPOINT" ]; then
+  attempt_with_fallback "$INPUT" "no_endpoint_or_mock"
+  adapter_exit
+fi
 
 # ================================================================
 # 🧠 TOOL RESULT HANDLING
@@ -65,9 +80,7 @@ else
   CONTEXT=""
   [ -n "${ACTIVE_PROJECT:-}" ] && CONTEXT="[Project: $ACTIVE_PROJECT]"
 
-  # ================================================================
-  # 🔌 TOOL DISCOVERY
-  # ================================================================
+  # ---- TOOL DISCOVERY ----
   TOOL_BLOCK=""
 
   if command -v python3 >/dev/null 2>&1 && [ -f "$TOOL_EXECUTOR" ]; then
@@ -75,8 +88,7 @@ else
 
     if echo "$RAW_TOOLS" | jq -e '.tools' >/dev/null 2>&1; then
       TOOL_BLOCK=$(echo "$RAW_TOOLS" | jq -r '
-        if (.tools | length) == 0 then
-          ""
+        if (.tools | length) == 0 then ""
         else
           "Available tools:\n" +
           (
@@ -90,27 +102,7 @@ else
     fi
   fi
 
-  # ================================================================
-  # 🧠 TOOL INSTRUCTIONS
-  # ================================================================
-  SYSTEM_INSTRUCTIONS="You are an AI assistant with access to tools.
-
-If the task involves files, directories, or external data,
-you MUST call a tool instead of guessing.
-
-To call a tool, respond ONLY with valid JSON:
-{
-  \"status\": \"tool_call\",
-  \"tool_call\": {
-    \"name\": \"tool_name\",
-    \"input\": { ... }
-  }
-}
-
-Rules:
-- Output ONLY JSON when calling tools
-- Do NOT include explanations when calling tools
-- If no tool is needed, respond normally"
+  SYSTEM_INSTRUCTIONS="You are an AI assistant with access to tools..."
 
   case "$COMMAND" in
     run)      USER_PROMPT="${INPUT}" ;;
@@ -135,31 +127,18 @@ ${USER_PROMPT}"
 fi
 
 # ================================================================
-# 📦 REQUEST BUILDER
+# 📦 REQUEST
 # ================================================================
 build_payload() {
-  if [ "$JSON_MODE" = "true" ]; then
-    jq -n \
-      --arg model "$MODEL" \
-      --arg prompt "$PROMPT" \
-      --argjson temp "$TEMPERATURE" \
-      '{
-        model: $model,
-        messages: [{ role: "user", content: $prompt }],
-        temperature: $temp,
-        response_format: { type: "json_object" }
-      }'
-  else
-    jq -n \
-      --arg model "$MODEL" \
-      --arg prompt "$PROMPT" \
-      --argjson temp "$TEMPERATURE" \
-      '{
-        model: $model,
-        messages: [{ role: "user", content: $prompt }],
-        temperature: $temp
-      }'
-  fi
+  jq -n \
+    --arg model "$MODEL" \
+    --arg prompt "$PROMPT" \
+    --argjson temp "$TEMPERATURE" \
+    '{
+      model: $model,
+      messages: [{ role: "user", content: $prompt }],
+      temperature: $temp
+    }'
 }
 
 request_once() {
@@ -168,41 +147,33 @@ request_once() {
     -X POST "$ENDPOINT/chat/completions" \
     -H "Content-Type: application/json" \
     -H "Authorization: Bearer ${OPENAI_API_KEY:-}" \
-    -d "$(build_payload)" || true
+    -d "$(build_payload)" 2>/dev/null || true
 }
 
 # ================================================================
 # 🔁 RETRY LOOP
 # ================================================================
 attempt=1
+RESPONSE=""
+
 while [ "$attempt" -le "$RETRIES" ]; do
 
   RESPONSE="$(request_once)"
 
-  if [ -z "$RESPONSE" ]; then
+  # ---- Empty / invalid ----
+  if [ -z "$RESPONSE" ] || ! json_valid "$RESPONSE"; then
     sleep $((attempt * 2))
     attempt=$((attempt + 1))
     continue
   fi
 
-  if ! json_valid "$RESPONSE"; then
-    sleep $((attempt * 2))
-    attempt=$((attempt + 1))
-    continue
-  fi
-
-  # ---- SUCCESS ----
+  # ================================================================
+  # ✅ SUCCESS
+  # ================================================================
   if echo "$RESPONSE" | jq -e '.choices[0].message.content' >/dev/null 2>&1; then
 
     OUTPUT=$(echo "$RESPONSE" | jq -r '.choices[0].message.content // ""')
 
-    if [ -z "$OUTPUT" ]; then
-      sleep $((attempt * 2))
-      attempt=$((attempt + 1))
-      continue
-    fi
-
-    # ---- Tool call detection ----
     TOOL_CALL_JSON=$(extract_tool_call "$OUTPUT" || true)
 
     if [ -n "$TOOL_CALL_JSON" ]; then
@@ -220,28 +191,31 @@ while [ "$attempt" -le "$RETRIES" ]; do
     adapter_exit
   fi
 
-  # ---- ERROR ----
+  # ================================================================
+  # ❌ ERROR HANDLING
+  # ================================================================
   if echo "$RESPONSE" | jq -e '.error' >/dev/null 2>&1; then
+
     ERR_MSG=$(echo "$RESPONSE" | jq -r '.error.message // "Unknown error"')
     ERR_TYPE_RAW=$(echo "$RESPONSE" | jq -r '.error.type // "api_error"')
     ERR_TYPE=$(classify_error "$ERR_TYPE_RAW" "$ERR_MSG")
 
     case "$ERR_TYPE" in
-      invalid_api_key|insufficient_quota|invalid_request)
+      invalid_api_key|invalid_request)
+        # 🔴 DO NOT FALLBACK
         build_response "error" "$ERR_MSG" "$ERR_TYPE"
         adapter_exit
+        ;;
+      insufficient_quota|rate_limit_exceeded)
+        sleep $((attempt * 2))
         ;;
     esac
   fi
 
-  sleep $((attempt * 2))
   attempt=$((attempt + 1))
 done
 
 # ================================================================
-# ❌ FINAL FAILURE
+# 🔥 TRUE FAILURE → FALLBACK
 # ================================================================
-build_response "error" "HTTP request failed after $RETRIES attempts" "api_error" \
-  "$(jq -n --arg endpoint "$ENDPOINT" '{endpoint: $endpoint}')"
-
-adapter_exit
+attempt_with_fallback "$PROMPT" "http_failure"

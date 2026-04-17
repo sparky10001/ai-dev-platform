@@ -19,6 +19,7 @@
 setup: ## Initialize environment from template
 	@echo "🔧 Setting up AI Dev Platform..."
 	@cp -n .env.example .env 2>/dev/null || true
+	@chmod +x ai
 	@chmod +x tools/*.sh
 	@chmod +x scripts/*.sh
 	@chmod +x scripts/adapters/*.sh
