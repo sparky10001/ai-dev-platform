@@ -1,0 +1,24 @@
+{
+  "scenario_id": "arb_health_001",
+  "name": "Arb-Agent-System Health Check",
+  "project": "arb-agent-system",
+  "agent": "health-monitor",
+  "task": "Verify all five microservices are healthy and reachable",
+  "initial_input": "curl -sf http://localhost:8080/health",
+  "context": {
+    "services": [
+      "orchestrator",
+      "data-service",
+      "strategy-service",
+      "risk-service",
+      "execution-service"
+    ]
+  },
+  "success_criteria": [
+    "pipeline completed without error",
+    "output contains ok",
+    "no errors detected"
+  ],
+  "timeout": 15,
+  "tags": ["health", "monitoring", "ci"]
+}

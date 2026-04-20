@@ -1,0 +1,21 @@
+{
+  "scenario_id": "arb_spread_detection_001",
+  "name": "Arbitrage Spread Detection — Full Pipeline",
+  "project": "arb-agent-system",
+  "agent": "orchestrator",
+  "task": "Execute full arbitrage detection pipeline and verify all services respond",
+  "initial_input": "curl -sf http://localhost:8080/run",
+  "context": {
+    "spread_threshold": 10,
+    "paper_trading": true,
+    "exchanges": ["coinbase", "kraken"],
+    "symbol": "BTC/USD"
+  },
+  "success_criteria": [
+    "pipeline completed without error",
+    "all services responded",
+    "output contains status"
+  ],
+  "timeout": 30,
+  "tags": ["arbitrage", "pipeline", "integration"]
+}

@@ -1,0 +1,21 @@
+{
+  "scenario_id": "llm_vs_qlearning_001",
+  "name": "LLM Agent vs Q-Learning Benchmark",
+  "project": "agent-sim",
+  "agent": "tinyllama",
+  "task": "Compare LLM agent (tinyllama) performance against Q-learning baseline on GridWorld",
+  "initial_input": "POLICY=llm OLLAMA_MODEL=tinyllama python -m agent_sim.runner.agent_runner",
+  "context": {
+    "env_mode": "local",
+    "baseline_success_rate": 0.95,
+    "baseline_avg_steps": 13.7,
+    "eval_episodes": 20
+  },
+  "success_criteria": [
+    "pipeline completed without error",
+    "goal reached",
+    "output contains success rate"
+  ],
+  "timeout": 300,
+  "tags": ["llm", "benchmark", "tinyllama", "comparison"]
+}

@@ -1,0 +1,21 @@
+{
+  "scenario_id": "arb_data_validation_001",
+  "name": "Data Service Market Data Validation",
+  "project": "arb-agent-system",
+  "agent": "data-validator",
+  "task": "Verify data service fetches valid BTC/USD order books from exchanges",
+  "initial_input": "curl -sf http://localhost:8081/price",
+  "context": {
+    "exchanges": ["coinbase", "kraken"],
+    "symbol": "BTC/USD",
+    "required_fields": ["bid", "ask"]
+  },
+  "success_criteria": [
+    "pipeline completed without error",
+    "output contains bid",
+    "output contains ask",
+    "no errors detected"
+  ],
+  "timeout": 15,
+  "tags": ["data", "market-data", "validation"]
+}

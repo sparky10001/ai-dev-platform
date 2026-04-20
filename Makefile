@@ -19,6 +19,7 @@ setup:
 	@chmod +x tools/*.sh
 	@chmod +x scripts/*.sh
 	@chmod +x scripts/adapters/*.sh
+	@chmod +x ollama-service/*.sh
 	@echo "✅ Setup complete"
 
 ###################################################################

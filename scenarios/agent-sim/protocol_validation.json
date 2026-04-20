@@ -1,0 +1,18 @@
+{
+  "scenario_id": "protocol_validation_001",
+  "name": "Agent-Sim Protocol Validator",
+  "project": "agent-sim",
+  "agent": "validator",
+  "task": "Run the full protocol validation suite against the agent-sim server",
+  "initial_input": "python -m agent_sim.validation.protocol_validator",
+  "context": {
+    "base_url": "http://localhost:8000/v1",
+    "checks": ["health", "reset", "step", "invalid_action", "determinism"]
+  },
+  "success_criteria": [
+    "pipeline completed without error",
+    "output contains passed"
+  ],
+  "timeout": 30,
+  "tags": ["protocol", "validation", "ci"]
+}

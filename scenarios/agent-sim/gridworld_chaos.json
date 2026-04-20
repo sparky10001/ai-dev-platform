@@ -1,0 +1,21 @@
+{
+  "scenario_id": "gridworld_chaos_001",
+  "name": "GridWorld Navigation — Chaos Mode",
+  "project": "agent-sim",
+  "agent": "q-learning",
+  "task": "Navigate GridWorld with 5% random failure injection — validates resilience",
+  "initial_input": "ENABLE_CHAOS=true POLICY=q python -m agent_sim.runner.agent_runner",
+  "context": {
+    "env_mode": "remote",
+    "chaos_rate": 0.05,
+    "max_steps": 50,
+    "train_episodes": 100
+  },
+  "success_criteria": [
+    "pipeline completed without error",
+    "goal reached",
+    "no tool misuse"
+  ],
+  "timeout": 180,
+  "tags": ["rl", "gridworld", "chaos", "resilience"]
+}

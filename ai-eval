@@ -1,0 +1,680 @@
+#!/usr/bin/env python3
+###################################################################
+# ai-eval — Evaluation CLI (v1.0 production)
+#
+# Simulation-Driven CI for AI systems
+#
+# Usage:
+#   ai-eval <trace_log> <scenario_file> [options]
+#
+# Examples:
+#   ai-eval .ai_trace.log scenarios/agent-sim/gridworld_basic.json
+#   ai-eval .ai_trace.log scenarios/arb/spread_detection.json --output report.json
+#   ai-eval .ai_trace.log scenarios/agent-sim/gridworld_basic.json --format markdown
+#   ai-eval --list-scenarios scenarios/
+###################################################################
+
+import sys
+import json
+import os
+import argparse
+from datetime import datetime
+
+VERSION = "1.0.0"
+
+# ================================================================
+# 🏗️ RESPONSE HELPERS
+# ================================================================
+
+def load_jsonl(path):
+    """Load JSONL file into list of dicts."""
+    events = []
+    if not os.path.exists(path):
+        return events
+    with open(path, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                events.append(json.loads(line))
+            except json.JSONDecodeError:
+                continue
+    return events
+
+
+def load_json(path):
+    """Load JSON file."""
+    with open(path, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+def safe_print(obj):
+    try:
+        print(json.dumps(obj, indent=2))
+    except Exception:
+        print(json.dumps({"error": "Serialization failure"}))
+
+
+# ================================================================
+# 📊 TRACE ANALYZER
+# ================================================================
+
+class TraceAnalyzer:
+    """
+    Extracts structured facts from a raw execution trace.
+    Decoupled from scoring — just facts.
+    """
+
+    def __init__(self, events):
+        self.events = events
+
+    def total_steps(self):
+        steps = set(e.get("step", -1) for e in self.events if e.get("step", -1) >= 0)
+        return len(steps)
+
+    def total_events(self):
+        return len(self.events)
+
+    def tools_called(self):
+        return [
+            e.get("data", "unknown")
+            for e in self.events
+            if e.get("event") == "tool_call"
+        ]
+
+    def tool_results(self):
+        results = []
+        for e in self.events:
+            if e.get("event") == "tool_result":
+                try:
+                    data = json.loads(e.get("data", "{}")) if isinstance(e.get("data"), str) else e.get("data", {})
+                    results.append(data)
+                except Exception:
+                    results.append({"raw": e.get("data", "")})
+        return results
+
+    def errors(self):
+        return [
+            e for e in self.events
+            if "error" in e.get("event", "")
+        ]
+
+    def outputs(self):
+        return [
+            e.get("data", "")
+            for e in self.events
+            if e.get("event") == "adapter_output"
+        ]
+
+    def final_output(self):
+        outputs = self.outputs()
+        return outputs[-1] if outputs else ""
+
+    def has_event(self, event_type):
+        return any(e.get("event") == event_type for e in self.events)
+
+    def session_duration(self):
+        timestamps = [
+            e.get("timestamp", 0)
+            for e in self.events
+            if e.get("timestamp")
+        ]
+        if len(timestamps) >= 2:
+            return round(float(timestamps[-1]) - float(timestamps[0]), 2)
+        return None
+
+    def to_dict(self):
+        return {
+            "total_steps": self.total_steps(),
+            "total_events": self.total_events(),
+            "tools_called": self.tools_called(),
+            "tool_results": self.tool_results(),
+            "errors": self.errors(),
+            "final_output": self.final_output(),
+            "duration_seconds": self.session_duration()
+        }
+
+
+# ================================================================
+# 🎯 CRITERION EVALUATORS
+# ================================================================
+
+class CriterionEvaluator:
+    """
+    Evaluates a single success criterion against trace facts.
+    Extensible — add new criterion handlers here.
+    """
+
+    def __init__(self, analyzer):
+        self.analyzer = analyzer
+
+    def evaluate(self, criterion):
+        """
+        Returns (met: bool, confidence: float, reason: str)
+        """
+        c = criterion.lower().strip()
+
+        # ---- Goal/completion checks ----
+        if any(k in c for k in ["goal reached", "completed", "done", "success"]):
+            return self._check_completion()
+
+        # ---- Step count checks ----
+        if "steps" in c or "step" in c:
+            return self._check_steps(c)
+
+        # ---- Tool usage checks ----
+        if "tool" in c:
+            return self._check_tool_usage(c)
+
+        # ---- Error checks ----
+        if "no error" in c or "error-free" in c or "without error" in c:
+            return self._check_no_errors()
+
+        # ---- Output content checks ----
+        if "output" in c or "response" in c or "explained" in c or "policy" in c:
+            return self._check_output_content(c)
+
+        # ---- Service response checks ----
+        if "service" in c or "responded" in c or "reachable" in c:
+            return self._check_services(c)
+
+        # ---- Database/log checks ----
+        if "logged" in c or "database" in c or "recorded" in c:
+            return self._check_logging(c)
+
+        # ---- Invalid action checks ----
+        if "invalid" in c or "misuse" in c:
+            return self._check_no_invalid_actions(c)
+
+        # ---- Default: check output contains keywords ----
+        return self._check_output_keywords(c)
+
+    def _check_completion(self):
+        final = self.analyzer.final_output().lower()
+        errors = self.analyzer.errors()
+        tools = self.analyzer.tools_called()
+
+        if errors:
+            return False, 0.3, f"Found {len(errors)} error event(s) in trace"
+
+        if "done" in final or "complete" in final or "success" in final:
+            return True, 0.9, "Final output indicates completion"
+
+        if tools:
+            return True, 0.7, f"Tools executed ({len(tools)}) — likely completed"
+
+        return False, 0.2, "No clear completion signal in trace"
+
+    def _check_steps(self, criterion):
+        total = self.analyzer.total_steps()
+
+        # Extract number from criterion like "steps < 20" or "under 10 steps"
+        import re
+        numbers = re.findall(r'\d+', criterion)
+
+        if not numbers:
+            if total > 0:
+                return True, 0.7, f"Executed {total} step(s)"
+            return False, 0.1, "No steps recorded in trace"
+
+        limit = int(numbers[0])
+
+        if "<" in criterion or "under" in criterion or "less" in criterion or "within" in criterion:
+            met = total < limit
+            confidence = 0.95 if met else 0.9
+            reason = f"Used {total} steps (limit: {limit})"
+            return met, confidence, reason
+
+        if ">" in criterion or "at least" in criterion or "more" in criterion:
+            met = total > limit
+            return met, 0.95, f"Used {total} steps (minimum: {limit})"
+
+        met = total <= limit
+        return met, 0.9, f"Used {total} steps (expected: {limit})"
+
+    def _check_tool_usage(self, criterion):
+        tools = self.analyzer.tools_called()
+
+        if "no tool misuse" in criterion or "correct" in criterion:
+            errors = self.analyzer.errors()
+            tool_errors = [e for e in errors if "tool" in e.get("event", "")]
+            if tool_errors:
+                return False, 0.85, f"Found {len(tool_errors)} tool error(s)"
+            return True, 0.8, f"No tool errors detected ({len(tools)} tool call(s))"
+
+        if "used" in criterion or "called" in criterion:
+            if tools:
+                return True, 0.9, f"Tools used: {', '.join(tools[:5])}"
+            return False, 0.9, "No tools called in trace"
+
+        return True, 0.5, f"Tools in trace: {tools}"
+
+    def _check_no_errors(self):
+        errors = self.analyzer.errors()
+        if not errors:
+            return True, 0.95, "No errors found in trace"
+        types = list(set(e.get("event", "unknown") for e in errors))
+        return False, 0.95, f"Found {len(errors)} error(s): {', '.join(types)}"
+
+    def _check_output_content(self, criterion):
+        final = self.analyzer.final_output().lower()
+        outputs = " ".join(self.analyzer.outputs()).lower()
+        combined = final + " " + outputs
+
+        # Extract keywords to look for
+        import re
+        keywords = re.findall(r'\b[a-z]{4,}\b', criterion)
+        stop_words = {"output", "response", "contains", "should", "must", "with", "that", "this", "from"}
+        keywords = [k for k in keywords if k not in stop_words]
+
+        if not keywords:
+            if final:
+                return True, 0.6, "Output present (no specific keywords to check)"
+            return False, 0.7, "No output in trace"
+
+        found = [k for k in keywords if k in combined]
+        ratio = len(found) / len(keywords) if keywords else 0
+
+        if ratio >= 0.6:
+            return True, round(ratio, 2), f"Found keywords: {', '.join(found)}"
+        return False, round(ratio, 2), f"Missing keywords: {', '.join(set(keywords) - set(found))}"
+
+    def _check_services(self, criterion):
+        tools = self.analyzer.tools_called()
+        results = self.analyzer.tool_results()
+        errors = self.analyzer.errors()
+
+        http_calls = [t for t in tools if "http" in t.lower() or "request" in t.lower() or "get" in t.lower()]
+        service_errors = [e for e in errors if "api" in e.get("event", "") or "service" in str(e.get("data", ""))]
+
+        if service_errors:
+            return False, 0.85, f"Service errors detected: {len(service_errors)}"
+        if results or http_calls:
+            return True, 0.8, "Services responded (no errors in trace)"
+        return True, 0.5, "No service calls detected (may be local execution)"
+
+    def _check_logging(self, criterion):
+        outputs = " ".join(self.analyzer.outputs()).lower()
+        final = self.analyzer.final_output().lower()
+        combined = outputs + " " + final
+
+        log_signals = ["logged", "saved", "written", "recorded", "inserted", "committed", "database"]
+        found = [s for s in log_signals if s in combined]
+
+        if found:
+            return True, 0.8, f"Logging signals found: {', '.join(found)}"
+        return False, 0.4, "No logging signals found in output"
+
+    def _check_no_invalid_actions(self, criterion):
+        errors = self.analyzer.errors()
+        outputs = " ".join(self.analyzer.outputs()).lower()
+
+        invalid_signals = ["invalid", "blocked", "denied", "unauthorized", "misuse", "400"]
+        found_in_errors = any(
+            any(s in str(e.get("data", "")).lower() for s in invalid_signals)
+            for e in errors
+        )
+        found_in_output = any(s in outputs for s in invalid_signals)
+
+        if found_in_errors or found_in_output:
+            return False, 0.85, "Invalid action or misuse detected in trace"
+        return True, 0.8, "No invalid actions detected"
+
+    def _check_output_keywords(self, criterion):
+        """Fallback: search for criterion keywords in all outputs."""
+        return self._check_output_content(criterion)
+
+
+# ================================================================
+# 🏆 SCORER
+# ================================================================
+
+class ScenarioScorer:
+    """
+    Scores a trace against a scenario spec.
+    Returns structured evaluation contract.
+    """
+
+    def __init__(self, scenario, analyzer):
+        self.scenario = scenario
+        self.analyzer = analyzer
+        self.evaluator = CriterionEvaluator(analyzer)
+
+    def score(self):
+        scenario_id = self.scenario.get("scenario_id", "unknown")
+        criteria = self.scenario.get("success_criteria", [])
+        facts = self.analyzer.to_dict()
+
+        # ---- Evaluate each criterion ----
+        criteria_results = []
+        total_confidence = 0.0
+
+        for criterion in criteria:
+            met, confidence, reason = self.evaluator.evaluate(criterion)
+            criteria_results.append({
+                "criterion": criterion,
+                "met": met,
+                "confidence": round(confidence, 2),
+                "reason": reason
+            })
+            total_confidence += confidence if met else (1 - confidence) * 0
+
+        # ---- Compute score ----
+        if not criteria_results:
+            overall_score = 0.0
+            passed = False
+        else:
+            met_count = sum(1 for r in criteria_results if r["met"])
+            avg_confidence = sum(
+                r["confidence"] for r in criteria_results
+            ) / len(criteria_results)
+
+            # Score = weighted met ratio * average confidence
+            met_ratio = met_count / len(criteria_results)
+            overall_score = round(met_ratio * avg_confidence, 3)
+            passed = met_ratio >= 0.8  # 80% criteria must pass
+
+        # ---- Observations ----
+        observations = []
+
+        if facts["errors"]:
+            observations.append(f"⚠️  {len(facts['errors'])} error event(s) in trace")
+
+        if facts["tools_called"]:
+            observations.append(f"🛠️  Tools used: {', '.join(facts['tools_called'][:5])}")
+
+        if facts["duration_seconds"]:
+            observations.append(f"⏱️  Duration: {facts['duration_seconds']}s")
+
+        if facts["total_steps"] == 0:
+            observations.append("⚠️  No steps recorded — trace may be empty")
+
+        return {
+            "scenario_id": scenario_id,
+            "scenario_name": self.scenario.get("name", scenario_id),
+            "project": self.scenario.get("project", "unknown"),
+            "agent": self.scenario.get("agent", "unknown"),
+            "evaluated_at": datetime.utcnow().isoformat(),
+            "score": overall_score,
+            "pass": passed,
+            "criteria_count": len(criteria_results),
+            "criteria_passed": sum(1 for r in criteria_results if r["met"]),
+            "criteria_results": criteria_results,
+            "observations": observations,
+            "trace_facts": facts,
+            "evaluator": f"ai-eval v{VERSION}"
+        }
+
+
+# ================================================================
+# 📋 FORMATTERS
+# ================================================================
+
+def format_json(result):
+    return json.dumps(result, indent=2)
+
+
+def format_markdown(result):
+    lines = []
+    lines.append(f"# Evaluation Report")
+    lines.append(f"")
+    lines.append(f"**Scenario:** {result['scenario_name']} (`{result['scenario_id']}`)")
+    lines.append(f"**Project:** {result['project']}")
+    lines.append(f"**Agent:** {result['agent']}")
+    lines.append(f"**Evaluated:** {result['evaluated_at']}")
+    lines.append(f"")
+    lines.append(f"---")
+    lines.append(f"")
+
+    # ---- Result banner ----
+    if result["pass"]:
+        lines.append(f"## ✅ PASS — Score: {result['score']}")
+    else:
+        lines.append(f"## ❌ FAIL — Score: {result['score']}")
+
+    lines.append(f"")
+    lines.append(
+        f"**{result['criteria_passed']}/{result['criteria_count']} criteria met**"
+    )
+    lines.append(f"")
+
+    # ---- Criteria ----
+    lines.append(f"## Criteria Results")
+    lines.append(f"")
+    for r in result["criteria_results"]:
+        icon = "✅" if r["met"] else "❌"
+        lines.append(f"{icon} **{r['criterion']}**")
+        lines.append(f"   - Confidence: {r['confidence']}")
+        lines.append(f"   - Reason: {r['reason']}")
+        lines.append(f"")
+
+    # ---- Observations ----
+    if result["observations"]:
+        lines.append(f"## Observations")
+        lines.append(f"")
+        for obs in result["observations"]:
+            lines.append(f"- {obs}")
+        lines.append(f"")
+
+    # ---- Trace Facts ----
+    facts = result["trace_facts"]
+    lines.append(f"## Trace Facts")
+    lines.append(f"")
+    lines.append(f"| Metric | Value |")
+    lines.append(f"|--------|-------|")
+    lines.append(f"| Total Steps | {facts['total_steps']} |")
+    lines.append(f"| Total Events | {facts['total_events']} |")
+    lines.append(f"| Tools Called | {', '.join(facts['tools_called']) or 'none'} |")
+    lines.append(f"| Errors | {len(facts['errors'])} |")
+    lines.append(f"| Duration | {facts['duration_seconds']}s |")
+    lines.append(f"")
+
+    return "\n".join(lines)
+
+
+def format_summary(result):
+    icon = "✅ PASS" if result["pass"] else "❌ FAIL"
+    lines = [
+        f"",
+        f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+        f"  {icon}  |  Score: {result['score']}",
+        f"  Scenario: {result['scenario_name']}",
+        f"  Criteria: {result['criteria_passed']}/{result['criteria_count']} met",
+        f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+        f"",
+    ]
+
+    for r in result["criteria_results"]:
+        icon_c = "✅" if r["met"] else "❌"
+        lines.append(f"  {icon_c}  {r['criterion']}")
+        lines.append(f"       {r['reason']}")
+
+    lines.append(f"")
+    if result["observations"]:
+        for obs in result["observations"]:
+            lines.append(f"  {obs}")
+        lines.append(f"")
+
+    return "\n".join(lines)
+
+
+# ================================================================
+# 📁 SCENARIO DISCOVERY
+# ================================================================
+
+def list_scenarios(directory):
+    """Find all scenario JSON files in a directory."""
+    scenarios = []
+    for root, dirs, files in os.walk(directory):
+        for f in files:
+            if f.endswith(".json"):
+                path = os.path.join(root, f)
+                try:
+                    with open(path) as fh:
+                        data = json.load(fh)
+                    if "scenario_id" in data:
+                        scenarios.append({
+                            "path": path,
+                            "scenario_id": data.get("scenario_id"),
+                            "name": data.get("name", ""),
+                            "project": data.get("project", ""),
+                            "criteria": len(data.get("success_criteria", []))
+                        })
+                except Exception:
+                    pass
+    return scenarios
+
+
+# ================================================================
+# 🚀 MAIN CLI
+# ================================================================
+
+def main():
+    parser = argparse.ArgumentParser(
+        prog="ai-eval",
+        description="Simulation-Driven CI evaluator for AI systems",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  ai-eval .ai_trace.log scenarios/agent-sim/gridworld_basic.json
+  ai-eval .ai_trace.log scenarios/arb/spread_detection.json --format markdown
+  ai-eval .ai_trace.log scenarios/agent-sim/gridworld_basic.json --output report.json
+  ai-eval --list-scenarios scenarios/
+  ai-eval --version
+        """
+    )
+
+    parser.add_argument("trace", nargs="?", help="Path to .ai_trace.log JSONL file")
+    parser.add_argument("scenario", nargs="?", help="Path to scenario JSON spec")
+    parser.add_argument(
+        "--format",
+        choices=["summary", "json", "markdown"],
+        default="summary",
+        help="Output format (default: summary)"
+    )
+    parser.add_argument("--output", help="Write result to file instead of stdout")
+    parser.add_argument(
+        "--list-scenarios",
+        metavar="DIR",
+        help="List available scenarios in directory"
+    )
+    parser.add_argument(
+        "--facts-only",
+        action="store_true",
+        help="Print trace facts without scoring"
+    )
+    parser.add_argument(
+        "--version",
+        action="store_true",
+        help="Show version"
+    )
+    parser.add_argument(
+        "--last-n",
+        type=int,
+        default=0,
+        help="Only evaluate last N trace events (0 = all)"
+    )
+
+    args = parser.parse_args()
+
+    # ---- Version ----
+    if args.version:
+        print(f"ai-eval v{VERSION}")
+        sys.exit(0)
+
+    # ---- List scenarios ----
+    if args.list_scenarios:
+        directory = args.list_scenarios
+        if not os.path.isdir(directory):
+            print(f"❌ Directory not found: {directory}")
+            sys.exit(1)
+
+        scenarios = list_scenarios(directory)
+        if not scenarios:
+            print(f"No scenarios found in: {directory}")
+            sys.exit(0)
+
+        print(f"\n📋 Scenarios in {directory}:\n")
+        for s in scenarios:
+            print(f"  [{s['project']}] {s['scenario_id']}")
+            if s['name']:
+                print(f"    Name:     {s['name']}")
+            print(f"    Criteria: {s['criteria']}")
+            print(f"    Path:     {s['path']}")
+            print()
+        sys.exit(0)
+
+    # ---- Require trace + scenario ----
+    if not args.trace or not args.scenario:
+        parser.print_help()
+        sys.exit(1)
+
+    # ---- Validate paths ----
+    if not os.path.exists(args.trace):
+        print(f"❌ Trace log not found: {args.trace}")
+        sys.exit(1)
+
+    if not os.path.exists(args.scenario):
+        print(f"❌ Scenario file not found: {args.scenario}")
+        sys.exit(1)
+
+    # ---- Load trace ----
+    events = load_jsonl(args.trace)
+
+    if not events:
+        print(f"⚠️  Trace log is empty: {args.trace}")
+        sys.exit(1)
+
+    # ---- Trim if requested ----
+    if args.last_n > 0:
+        events = events[-args.last_n:]
+
+    # ---- Load scenario ----
+    try:
+        scenario = load_json(args.scenario)
+    except Exception as e:
+        print(f"❌ Failed to load scenario: {e}")
+        sys.exit(1)
+
+    # ---- Analyze ----
+    analyzer = TraceAnalyzer(events)
+
+    # ---- Facts only mode ----
+    if args.facts_only:
+        facts = analyzer.to_dict()
+        output = json.dumps(facts, indent=2)
+        if args.output:
+            with open(args.output, "w") as f:
+                f.write(output)
+            print(f"✅ Facts written to: {args.output}")
+        else:
+            print(output)
+        sys.exit(0)
+
+    # ---- Score ----
+    scorer = ScenarioScorer(scenario, analyzer)
+    result = scorer.score()
+
+    # ---- Format output ----
+    if args.format == "json":
+        output = format_json(result)
+    elif args.format == "markdown":
+        output = format_markdown(result)
+    else:
+        output = format_summary(result)
+
+    # ---- Write or print ----
+    if args.output:
+        with open(args.output, "w", encoding="utf-8") as f:
+            f.write(output)
+        print(f"✅ Evaluation written to: {args.output}")
+    else:
+        print(output)
+
+    # ---- Exit code reflects pass/fail ----
+    sys.exit(0 if result["pass"] else 1)
+
+
+if __name__ == "__main__":
+    main()

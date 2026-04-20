@@ -184,7 +184,7 @@ http)
 # 🧠 Ollama
 # ---------------------------------------------------------------
 ollama|local)
-  BASE="${OLLAMA_ENDPOINT:-http://localhost:11434}"
+  BASE="${OLLAMA_ENDPOINT:-http://host.docker.internal:11434}"
 
   update_env "MODEL_PROVIDER" "local"
   update_env "MODEL_ENDPOINT" "$BASE"
