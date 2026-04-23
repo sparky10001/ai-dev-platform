@@ -1,11 +1,9 @@
 #!/usr/bin/env bash
 ###################################################################
-# post-create.sh — Dev Container post-creation setup (v2.0)
+# post-create.sh — Dev Container post-creation setup (v2.2)
 #
-# New in v2.0:
-#   - Ollama service auto-start via docker compose
-#   - Waits for tinyllama to be ready before completing
-#   - Supports OLLAMA_IMAGE build arg (full vs alpine)
+# Changes from v2.01:
+#   - Removed Ollama section wrapped as non-fatal function
 ###################################################################
 
 set -e
@@ -86,91 +84,6 @@ else
 fi
 
 # ================================================================
-# 🦙 OLLAMA SERVICE (NEW in v2.0)
-# ================================================================
-
-OLLAMA_DIR="$ROOT_DIR/ollama-service"
-OLLAMA_ENDPOINT="${OLLAMA_ENDPOINT:-http://host.docker.internal:11434}"
-OLLAMA_MODEL="${OLLAMA_MODEL:-tinyllama}"
-
-echo ""
-echo "🦙 Setting up Ollama service..."
-
-# ---- Check if Docker is available ----
-if ! command -v docker > /dev/null 2>&1; then
-    echo "⚠️  Docker CLI not found — skipping Ollama auto-start"
-    echo "   Install Docker CLI or start Ollama manually"
-    echo "   cd ollama-service && make up"
-else
-
-    # ---- Check if Ollama is already running ----
-    if curl -sf "${OLLAMA_ENDPOINT}/api/tags" > /dev/null 2>&1; then
-        echo "✅ Ollama already running at $OLLAMA_ENDPOINT"
-
-    # ---- Start Ollama service via docker compose ----
-    elif [ -f "$OLLAMA_DIR/docker-compose.yml" ]; then
-        echo "🚀 Starting Ollama service..."
-
-        # Copy .env if not present
-        if [ ! -f "$OLLAMA_DIR/.env" ]; then
-            cp "$OLLAMA_DIR/.env.example" "$OLLAMA_DIR/.env" 2>/dev/null || true
-        fi
-
-        # ---- Image selection ----
-        # OLLAMA_IMAGE can be set in environment:
-        #   full:       OLLAMA_IMAGE=ollama/ollama:latest  (~4GB, CUDA)
-        #   lightweight: OLLAMA_IMAGE=alpine/ollama:latest  (~70MB, CPU-only)
-        OLLAMA_IMAGE="${OLLAMA_IMAGE:-ollama/ollama:latest}"
-        echo "   Image: $OLLAMA_IMAGE"
-
-        cd "$OLLAMA_DIR"
-        OLLAMA_IMAGE="$OLLAMA_IMAGE" docker compose up --build -d
-        cd "$ROOT_DIR"
-
-        echo "✅ Ollama service starting in background"
-
-        # ---- Wait for tinyllama to be ready ----
-        echo "⏳ Waiting for tinyllama to be ready..."
-        echo "   (First run pulls ~638MB — may take 2-3 minutes)"
-        echo ""
-
-        MAX_WAIT=240
-        elapsed=0
-        SPINNER="⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
-        spin_idx=0
-
-        while [ "$elapsed" -lt "$MAX_WAIT" ]; do
-            # Check if tinyllama is in the model list
-            if curl -sf "${OLLAMA_ENDPOINT}/api/tags" 2>/dev/null \
-               | grep -q "$OLLAMA_MODEL"; then
-                echo ""
-                echo "✅ $OLLAMA_MODEL ready! (${elapsed}s)"
-                break
-            fi
-
-            # Spinner progress indicator
-            spin_char="${SPINNER:$spin_idx:1}"
-            printf "\r   %s Waiting... (%ds)" "$spin_char" "$elapsed"
-            spin_idx=$(( (spin_idx + 1) % ${#SPINNER} ))
-
-            sleep 5
-            elapsed=$((elapsed + 5))
-        done
-
-        if [ "$elapsed" -ge "$MAX_WAIT" ]; then
-            echo ""
-            echo "⚠️  Ollama not ready after ${MAX_WAIT}s — continuing anyway"
-            echo "   Check status: cd ollama-service && make status"
-            echo "   Check logs:   cd ollama-service && docker compose logs ollama"
-        fi
-
-    else
-        echo "⚠️  ollama-service not found at $OLLAMA_DIR"
-        echo "   Ensure ollama-service/ folder exists in repo root"
-    fi
-fi
-
-# ================================================================
 # ✅ SUMMARY
 # ================================================================
 
@@ -180,8 +93,8 @@ echo "✅ AI Dev Platform ready!"
 echo ""
 echo "   Provider:  $MODEL_PROVIDER"
 echo "   Adapter:   $AI_ADAPTER"
-echo "   Endpoint:  ${OLLAMA_ENDPOINT:-not set}"
-echo "   Model:     ${OLLAMA_MODEL:-not set}"
+echo "   Endpoint:  ${OLLAMA_ENDPOINT:-http://ollama:11434}"
+echo "   Model:     ${OLLAMA_MODEL:-tinyllama}"
 echo "   Project:   ${ACTIVE_PROJECT:-not set}"
 echo ""
 echo "   Quick start:"
@@ -192,7 +105,7 @@ echo "     make status        — show active config"
 echo "     make validate      — run validation ladder"
 echo ""
 echo "   Switch provider:"
-echo "     make ollama        — local Ollama (default)"
-echo "     make mock          — offline/plane mode"
-echo "     make openai        — OpenAI API"
+echo "     ./scripts/switch-model.sh ollama   — local Ollama (default)"
+echo "     ./scripts/switch-model.sh mock     — offline/plane mode"
+echo "     ./scripts/switch-model.sh openai   — OpenAI API"
 echo ""

@@ -1,0 +1,154 @@
+###################################################################
+# LiteLLM Router Configuration
+#
+# Model aliases map intent → provider/model
+# Router handles fallback, retries, and load balancing
+#
+# ACTIVE_MODEL env var selects which alias to use:
+#   fast     → tinyllama (local, free, instant)
+#   general  → tinyllama (local, free, instant)
+#   code     → gpt-4.1 (cloud, smart) or tinyllama fallback
+#   tooling  → gpt-4.1 (cloud, smart) or tinyllama fallback
+#   claude   → claude-sonnet (cloud, powerful)
+#
+# Providers enabled based on available env vars:
+#   OPENAI_API_KEY  → enables openai models
+#   ANTHROPIC_API_KEY → enables claude models
+#   Ollama always available (local, no key needed)
+###################################################################
+
+model_list:
+
+  # ================================================================
+  # 🏃 FAST — Local Ollama (always available, no key required)
+  # ================================================================
+  - model_name: fast
+    litellm_params:
+      model: ollama/tinyllama
+      api_base: http://ollama:11434
+      stream: false
+
+  # ================================================================
+  # 🌐 GENERAL — Local Ollama (default for unclassified tasks)
+  # ================================================================
+  - model_name: general
+    litellm_params:
+      model: ollama/tinyllama
+      api_base: http://ollama:11434
+      stream: false
+
+  # ================================================================
+  # 💻 CODE — OpenAI (falls back to local if no key)
+  # ================================================================
+  - model_name: code
+    litellm_params:
+      model: openai/gpt-4.1
+      api_key: os.environ/OPENAI_API_KEY
+      stream: false
+
+  - model_name: code
+    litellm_params:
+      model: ollama/tinyllama
+      api_base: http://ollama:11434
+      stream: false
+
+  # ================================================================
+  # 🛠️ TOOLING — OpenAI (falls back to local if no key)
+  # ================================================================
+  - model_name: tooling
+    litellm_params:
+      model: openai/gpt-4.1
+      api_key: os.environ/OPENAI_API_KEY
+      stream: false
+
+  - model_name: tooling
+    litellm_params:
+      model: ollama/tinyllama
+      api_base: http://ollama:11434
+      stream: false
+
+  # ================================================================
+  # 🤖 CLAUDE — Anthropic (future-proofed, optional)
+  # ================================================================
+  - model_name: claude
+    litellm_params:
+      model: anthropic/claude-sonnet-4-5
+      api_key: os.environ/ANTHROPIC_API_KEY
+      stream: false
+
+  - model_name: claude
+    litellm_params:
+      model: ollama/tinyllama
+      api_base: http://ollama:11434
+      stream: false
+
+  # ================================================================
+  # 🔍 SMART — Best available model (OpenAI → Claude → local)
+  # ================================================================
+  - model_name: smart
+    litellm_params:
+      model: openai/gpt-4.1
+      api_key: os.environ/OPENAI_API_KEY
+      stream: false
+
+  - model_name: smart
+    litellm_params:
+      model: anthropic/claude-sonnet-4-5
+      api_key: os.environ/ANTHROPIC_API_KEY
+      stream: false
+
+  - model_name: smart
+    litellm_params:
+      model: ollama/tinyllama
+      api_base: http://ollama:11434
+      stream: false
+
+# ================================================================
+# 🔁 Router Settings
+# ================================================================
+router_settings:
+  # Default model when ACTIVE_MODEL is not set
+  # default_model: fast
+
+  # LiteLLM handles retries per provider
+  num_retries: 2
+  retry_after: 5
+
+  # Fallback chain per model alias
+  # If primary fails → try next in list
+  fallbacks:
+    - code:    [general]
+    - tooling: [general]
+    - claude:  [smart, general]
+    - smart:   [general]
+    - fast:    [general]
+
+  # Timeout per request (seconds)
+  timeout: 60
+
+  # Route to least busy provider
+  routing_strategy: simple-shuffle
+
+# ================================================================
+# ⚙️ General Settings
+# ================================================================
+general_settings:
+  # Master key for API auth (set via env)
+  # master_key: ""
+  allow_requests_without_key: true
+
+  # Store usage in DB (optional — disabled by default)
+  # database_url: os.environ/DATABASE_URL
+
+  # Logging
+  set_verbose: false
+
+# ================================================================
+# 📊 Litellm Settings
+# ================================================================
+litellm_settings:
+  # Drop unsupported params (avoids errors with local models)
+  drop_params: true
+
+  # Don't require stream parameter
+  set_verbose: false

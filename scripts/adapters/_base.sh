@@ -1,11 +1,12 @@
 #!/bin/bash
 ###################################################################
-# _base.sh — Shared adapter utilities (v7 production)
+# _base.sh — Shared adapter utilities (v8 production)
 #
-# Adds:
-# - Proper fallback chaining (mock → local → remote)
-# - Clean adapter entrypoint (attempt_with_fallback)
-# - Loop-safe execution
+# Fixes from v7:
+# - Removed sanitize_input from build_response output (was mangling code)
+# - Fixed FALLBACK_CHAIN comma-split (was space-split, breaking chain)
+# - sanitize_input kept for tool names and user inputs only
+# - No symlinks anywhere
 ###################################################################
 
 ADAPTER_NAME="${ADAPTER_NAME:-unknown}"
@@ -33,6 +34,8 @@ strip_markdown_json() {
 
 # ================================================================
 # 🔐 INPUT SANITIZATION
+# Only use for user-supplied inputs and tool names
+# NOT for model output — would mangle code/paths/commands
 # ================================================================
 
 sanitize_input() {
@@ -63,7 +66,7 @@ validate_tool_call() {
 }
 
 # ================================================================
-# 🛡️ SAFE RESPONSE
+# 🛡️ SAFE RESPONSE (never-fail fallback)
 # ================================================================
 
 safe_build_response() {
@@ -87,6 +90,8 @@ safe_build_response() {
 
 # ================================================================
 # 📦 STANDARD RESPONSE
+# NOTE: output is NOT sanitized here — model output must pass
+# through clean to preserve code, paths, commands, etc.
 # ================================================================
 
 build_response() {
@@ -95,11 +100,10 @@ build_response() {
   local error_type="${3:-}"
   local extra_meta="${4:-null}"
 
-  if ! json_valid "$extra_meta"; then
+  # Validate extra_meta is JSON or null
+  if ! json_valid "$extra_meta" 2>/dev/null; then
     extra_meta="null"
   fi
-
-  output=$(sanitize_input "$output")
 
   jq -n \
     --arg status "$status" \
@@ -191,64 +195,89 @@ classify_error() {
   local msg="$2"
 
   case "$type" in
-    insufficient_quota) echo "insufficient_quota" ;;
-    rate_limit_exceeded) echo "rate_limit_exceeded" ;;
-    authentication_error) echo "invalid_api_key" ;;
+    insufficient_quota)     echo "insufficient_quota" ;;
+    rate_limit_exceeded)    echo "rate_limit_exceeded" ;;
+    authentication_error)   echo "invalid_api_key" ;;
     invalid_request_error)
-      if echo "$msg" | grep -qi "api key"; then echo "invalid_api_key"
-      else echo "invalid_request"; fi ;;
+      if echo "$msg" | grep -qi "api key"; then
+        echo "invalid_api_key"
+      else
+        echo "invalid_request"
+      fi
+      ;;
     *) echo "api_error" ;;
   esac
 }
 
 # ================================================================
-# 🔥 FALLBACK CHAIN (NEW)
+# 🔥 FALLBACK CHAIN
+#
+# Fix v8: FALLBACK_CHAIN is comma-separated — use IFS split
+# Previously used space iteration which broke with comma values
 # ================================================================
 
 run_fallback_chain() {
   local prompt="$1"
   local reason="$2"
 
+  # Read comma-separated chain — consistent with switch-model.sh
   local CHAIN="${FALLBACK_CHAIN:-mock}"
+  IFS=',' read -ra CHAIN_ARRAY <<< "$CHAIN"
 
-  for provider in $CHAIN; do
+  for provider in "${CHAIN_ARRAY[@]}"; do
+
+    # Trim whitespace
+    provider=$(echo "$provider" | tr -d ' ')
 
     local endpoint
     case "$provider" in
-      mock)  endpoint="${FALLBACK_ENDPOINT:-http://localhost:8000/v1}" ;;
-      local) endpoint="${LOCAL_LLM_ENDPOINT:-http://localhost:11434/v1}" ;;
-      *) continue ;;
+      mock)       endpoint="${MOCK_ENDPOINT:-http://localhost:8000/v1}" ;;
+      local)      endpoint="${LOCAL_LLM_ENDPOINT:-http://localhost:11434/v1}" ;;
+      ollama)     endpoint="${OLLAMA_ENDPOINT:-http://host.docker.internal:11434}/v1" ;;
+      http-agent) endpoint="${MODEL_ENDPOINT:-}" ;;
+      *)          continue ;;
     esac
 
+    [ -z "$endpoint" ] || [ "$endpoint" = "none/v1" ] && continue
+
+    local RESPONSE
     RESPONSE=$(curl -sS --max-time 10 \
-      -X POST "$endpoint/chat/completions" \
+      -X POST "${endpoint}/chat/completions" \
       -H "Content-Type: application/json" \
       -d "$(jq -n \
-        --arg model "fallback-$provider" \
+        --arg model "fallback-${provider}" \
         --arg prompt "$prompt" \
-        '{model:$model, messages:[{role:"user",content:$prompt}], temperature:0.7}')" \
+        '{
+          model: $model,
+          messages: [{role:"user", content:$prompt}],
+          temperature: 0.7
+        }')" \
       2>/dev/null || true)
 
     if json_valid "$RESPONSE"; then
+      local OUTPUT
       OUTPUT=$(echo "$RESPONSE" | jq -r '.choices[0].message.content // ""')
 
       if [ -n "$OUTPUT" ]; then
-        build_response "done" "[FALLBACK $provider]\n$OUTPUT" "" \
+        build_response "done" "[FALLBACK ${provider}] ${OUTPUT}" "" \
           "$(jq -n \
             --arg mode "fallback" \
             --arg provider "$provider" \
             --arg reason "$reason" \
             '{mode:$mode, provider:$provider, reason:$reason}')"
-        return
+        return 0
       fi
     fi
+
   done
 
-  build_response "error" "All fallback providers failed" "api_error"
+  # All fallbacks exhausted
+  build_response "error" "All fallback providers failed (chain: ${CHAIN})" "api_error" \
+    "$(jq -n --arg reason "$reason" '{reason:$reason}')"
 }
 
 # ================================================================
-# 🔁 ADAPTER ENTRYPOINT (FIXED)
+# 🔁 ADAPTER ENTRYPOINT
 # ================================================================
 
 attempt_with_fallback() {
@@ -268,7 +297,7 @@ attempt_with_fallback() {
 }
 
 # ================================================================
-# 🚪 EXIT
+# 🚪 EXIT (always 0 — errors in payload not exit code)
 # ================================================================
 
 adapter_exit() {

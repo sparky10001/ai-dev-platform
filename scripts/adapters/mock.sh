@@ -1,24 +1,23 @@
 #!/bin/bash
 ###################################################################
-# mock.sh — Contract-based Mock Adapter (v7 production)
+# mock.sh — Contract-based Mock Adapter (v7.1)
 #
-# Aligned with fallback chain model:
-# - Safe as final fallback provider
-# - Deterministic behavior
-# - No infinite loops
-# - Contract-consistent metadata
+# Fixes from v7:
+# - Tool triggers in mock.sh guarded for fallback mode
+#   (was triggering unexpected tool calls during fallback)
+# - No symlinks
 ###################################################################
 
 set -euo pipefail
 
-COMMAND="${1:-}"
-INPUT="${2:-}"
+ADAPTER_NAME="mock"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-ADAPTER_NAME="mock"
-
 source "${SCRIPT_DIR}/_base.sh"
+
+COMMAND="${1:-}"
+INPUT="${2:-}"
 
 INPUT="${INPUT:-}"
 LOWER_INPUT=$(echo "$INPUT" | tr '[:upper:]' '[:lower:]' 2>/dev/null || echo "")
@@ -56,8 +55,7 @@ else
 
     if echo "$RAW_TOOLS" | jq -e '.tools' >/dev/null 2>&1; then
       TOOL_BLOCK=$(echo "$RAW_TOOLS" | jq -r '
-        if (.tools | length) == 0 then
-          ""
+        if (.tools | length) == 0 then ""
         else
           "Available tools:\n" +
           (
@@ -72,7 +70,6 @@ else
   fi
 
   SYSTEM_INSTRUCTIONS="You are a mock AI system.
-
 Follow tool rules strictly.
 Be deterministic."
 
@@ -97,31 +94,35 @@ ${USER_PROMPT}"
 fi
 
 # ================================================================
-# 🧠 MOCK EXECUTION (SAFE)
+# 🧠 MOCK EXECUTION
 # ================================================================
 
 case "$COMMAND" in
 
 run)
+  # ---- Tool triggers only when NOT in fallback mode ----
+  # Fix v7.1: tool triggers suppressed during fallback to prevent
+  # unexpected tool calls when mock is acting as last-resort provider
+  if [ "$IS_FALLBACK" != "true" ]; then
 
-  # ---- Tool triggers (allowed even in fallback) ----
-  if [[ "$LOWER_INPUT" == *"read"* && "$LOWER_INPUT" == *"readme"* ]]; then
-    build_tool_call "read_file" '{"path":"README.md"}' "Mock reading README"
-    adapter_exit
+    if [[ "$LOWER_INPUT" == *"read"* && "$LOWER_INPUT" == *"readme"* ]]; then
+      build_tool_call "read_file" '{"path":"README.md"}' "Mock reading README"
+      adapter_exit
+    fi
+
+    if [[ "$LOWER_INPUT" == *"list"* ]]; then
+      build_tool_call "list_files" '{"path":""}' "Mock listing files"
+      adapter_exit
+    fi
+
+    if [[ "$LOWER_INPUT" == *"loop"* ]]; then
+      build_response "continue" "[MOCK] Looping..." "" '{"mode":"loop"}'
+      adapter_exit
+    fi
+
   fi
 
-  if [[ "$LOWER_INPUT" == *"list"* ]]; then
-    build_tool_call "list_files" '{"path":""}' "Mock listing files"
-    adapter_exit
-  fi
-
-  # ---- Loop simulation ONLY outside fallback ----
-  if [[ "$LOWER_INPUT" == *"loop"* && "$IS_FALLBACK" != "true" ]]; then
-    build_response "continue" "[MOCK] Looping..." "" '{"mode":"loop"}'
-    adapter_exit
-  fi
-
-  # ---- Default SAFE output ----
+  # Default safe output
   build_response "done" "[MOCK] ${PROMPT}" "" \
     "$(jq -n \
       --arg mode "$([ "$IS_FALLBACK" = "true" ] && echo "fallback" || echo "mock")" \
@@ -130,7 +131,6 @@ run)
   ;;
 
 explain|fix|refactor|query)
-
   build_response "done" "[MOCK ${COMMAND^^}] ${PROMPT}" "" \
     '{"provider":"mock"}'
   adapter_exit

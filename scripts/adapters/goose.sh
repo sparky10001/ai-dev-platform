@@ -1,12 +1,11 @@
 #!/bin/bash
 ###################################################################
-# goose.sh — Contract-based Goose Adapter (v7 unified)
+# goose.sh — Contract-based Goose Adapter (v7.1)
 #
-# Features:
-# - Unified fallback (shared across ALL adapters)
-# - Mock-mode compatible
-# - Graceful degradation (no hard crashes)
-# - Tool-aware prompting + extraction
+# Fixes from v7:
+# - Removed hardcoded --provider openai flag
+#   Goose now uses its own configured provider
+# - No symlinks
 ###################################################################
 
 set -euo pipefail
@@ -39,7 +38,7 @@ TIMEOUT="${AI_TIMEOUT:-60}"
 # 🧠 MODE DETECTION
 # ================================================================
 
-# Mock / disabled mode → skip Goose entirely
+# Mock mode → skip Goose entirely
 if [ "${MODEL_PROVIDER:-}" = "mock" ]; then
     attempt_with_fallback "$INPUT" "mock_mode"
     adapter_exit
@@ -77,7 +76,7 @@ else
     CONTEXT=""
     [ -n "${ACTIVE_PROJECT:-}" ] && CONTEXT="[Project: $ACTIVE_PROJECT]"
 
-    # ---- TOOL DISCOVERY ----
+    # ---- Tool discovery ----
     TOOL_BLOCK=""
 
     if command -v python3 >/dev/null 2>&1 && [ -f "$TOOL_EXECUTOR" ]; then
@@ -125,6 +124,7 @@ fi
 
 # ================================================================
 # 🚀 EXECUTION LOOP
+# Fix: removed --provider openai — Goose uses its own config
 # ================================================================
 
 ATTEMPT=1
@@ -134,11 +134,8 @@ while [ "$ATTEMPT" -le "$RETRIES" ]; do
 
     RESPONSE=$(echo "$PROMPT" | timeout "$TIMEOUT" "$GOOSE_BIN" run \
         --no-session \
-        --provider openai \
-        --model "$MODEL" \
         --text - 2>/dev/null || true)
 
-    # ---- Valid output ----
     if [ -n "$RESPONSE" ] && echo "$RESPONSE" | grep -q '[^[:space:]]'; then
         break
     fi

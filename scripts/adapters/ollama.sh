@@ -1,13 +1,11 @@
 #!/bin/bash
 ###################################################################
-# ollama.sh — Local LLM Adapter v3.4 (Production Stable)
+# ollama.sh — Local LLM Adapter v3.5
 #
-# Goals:
-# - Deterministic output contract
-# - Safe JSON parsing (never jq-crash)
-# - Unified Ollama + OpenAI-compatible support
-# - Clean retry semantics
-# - Always returns router-safe response
+# Fixes from v3.4:
+# - Added attempt_with_fallback on all failure paths
+#   (was calling build_response + adapter_exit, skipping fallback)
+# - No symlinks
 ###################################################################
 
 set -euo pipefail
@@ -34,7 +32,7 @@ fi
 # ---------------------------------------------------------------
 # Config
 # ---------------------------------------------------------------
-RAW_ENDPOINT="${OLLAMA_ENDPOINT:-${MODEL_ENDPOINT:-http://localhost:11434}}"
+RAW_ENDPOINT="${OLLAMA_ENDPOINT:-${MODEL_ENDPOINT:-http://ollama:11434}}"
 MODEL="${OLLAMA_MODEL:-tinyllama}"
 TIMEOUT="${AI_TIMEOUT:-60}"
 RETRIES="${AI_RETRIES:-2}"
@@ -44,10 +42,10 @@ RETRIES="${AI_RETRIES:-2}"
 # ---------------------------------------------------------------
 if [[ "$RAW_ENDPOINT" == *"/v1"* ]]; then
   ENDPOINT_TYPE="openai"
-  ENDPOINT="$RAW_ENDPOINT/chat/completions"
+  ENDPOINT="${RAW_ENDPOINT}/chat/completions"
 else
   ENDPOINT_TYPE="ollama"
-  ENDPOINT="$RAW_ENDPOINT/api/generate"
+  ENDPOINT="${RAW_ENDPOINT}/api/generate"
 fi
 
 # ---------------------------------------------------------------
@@ -66,6 +64,14 @@ build_prompt() {
 PROMPT="$(build_prompt)"
 
 # ---------------------------------------------------------------
+# Validate command
+# ---------------------------------------------------------------
+if [ -z "$COMMAND" ]; then
+  build_response "error" "Missing command" "invalid_request"
+  adapter_exit
+fi
+
+# ---------------------------------------------------------------
 # Safe JSON validator
 # ---------------------------------------------------------------
 is_json_object() {
@@ -73,7 +79,7 @@ is_json_object() {
 }
 
 # ---------------------------------------------------------------
-# Request layer (NO silent failure)
+# Request layer
 # ---------------------------------------------------------------
 request_once() {
   if [ "$ENDPOINT_TYPE" = "openai" ]; then
@@ -101,7 +107,7 @@ request_once() {
 }
 
 # ---------------------------------------------------------------
-# Retry loop (stable)
+# Retry loop
 # ---------------------------------------------------------------
 attempt=1
 RESPONSE=""
@@ -121,15 +127,15 @@ while [ "$attempt" -le "$RETRIES" ]; do
 done
 
 # ---------------------------------------------------------------
-# Hard failure guard
+# Failure guards — NOW WITH FALLBACK (fix from v3.4)
 # ---------------------------------------------------------------
 if [ -z "$RESPONSE" ]; then
-  build_response "error" "No response from Ollama endpoint" "api_error"
+  attempt_with_fallback "$PROMPT" "ollama_no_response"
   adapter_exit
 fi
 
 if ! is_json_object "$RESPONSE"; then
-  build_response "error" "Invalid JSON from model" "api_error"
+  attempt_with_fallback "$PROMPT" "ollama_invalid_json"
   adapter_exit
 fi
 
@@ -145,18 +151,21 @@ OUTPUT=$(echo "$RESPONSE" | jq -r '
 ')
 
 # ---------------------------------------------------------------
-# Final guard
+# Empty output guard — NOW WITH FALLBACK (fix from v3.4)
 # ---------------------------------------------------------------
 if [ -z "$OUTPUT" ]; then
-  build_response "error" "Empty model response (no extractable content)" "api_error"
+  attempt_with_fallback "$PROMPT" "ollama_empty_output"
   adapter_exit
 fi
 
 # ---------------------------------------------------------------
-# SUCCESS CONTRACT (CRITICAL)
+# SUCCESS CONTRACT
 # ---------------------------------------------------------------
 build_response "done" "$OUTPUT" "" \
-  "$(jq -n --arg model "$MODEL" --arg endpoint "$ENDPOINT" \
-  '{mode:"local", provider:"ollama", model:$model, endpoint:$endpoint}')"
+  "$(jq -n \
+    --arg model "$MODEL" \
+    --arg endpoint "$ENDPOINT" \
+    --arg type "$ENDPOINT_TYPE" \
+    '{mode:"local", provider:"ollama", model:$model, endpoint:$endpoint, api_type:$type}')"
 
 adapter_exit

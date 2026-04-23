@@ -256,4 +256,3 @@ MIT License — see [LICENSE](LICENSE) for details.
 <p align="center">
 Built with ❤️ by James R. Glines<br>
 The interface is stable. Everything else is replaceable.
-</p>

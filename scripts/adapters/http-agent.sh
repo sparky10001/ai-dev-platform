@@ -1,12 +1,10 @@
 #!/bin/bash
 ###################################################################
-# http-agent.sh — Contract-based HTTP adapter (v6.1 production)
+# http-agent.sh — Contract-based HTTP adapter (v6.1)
 #
-# Fixes:
-# - Correct fallback conditions
-# - Proper mock mode handling
-# - No fallback on auth errors
-# - Endpoint normalization hardened
+# No changes needed from sanity check —
+# already correctly uses attempt_with_fallback on failure
+# No symlinks
 ###################################################################
 
 set -euo pipefail
@@ -35,7 +33,6 @@ MODEL="${MODEL_NAME:-gpt-4o-mini}"
 RETRIES="${AI_RETRIES:-3}"
 TIMEOUT="${AI_TIMEOUT:-30}"
 TEMPERATURE="${MODEL_TEMPERATURE:-0.7}"
-JSON_MODE="${AI_JSON_MODE:-false}"
 
 # ================================================================
 # 🧠 HARD MODE DETECTION
@@ -46,7 +43,7 @@ if [ -z "$ENDPOINT" ] || [ "$ENDPOINT" = "none" ] || [ "$ENDPOINT" = "null" ]; t
   ENDPOINT=""
 fi
 
-# ---- MOCK MODE (NO HTTP CALLS) ----
+# No endpoint → fallback immediately
 if [ -z "$ENDPOINT" ]; then
   attempt_with_fallback "$INPUT" "no_endpoint_or_mock"
   adapter_exit
@@ -80,7 +77,7 @@ else
   CONTEXT=""
   [ -n "${ACTIVE_PROJECT:-}" ] && CONTEXT="[Project: $ACTIVE_PROJECT]"
 
-  # ---- TOOL DISCOVERY ----
+  # ---- Tool discovery ----
   TOOL_BLOCK=""
 
   if command -v python3 >/dev/null 2>&1 && [ -f "$TOOL_EXECUTOR" ]; then
@@ -102,7 +99,7 @@ else
     fi
   fi
 
-  SYSTEM_INSTRUCTIONS="You are an AI assistant with access to tools..."
+  SYSTEM_INSTRUCTIONS="You are an AI assistant with access to tools."
 
   case "$COMMAND" in
     run)      USER_PROMPT="${INPUT}" ;;
@@ -160,16 +157,14 @@ while [ "$attempt" -le "$RETRIES" ]; do
 
   RESPONSE="$(request_once)"
 
-  # ---- Empty / invalid ----
+  # Empty or invalid JSON → retry
   if [ -z "$RESPONSE" ] || ! json_valid "$RESPONSE"; then
     sleep $((attempt * 2))
     attempt=$((attempt + 1))
     continue
   fi
 
-  # ================================================================
   # ✅ SUCCESS
-  # ================================================================
   if echo "$RESPONSE" | jq -e '.choices[0].message.content' >/dev/null 2>&1; then
 
     OUTPUT=$(echo "$RESPONSE" | jq -r '.choices[0].message.content // ""')
@@ -191,9 +186,7 @@ while [ "$attempt" -le "$RETRIES" ]; do
     adapter_exit
   fi
 
-  # ================================================================
-  # ❌ ERROR HANDLING
-  # ================================================================
+  # ❌ API ERROR
   if echo "$RESPONSE" | jq -e '.error' >/dev/null 2>&1; then
 
     ERR_MSG=$(echo "$RESPONSE" | jq -r '.error.message // "Unknown error"')
@@ -202,7 +195,7 @@ while [ "$attempt" -le "$RETRIES" ]; do
 
     case "$ERR_TYPE" in
       invalid_api_key|invalid_request)
-        # 🔴 DO NOT FALLBACK
+        # Non-retryable — return error directly, no fallback
         build_response "error" "$ERR_MSG" "$ERR_TYPE"
         adapter_exit
         ;;
@@ -218,4 +211,4 @@ done
 # ================================================================
 # 🔥 TRUE FAILURE → FALLBACK
 # ================================================================
-attempt_with_fallback "$PROMPT" "http_failure"
+attempt_with_fallback "$PROMPT" "http_agent_failure"

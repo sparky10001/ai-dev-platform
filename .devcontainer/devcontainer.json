@@ -1,37 +1,11 @@
 {
-  "name": "AI Dev Environment",
+  "name": "ai-dev-platform",
 
-  // ----------------------------------------------------------------
-  // Build
-  // ----------------------------------------------------------------
-  "build": {
-    "dockerfile": "Dockerfile"
-  },
+  "dockerComposeFile": "docker-compose.yml",
+  "service": "devcontainer",
+  "workspaceFolder": "/workspace",
 
-  // ----------------------------------------------------------------
-  // User
-  // ----------------------------------------------------------------
   "remoteUser": "vscode",
-
-  // ----------------------------------------------------------------
-  // Container args
-  // ----------------------------------------------------------------
-  "runArgs": [
-    // Maps host.docker.internal → host machine (portable, no hardcoded IPs)
-    "--add-host=host.docker.internal:host-gateway",
-
-    // Mount Docker socket for Docker-outside-of-Docker (DooD)
-    // Allows: docker compose, make up, etc. from inside container
-    "--volume=/var/run/docker.sock:/var/run/docker.sock"
-  ],
-
-  // ----------------------------------------------------------------
-  // Mounts
-  // ----------------------------------------------------------------
-  "mounts": [
-    // Workspace mount — bind to host repo
-    "source=/home/labadmin/ai-dev-platform,target=/workspace,type=bind,consistency=cached"
-  ],
 
   // ----------------------------------------------------------------
   // Lifecycle hooks
@@ -59,28 +33,15 @@
     }
   },
 
-  // ----------------------------------------------------------------
-  // Port forwarding
-  // ----------------------------------------------------------------
-  "forwardPorts": [
-    3000,    // General app port
-    11434,   // Ollama LLM service
-    8000     // Mock OpenAI server / agent-sim env server
-  ],
+  "forwardPorts": [3000, 4000, 11434, 8000],
 
-  // ----------------------------------------------------------------
-  // Remote environment
-  // ----------------------------------------------------------------
   "remoteEnv": {
-    // PATH — includes venv and local bins
+  // PATH — includes venv and local bins
     "PATH": "/opt/venv/bin:/usr/local/bin:${containerEnv:PATH}",
-
-    // Ollama — portable via host.docker.internal (no hardcoded IPs)
-    "OLLAMA_ENDPOINT": "http://host.docker.internal:11434",
-    "OLLAMA_MODEL": "tinyllama",
-
-    // AI Platform defaults
-    "MODEL_PROVIDER": "ollama",
-    "AI_ADAPTER": "ollama"
+    "OLLAMA_ENDPOINT": "http://ollama:11434",
+    "LITELLM_ENDPOINT": "http://litellm:4000",
+    "MODEL_PROVIDER": "litellm",
+    "AI_ADAPTER": "litellm",
+    "OLLAMA_MODEL": "tinyllama"
   }
 }

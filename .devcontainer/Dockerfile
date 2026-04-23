@@ -3,7 +3,8 @@
 # Base: Ubuntu 22.04
 ###################################################################
 
-FROM mcr.microsoft.com/devcontainers/base:ubuntu-22.04
+ARG BASE_IMAGE=mcr.microsoft.com/devcontainers/base:ubuntu-22.04
+FROM ${BASE_IMAGE}
 
 # ---- Create workspace folder ----
 RUN mkdir -p /workspace
@@ -25,16 +26,12 @@ RUN apt-get update && apt-get install -y \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# ✅ Ensure /bin/sh points to bash (must be ROOT)
-RUN ln -sf /bin/bash /bin/sh
-
 # ---- Docker CLI (Docker-outside-of-Docker) ----
 # Allows running docker compose from inside the devcontainer
-# Connects to host Docker daemon via mounted socket
+# Connects to host Docker daemon via mounted socket (/var/run/docker.sock)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     gnupg \
-    lsb-release \
     && install -m 0755 -d /etc/apt/keyrings \
     && curl -fsSL https://download.docker.com/linux/ubuntu/gpg \
        | gpg --dearmor -o /etc/apt/keyrings/docker.gpg \
@@ -42,13 +39,19 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && echo \
        "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] \
        https://download.docker.com/linux/ubuntu \
-       $(lsb_release -cs) stable" \
+       $(. /etc/os-release && echo $VERSION_CODENAME) stable" \
        > /etc/apt/sources.list.d/docker.list \
     && apt-get update && apt-get install -y --no-install-recommends \
        docker-ce-cli \
        docker-compose-plugin \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
+
+# ---- Add vscode user to docker group ----
+# Required for Docker-outside-of-Docker without sudo
+# Note: group membership activates on next shell — post-create.sh
+# handles the case where it's not yet active on first run
+RUN groupadd -f docker && usermod -aG docker vscode
 
 # ---- Python virtual environment ----
 RUN python3 -m venv /opt/venv \
@@ -62,11 +65,14 @@ RUN python3 -m venv /opt/venv \
         pydantic \
         uvicorn
 
+# Fix venv ownership
+RUN chown -R vscode:vscode /opt/venv
+        
 # Add venv bin to PATH
 ENV PATH="/opt/venv/bin:${PATH}"
 
 # ---- Goose CLI ----
-# Official install — handles arch detection, puts binary in ~/.local/bin
+# Official install script — handles arch detection, extracts to ~/.local/bin
 # bzip2 required to extract the tar.bz2 archive
 RUN apt-get update && apt-get install -y --no-install-recommends \
     bzip2 \

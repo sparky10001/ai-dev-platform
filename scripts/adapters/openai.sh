@@ -1,12 +1,11 @@
 #!/bin/bash
 ###################################################################
-# openai.sh — Contract-Based OpenAI Adapter (v7 unified)
+# openai.sh — Contract-Based OpenAI Adapter (v7.1)
 #
-# Features:
-# - Unified fallback (shared with all adapters)
-# - Correct failure classification
-# - Mock-mode compatible
-# - Tool-aware + extraction-safe
+# No changes from sanity check — already correctly:
+# - Uses attempt_with_fallback on failure
+# - Does NOT fallback on auth errors
+# - No symlinks
 ###################################################################
 
 set -euo pipefail
@@ -47,7 +46,7 @@ if [ -z "$ENDPOINT" ] || [ "$ENDPOINT" = "none" ] || [ "$ENDPOINT" = "null" ]; t
   adapter_exit
 fi
 
-# 🔴 HARD FAIL: missing API key
+# Hard fail — missing API key for OpenAI (no fallback — config error)
 if [ -z "$API_KEY" ] && [[ "$ENDPOINT" == *"openai.com"* ]]; then
   build_response "error" "Missing OPENAI_API_KEY" "invalid_api_key"
   adapter_exit
@@ -79,6 +78,7 @@ else
   CONTEXT=""
   [ -n "${ACTIVE_PROJECT:-}" ] && CONTEXT="[Project: $ACTIVE_PROJECT]"
 
+  # ---- Tool discovery ----
   TOOL_BLOCK=""
 
   if command -v python3 >/dev/null 2>&1 && [ -f "$TOOL_EXECUTOR" ]; then
@@ -191,7 +191,7 @@ while [ "$attempt" -le "$RETRIES" ]; do
     adapter_exit
   fi
 
-  # ❌ ERROR
+  # ❌ API ERROR
   if echo "$RESPONSE" | jq -e '.error' >/dev/null 2>&1; then
 
     ERR_MSG=$(echo "$RESPONSE" | jq -r '.error.message // "Unknown error"')
@@ -200,6 +200,7 @@ while [ "$attempt" -le "$RETRIES" ]; do
 
     case "$ERR_TYPE" in
       invalid_api_key|invalid_request)
+        # Non-retryable — no fallback for config errors
         build_response "error" "$ERR_MSG" "$ERR_TYPE"
         adapter_exit
         ;;
