@@ -1,78 +1,17 @@
 # 🔌 Adapters
 
-Adapters are the bridge between the stable `ai` interface and specific AI agents.
+Adapters are the **execution layer** between the stable `ai` interface and the underlying runtime.
+
+The system has been simplified:
+
+> **LiteLLM is now the primary execution gateway**
+> Everything else is a mode on top of it.
 
 ---
 
-## Active Adapter
+## 🧠 Active Adapter
 
-Adapters are selected via AI_ADAPTER in .env.
-
-Example:
-  AI_ADAPTER=goose
-  AI_ADAPTER=mock
-
-The scripts/runtime.sh wrapper dynamically loads the adapter.
-```
-
-Switch adapters via:
-```bash
-make openai    # → goose.sh
-make local     # → goose.sh (with local endpoint)
-make mock      # → mock.sh
-```
-
----
-
-## Available Adapters
-
-### `goose.sh` — Goose AI Agent
-Primary adapter. Wraps Goose with project context injection.
-Requires Goose to be installed.
-
-### `mock.sh` — Offline Mock
-Mirrors goose.sh interface exactly.
-No AI calls made — logs intended actions only.
-Perfect for: planes, CI/CD, testing.
-
----
-
-## Command Interface
-
-All adapters implement the same commands:
-
-| Command | Purpose |
-|---------|---------|
-| `run` | Execute a general task |
-| `fix` | Fix a specific issue |
-| `explain` | Get an explanation |
-| `refactor` | Improve existing code |
-| `query` | Ask a question |
-
----
-
-## Adding Your Own Adapter
+Adapters are selected via:
 
 ```bash
-#!/bin/bash
-# scripts/adapters/my-agent.sh
-
-COMMAND=$1
-shift
-
-case "$COMMAND" in
-  run)      my_agent "$@" ;;
-  fix)      my_agent "Fix: $@" ;;
-  explain)  my_agent "Explain: $@" ;;
-  refactor) my_agent "Refactor: $@" ;;
-  query)    my_agent "$@" ;;
-  *)        echo "Unknown: $COMMAND"; exit 1 ;;
-esac
-```
-
-Activate it:
-```bash
-chmod +x scripts/adapters/my-agent.sh
-```
-
-**The interface is stable. Everything else is replaceable.**
+AI_ADAPTER in .env

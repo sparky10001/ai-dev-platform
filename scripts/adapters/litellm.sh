@@ -39,7 +39,7 @@ fi
 BASE_URL="${LITELLM_BASE_URL:-http://litellm:4000/v1}"
 MODEL="${ACTIVE_MODEL:-fast}"
 MASTER_KEY="${LITELLM_MASTER_KEY:-ai-dev-platform}"
-TIMEOUT="${AI_TIMEOUT:-60}"
+TIMEOUT="${AI_TIMEOUT:-120}"
 RETRIES="${AI_RETRIES:-2}"
 
 # ================================================================
@@ -138,7 +138,12 @@ build_payload() {
 }
 
 request_once() {
-  curl -sS --max-time "$TIMEOUT" \
+  curl -sS \
+    --connect-timeout 5 \
+    --max-time "$TIMEOUT" \
+    --retry 2 \
+    --retry-delay 1 \
+    --retry-connrefused \
     -X POST "${BASE_URL}/chat/completions" \
     -H "Content-Type: application/json" \
     -H "Authorization: Bearer ${MASTER_KEY}" \

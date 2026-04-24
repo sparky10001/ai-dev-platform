@@ -40,9 +40,8 @@ ENV ACTIVE_MODEL=fast
 # ---- Expose port ----
 EXPOSE 4000
 
-# ---- Healthcheck ----
-# Verifies LiteLLM is ready and can list models
 HEALTHCHECK --interval=15s --timeout=5s --start-period=60s --retries=5 \
-    CMD curl -sf http://localhost:4000/health || exit 1
+  CMD curl -sf http://localhost:4000/health || \
+      curl -sf http://localhost:4000/v1/models || exit 1
 
 ENTRYPOINT ["/entrypoint.sh"]

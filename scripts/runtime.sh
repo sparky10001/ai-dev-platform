@@ -168,7 +168,7 @@ runtime_execute() {
         raw_output=""
         adapter_exit=0
 
-        raw_output=$(timeout "$AI_TIMEOUT" "$ADAPTER" "$command" "$input") || adapter_exit=$?
+        raw_output=$("$ADAPTER" "$command" "$input") || adapter_exit=$?
 
         if [ $adapter_exit -ne 0 ]; then
             echo "⚠️ Adapter system failure (exit $adapter_exit)"

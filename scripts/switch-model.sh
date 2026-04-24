@@ -1,11 +1,13 @@
 #!/bin/bash
 ###################################################################
-# switch-model.sh — v5.2 (Production Hardened)
+# switch-model.sh — v6.0 (LiteLLM-first architecture)
 #
-# Fixes from v5.1:
-# - Renamed AI_FALLBACK_CHAIN → FALLBACK_CHAIN for consistency
-#   with router.sh and _base.sh (both read FALLBACK_CHAIN)
-# - No symlinks anywhere
+# Key changes:
+# - LiteLLM is the primary gateway for ALL model traffic
+# - Goose runs on top of LiteLLM (not OpenAI directly)
+# - Removed legacy provider fragmentation
+# - Unified fallback model
+# - Added resilient curl probing
 ###################################################################
 
 set -euo pipefail
@@ -17,7 +19,7 @@ ENV_FILE="$(dirname "$0")/../.env"
 # Validate input
 # ---------------------------------------------------------------
 if [ -z "$PROVIDER" ]; then
-  echo "Usage: switch-model.sh [openai|openai-goose|http|colab|ollama|local|mock|mock-local]"
+  echo "Usage: switch-model.sh [litellm|goose|mock|mock-local|colab]"
   exit 1
 fi
 
@@ -52,49 +54,27 @@ strip_v1() {
 }
 
 curl_probe() {
-  curl -sS -f --max-time 3 "$1" 2>/dev/null || return 1
+  curl -sS \
+    --connect-timeout 3 \
+    --max-time 5 \
+    --retry 2 \
+    --retry-delay 1 \
+    --retry-connrefused \
+    "$1" 2>/dev/null || return 1
 }
 
 # ---------------------------------------------------------------
 # 🔍 Endpoint Tests
 # ---------------------------------------------------------------
-
-test_ollama() {
-  local base="$1"
-  echo ""
-  echo "🔍 Testing Ollama endpoint..."
-
-  if curl_probe "${base}/api/tags" | jq -e '.models' >/dev/null 2>&1; then
-    echo "✅ Ollama reachable"
-    return 0
-  fi
-
-  echo "❌ Ollama not reachable (run: ollama serve or make up in ollama-service/)"
-  return 1
-}
-
-test_openai() {
-  local base="$1"
-  echo ""
-  echo "🔍 Testing OpenAI endpoint..."
-
-  RESP="$(curl -sS --max-time 3 "${base}/models" || true)"
-
-  if echo "$RESP" | jq -e '.error.type' >/dev/null 2>&1; then
-    echo "✅ OpenAI endpoint reachable (auth required)"
-    return 0
-  fi
-
-  echo "⚠️  Unable to verify OpenAI endpoint (check API key/network)"
-  return 0
-}
-
 test_openai_compatible() {
   local base="$1"
   echo ""
   echo "🔍 Testing OpenAI-compatible endpoint..."
 
-  RESP="$(curl -sS --max-time 3 "${base}/models" || true)"
+  RESP="$(curl -sS \
+    --connect-timeout 3 \
+    --max-time 5 \
+    "${base}/models" || true)"
 
   if echo "$RESP" | jq -e '.data' >/dev/null 2>&1; then
     echo "✅ OpenAI-compatible endpoint reachable"
@@ -102,7 +82,7 @@ test_openai_compatible() {
   fi
 
   if echo "$RESP" | jq -e '.error' >/dev/null 2>&1; then
-    echo "⚠️  Endpoint requires auth (looks OpenAI-compatible)"
+    echo "⚠️  Endpoint requires auth (still valid)"
     return 0
   fi
 
@@ -122,78 +102,51 @@ echo "🔄 Switching provider to: $PROVIDER"
 case "$PROVIDER" in
 
 # ---------------------------------------------------------------
-# 🌐 OpenAI
+# ⚡ LiteLLM (PRIMARY PATH)
 # ---------------------------------------------------------------
-openai)
-  BASE="https://api.openai.com/v1"
+litellm)
+  BASE="${LITELLM_BASE_URL:-http://litellm:4000/v1}"
+  MODEL="${LITELLM_MODEL:-fast}"
+  KEY="${LITELLM_MASTER_KEY:-ai-dev-platform}"
 
-  update_env "MODEL_PROVIDER"  "openai"
-  update_env "MODEL_ENDPOINT"  "$BASE"
-  update_env "AI_ADAPTER"      "openai"
-  update_env "FALLBACK_CHAIN"  "openai,mock"
+  update_env "MODEL_PROVIDER"       "litellm"
+  update_env "MODEL_ENDPOINT"       "$BASE"
+  update_env "AI_ADAPTER"           "litellm"
+  update_env "LITELLM_MODEL"        "$MODEL"
+  update_env "LITELLM_MASTER_KEY"   "$KEY"
+  update_env "FALLBACK_CHAIN"       "litellm,mock"
 
-  echo "✅ Provider: OpenAI"
+  echo "✅ Provider: LiteLLM (unified gateway)"
+  echo "   Adapter:  litellm"
   echo "   Endpoint: $BASE"
-  echo "   Adapter:  openai"
-
-  test_openai "$(strip_v1 "$BASE")"
-  ;;
-
-# ---------------------------------------------------------------
-# 🦆 OpenAI via Goose
-# ---------------------------------------------------------------
-openai-goose)
-  BASE="https://api.openai.com/v1"
-
-  update_env "MODEL_PROVIDER"  "openai"
-  update_env "MODEL_ENDPOINT"  "$BASE"
-  update_env "AI_ADAPTER"      "goose"
-  update_env "FALLBACK_CHAIN"  "goose,openai,mock"
-
-  echo "✅ Provider: OpenAI (via Goose)"
-  echo "   Endpoint: $BASE"
-  echo "   Adapter:  goose"
-  ;;
-
-# ---------------------------------------------------------------
-# 🔗 Generic HTTP
-# ---------------------------------------------------------------
-http)
-  BASE="http://127.0.0.1:8000/v1"
-
-  update_env "MODEL_PROVIDER"  "http"
-  update_env "MODEL_ENDPOINT"  "$BASE"
-  update_env "AI_ADAPTER"      "http-agent"
-  update_env "FALLBACK_CHAIN"  "http-agent,mock"
-
-  echo "✅ HTTP adapter"
-  echo "   Endpoint: $BASE"
+  echo "   Model:    $MODEL"
 
   test_openai_compatible "$(strip_v1 "$BASE")"
   ;;
 
 # ---------------------------------------------------------------
-# 🧠 Ollama
+# 🦆 Goose (Agent runtime on LiteLLM)
 # ---------------------------------------------------------------
-ollama|local)
-  BASE="${OLLAMA_ENDPOINT:-http://ollama:11434}"
+goose)
+  BASE="${LITELLM_BASE_URL:-http://litellm:4000/v1}"
 
-  update_env "MODEL_PROVIDER"  "local"
-  update_env "MODEL_ENDPOINT"  "$BASE"
-  update_env "AI_ADAPTER"      "ollama"
-  update_env "OLLAMA_MODEL"    "${OLLAMA_MODEL:-tinyllama}"
-  update_env "FALLBACK_CHAIN"  "ollama,http-agent,mock"
+  update_env "MODEL_PROVIDER"   "litellm"
+  update_env "MODEL_ENDPOINT"   "$BASE"
+  update_env "AI_ADAPTER"       "goose"
+  update_env "GOOSE_PROVIDER"   "litellm"
+  update_env "GOOSE_MODEL"      "${GOOSE_MODEL:-fast}"
+  update_env "FALLBACK_CHAIN"   "litellm,mock"
 
-  echo "✅ Provider:  Ollama (local LLM)"
-  echo "   Adapter:   ollama"
-  echo "   Endpoint:  $BASE"
-  echo "   Model:     ${OLLAMA_MODEL:-tinyllama}"
+  echo "✅ Mode:     Goose (agent runtime)"
+  echo "   Backend:  LiteLLM"
+  echo "   Endpoint: $BASE"
+  echo "   Model:    ${GOOSE_MODEL:-fast}"
 
-  test_ollama "$BASE"
+  test_openai_compatible "$(strip_v1 "$BASE")"
   ;;
 
 # ---------------------------------------------------------------
-# ☁️ Colab
+# ☁️ Colab (still supported as external)
 # ---------------------------------------------------------------
 colab)
   if [ -z "${COLAB_URL:-}" ]; then
@@ -205,10 +158,10 @@ colab)
 
   update_env "MODEL_PROVIDER"  "colab"
   update_env "MODEL_ENDPOINT"  "$BASE"
-  update_env "AI_ADAPTER"      "http-agent"
-  update_env "FALLBACK_CHAIN"  "http-agent,mock"
+  update_env "AI_ADAPTER"      "litellm"
+  update_env "FALLBACK_CHAIN"  "litellm,mock"
 
-  echo "✅ Colab GPU"
+  echo "✅ Colab (via LiteLLM-compatible API)"
   echo "   Endpoint: $BASE"
 
   test_openai_compatible "$(strip_v1 "$BASE")"
@@ -223,23 +176,24 @@ mock)
   update_env "AI_ADAPTER"      "mock"
   update_env "FALLBACK_CHAIN"  "mock"
 
-  echo "✅ Mock (offline — no AI calls)"
+  echo "✅ Mock (offline mode)"
   ;;
 
 # ---------------------------------------------------------------
-# 🧪 Mock-local (mock OpenAI server)
+# 🧪 Mock-local (OpenAI-compatible test server)
 # ---------------------------------------------------------------
 mock-local)
   BASE="http://127.0.0.1:8000/v1"
 
   update_env "MODEL_PROVIDER"  "mock-local"
   update_env "MODEL_ENDPOINT"  "$BASE"
-  update_env "AI_ADAPTER"      "http-agent"
-  update_env "FALLBACK_CHAIN"  "http-agent,mock"
+  update_env "AI_ADAPTER"      "litellm"
+  update_env "FALLBACK_CHAIN"  "litellm,mock"
 
-  echo "✅ Mock OpenAI server"
+  echo "✅ Mock OpenAI-compatible server"
   echo "   Endpoint: $BASE"
-  echo "   Start server first: make mock-server-bg"
+
+  test_openai_compatible "$(strip_v1 "$BASE")"
   ;;
 
 # ---------------------------------------------------------------
@@ -247,7 +201,7 @@ mock-local)
 # ---------------------------------------------------------------
 *)
   echo "❌ Unknown provider: $PROVIDER"
-  echo "   Options: openai | openai-goose | http | colab | ollama | local | mock | mock-local"
+  echo "   Options: litellm | goose | colab | mock | mock-local"
   exit 1
   ;;
 esac

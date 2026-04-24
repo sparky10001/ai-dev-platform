@@ -74,13 +74,24 @@ if [ -f "$ROOT_DIR/Makefile" ]; then
     echo "✅ Make setup complete"
 fi
 
-# ---- Goose CLI configuration ----
+# ---- Goose CLI configuration (idempotent bootstrap) ----
 echo ""
-echo "🔧 Configuring AI provider: $MODEL_PROVIDER"
-if [ -f "$SCRIPT_DIR/goose-config.sh" ]; then
-    bash "$SCRIPT_DIR/goose-config.sh" || echo "⚠️ Goose config skipped"
+echo "🔧 Checking Goose configuration..."
+
+GOOSE_CONFIG="$HOME/.config/goose/config.yaml"
+WORKSPACE_CONFIG="$ROOT_DIR/.config/goose/config.yaml"
+
+# Ensure persistent config exists
+if [ ! -f "$WORKSPACE_CONFIG" ]; then
+    echo "⚠️ No persisted Goose config found — running initial setup..."
+
+    if [ -f "$SCRIPT_DIR/goose-config.sh" ]; then
+        bash "$SCRIPT_DIR/goose-config.sh" || echo "⚠️ Goose config setup failed"
+    else
+        echo "⚠️ goose-config.sh not found — skipping initial setup"
+    fi
 else
-    echo "⚠️ Goose config script not found — skipping"
+    echo "✅ Using persisted Goose config"
 fi
 
 # ================================================================

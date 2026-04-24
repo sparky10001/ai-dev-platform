@@ -1,12 +1,11 @@
 #!/bin/bash
 ###################################################################
-# _base.sh — Shared adapter utilities (v8 production)
+# _base.sh — Shared adapter utilities (v8.1 production)
 #
-# Fixes from v7:
-# - Removed sanitize_input from build_response output (was mangling code)
-# - Fixed FALLBACK_CHAIN comma-split (was space-split, breaking chain)
-# - sanitize_input kept for tool names and user inputs only
-# - No symlinks anywhere
+# # v8.1 change:
+# - Fallback logic is preserved for reference only
+# - NO adapters should call these directly anymore
+# - LiteLLM + router.sh are now the single source of truth
 ###################################################################
 
 ADAPTER_NAME="${ADAPTER_NAME:-unknown}"
@@ -210,90 +209,17 @@ classify_error() {
 }
 
 # ================================================================
-# 🔥 FALLBACK CHAIN
-#
-# Fix v8: FALLBACK_CHAIN is comma-separated — use IFS split
-# Previously used space iteration which broke with comma values
+# 💤 FALLBACK SYSTEM (DORMANT — LITE LLM NOW HANDLES ROUTING)
 # ================================================================
 
 run_fallback_chain() {
-  local prompt="$1"
-  local reason="$2"
-
-  # Read comma-separated chain — consistent with switch-model.sh
-  local CHAIN="${FALLBACK_CHAIN:-mock}"
-  IFS=',' read -ra CHAIN_ARRAY <<< "$CHAIN"
-
-  for provider in "${CHAIN_ARRAY[@]}"; do
-
-    # Trim whitespace
-    provider=$(echo "$provider" | tr -d ' ')
-
-    local endpoint
-    case "$provider" in
-      mock)       endpoint="${MOCK_ENDPOINT:-http://localhost:8000/v1}" ;;
-      local)      endpoint="${LOCAL_LLM_ENDPOINT:-http://localhost:11434/v1}" ;;
-      ollama)     endpoint="${OLLAMA_ENDPOINT:-http://host.docker.internal:11434}/v1" ;;
-      http-agent) endpoint="${MODEL_ENDPOINT:-}" ;;
-      *)          continue ;;
-    esac
-
-    [ -z "$endpoint" ] || [ "$endpoint" = "none/v1" ] && continue
-
-    local RESPONSE
-    RESPONSE=$(curl -sS --max-time 10 \
-      -X POST "${endpoint}/chat/completions" \
-      -H "Content-Type: application/json" \
-      -d "$(jq -n \
-        --arg model "fallback-${provider}" \
-        --arg prompt "$prompt" \
-        '{
-          model: $model,
-          messages: [{role:"user", content:$prompt}],
-          temperature: 0.7
-        }')" \
-      2>/dev/null || true)
-
-    if json_valid "$RESPONSE"; then
-      local OUTPUT
-      OUTPUT=$(echo "$RESPONSE" | jq -r '.choices[0].message.content // ""')
-
-      if [ -n "$OUTPUT" ]; then
-        build_response "done" "[FALLBACK ${provider}] ${OUTPUT}" "" \
-          "$(jq -n \
-            --arg mode "fallback" \
-            --arg provider "$provider" \
-            --arg reason "$reason" \
-            '{mode:$mode, provider:$provider, reason:$reason}')"
-        return 0
-      fi
-    fi
-
-  done
-
-  # All fallbacks exhausted
-  build_response "error" "All fallback providers failed (chain: ${CHAIN})" "api_error" \
-    "$(jq -n --arg reason "$reason" '{reason:$reason}')"
+  echo "[base.sh] fallback disabled (handled by LiteLLM/router)" >&2
+  return 1
 }
 
-# ================================================================
-# 🔁 ADAPTER ENTRYPOINT
-# ================================================================
-
 attempt_with_fallback() {
-  local prompt="$1"
-  local reason="${2:-unknown_failure}"
-
-  # Prevent recursion
-  if [ "${FALLBACK_ACTIVE:-false}" = "true" ]; then
-    build_response "error" "Fallback recursion prevented" "api_error"
-    return
-  fi
-
-  export FALLBACK_ACTIVE=true
-
-  run_fallback_chain "$prompt" "$reason"
-  adapter_exit
+  echo "[base.sh] attempt_with_fallback disabled (use router.sh)" >&2
+  return 1
 }
 
 # ================================================================

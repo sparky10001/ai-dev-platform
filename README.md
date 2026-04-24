@@ -17,32 +17,36 @@ One stable interface. Any AI agent. Any compute. Anywhere.
 Developer
     │
     ▼
-./scripts/ai run "your task"     ← Never changes
+./ai run "your task"          ← Stable CLI — never changes
     │
     ▼
-scripts/ai                       ← Stable AI interface (routes via AI_ADAPTER)
+scripts/runtime.sh            ← Execution engine + trace logging
     │
     ▼
-Goose │ Mock │ (your agent)      ← Replaceable agent
+scripts/router.sh             ← Intent classification + normalization
     │
     ▼
-OpenAI │ Colab │ Local │ Mock    ← Replaceable model
+LiteLLM │ Goose │ Mock        ← Swappable adapters
+    │
+    ▼
+Ollama │ OpenAI │ Claude │ Colab   ← Replaceable compute
 ```
 
-Swap the agent. Swap the model. Swap the compute.
-**Your workflow stays the same.**
+Swap the adapter. Swap the model. Swap the compute.
+**Your workflow never changes.**
 
 ---
 
 ## ✨ Features
 
-- **Provider Agnostic** — OpenAI, Google Colab GPU, local Ollama, or mock offline mode
-- **Agent Agnostic** — Goose today, anything tomorrow — adapter pattern enforces the contract
-- **Portable** — Works at home, at work, on a plane, in a container
-- **One Command Setup** — Dev Container handles everything automatically
-- **Project Aware** — Switch context between projects instantly
-- **Health Checks** — Know your stack is working before you start
-- **Offline Mode** — Mock adapter keeps your workflow intact without internet
+- **Provider Agnostic** — LiteLLM, OpenAI, Anthropic/Claude, Colab GPU, local Ollama, or fully offline mock
+- **Agent Agnostic** — Goose today, anything tomorrow via the adapter contract
+- **Portable** — Works in Dev Containers, bare metal, CI/CD, or on a plane
+- **Intent-Based Routing** — LiteLLM maps task type to the right model automatically
+- **Project Aware** — Switch context between agent-sim, arb-agent-system, private-ai-stack
+- **Health Verified** — Full system validation with `make health`
+- **Offline Mode** — Fully functional without internet via mock adapter
+- **Evaluation Ready** — Built-in `ai-eval` CLI for simulation-driven CI
 
 ---
 
@@ -57,13 +61,12 @@ cd ai-dev-platform
 
 Open in VS Code → **Reopen in Container**
 
-Everything configures automatically. Then:
+Everything builds automatically — Ollama pulls tinyllama, LiteLLM starts, environment configures itself.
 
 ```bash
-make status    # see active configuration
-make health    # verify everything works
-make openai    # configure your provider
-ai run "let's build something"
+make status          # verify active configuration
+make health          # check all services
+./ai run "hello"     # test the full chain
 ```
 
 ### Option 2 — Local Setup
@@ -72,7 +75,8 @@ ai run "let's build something"
 git clone https://github.com/sparky10001/ai-dev-platform.git
 cd ai-dev-platform
 make setup
-make openai    # or: make local | make mock
+make litellm-fast    # local tinyllama via LiteLLM
+./ai run "hello"
 ```
 
 ---
@@ -81,78 +85,86 @@ make openai    # or: make local | make mock
 
 | Tool | Required | Notes |
 |------|----------|-------|
-| Docker | ✅ Yes | For Dev Container |
+| Docker | ✅ Yes | Dev Container + service stack |
 | VS Code | ✅ Yes | With Dev Containers extension |
-| Goose | ✅ Yes | Primary AI agent |
-| Ollama | Optional | For local model provider |
-| OpenAI API Key | Optional | For OpenAI provider |
-| Google Colab | Optional | For GPU compute |
+| Goose CLI | Optional | `make install-goose` |
+| OpenAI API Key | Optional | For `litellm-code` / `litellm-smart` |
+| Anthropic API Key | Optional | For `litellm-claude` / `litellm-smart` |
 
 ---
 
 ## ⚡ The `ai` Command
 
-Everything goes through one stable interface:
+Everything flows through one stable interface:
 
 ```bash
 ai run      "analyze the agent-sim protocol layer"
 ai fix      "ImportError in agent_runner.py line 42"
 ai explain  "how does Q-learning convergence work"
-ai refactor "simplify the env_interface.py adapter"
-ai query    "what should I work on next"
+ai refactor "simplify the env_interface adapter"
+ai query    "what should I build next"
 ```
 
-**Same commands. Any provider. Any environment.**
+**Same commands. Any backend. Any environment.**
 
 ---
 
 ## 🔄 Switching Providers
 
 ```bash
-make openai    # OpenAI API
-make colab     # Google Colab GPU (prompts for ngrok URL)
-make local     # Local Ollama via private-ai-stack
-make mock      # Offline mode — no AI calls
+# LiteLLM (recommended — intent-based routing)
+make litellm-fast      # tinyllama local — always available
+make litellm-code      # gpt-4.1 → tinyllama fallback
+make litellm-claude    # claude-sonnet → tinyllama fallback
+make litellm-smart     # best available model
+
+# Direct adapters
+make goose             # Goose AI agent (OpenAI backend)
+make mock              # Offline mode — no AI calls
+make mock-local        # Local mock OpenAI server
+
+# GPU
+make colab             # Google Colab GPU via ngrok
 ```
 
-Or via environment variable:
+Or via environment override:
 ```bash
-MODEL_PROVIDER=local make ai-run CMD="review my code"
+ACTIVE_MODEL=claude make ai-run CMD="complex reasoning task"
 ```
 
 ---
 
 ## 🌍 Environment Scenarios
 
-### At Home — Local AI (private)
+### 🏠 At Home — Private Local AI
 ```bash
-make local
-# Uses Ollama via private-ai-stack
-# No data leaves your network
-ai run "review arb-agent-system risk service"
+make litellm-fast
+make ctx-agent-sim
+./ai run "review the Q-learning convergence issue"
+# tinyllama runs locally — no data leaves your network
 ```
 
-### At Work — OpenAI
+### ☁️ At Work — Cloud Intelligence
 ```bash
-make openai
-# Uses OpenAI API
-ai run "refactor agent-sim protocol layer"
+make litellm-code
+make ctx-arb
+./ai run "refactor the risk service"
+# gpt-4.1 via LiteLLM — falls back to tinyllama if key missing
 ```
 
-### On a Plane — Offline
+### ✈️ On a Plane — Offline
 ```bash
 make mock
+./ai run "plan the LiteLLM integration architecture"
+# → [MOCK] Would run: plan the LiteLLM integration...
 # No internet required
-# Commands logged but not executed
-ai run "plan my next feature"  # → [MOCK] Would run: plan my next feature
 ```
 
-### Need GPU — Google Colab
+### 🖥️ Need GPU — Google Colab
 ```bash
 make colab
-# Prompts for ngrok URL from your Colab notebook
-# Connects to GPU-accelerated LiteLLM proxy
-ai run "train the Q-learning agent for 10000 episodes"
+./ai run "train Q-agent for 10000 episodes"
+# LiteLLM routes to Colab GPU via ngrok
 ```
 
 ---
@@ -161,89 +173,198 @@ ai run "train the Q-learning agent for 10000 episodes"
 
 ```
 ai-dev-platform/
+├── ai                         ← ⭐ Stable CLI interface
+├── ai-eval                    ← Evaluation CLI
 ├── .devcontainer/
-│   ├── devcontainer.json    — VS Code Dev Container config
-│   ├── Dockerfile           — Dev environment definition
-│   ├── goose-config.sh      — Goose provider configuration
-│   └── post-create.sh       — Automatic setup on container creation
+│   ├── docker-compose.yml     ← Unified stack (devcontainer + ollama + litellm)
+│   ├── Dockerfile             ← Dev environment
+│   ├── goose-config.sh
+│   └── post-create.sh
 ├── scripts/
-│   ├── ai                   — ⭐ Stable AI interface (loads adapter dynamically)
+│   ├── runtime.sh             ← Execution engine (v5.7)
+│   ├── router.sh              ← Intent router (v3.2)
+│   ├── tool_executor.sh       ← Tool dispatch wrapper
+│   ├── tool_executor.py       ← Python tool engine (v3.1)
+│   ├── tools/                 ← Tool plugins
+│   │   ├── read_file.py
+│   │   ├── write_file.py
+│   │   ├── list_files.py
+│   │   ├── run_bash.py
+│   │   ├── http_get.py
+│   │   ├── read_trace.py
+│   │   └── run_scenario.py
 │   ├── adapters/
-│   │   ├── goose.sh         — Goose AI agent adapter
-│   │   ├── mock.sh          — Offline/testing adapter
-│   │   └── README.md        — Adapter documentation
-│   ├── health-check.sh      — System health verification
-│   ├── start-colab-proxy.sh — Google Colab GPU setup
-│   └── switch-model.sh      — Provider switching
-├── docs/
-│   ├── architecture.md      — System design and principles
-│   ├── setup.md             — Detailed setup guide
-│   └── workflows.md         — Common usage patterns
-├── .env.example             — Environment configuration template
-├── Makefile                 — Unified command interface
-└── README.md                — You are here!
+│   │   ├── _base.sh           ← Shared contract utilities
+│   │   ├── litellm.sh         ← LiteLLM adapter (primary)
+│   │   ├── goose.sh           ← Goose agent adapter
+│   │   └── mock.sh            ← Offline adapter
+│   ├── mock-server/           ← Local OpenAI-compatible test server
+│   ├── switch-model.sh        ← Provider switching
+│   ├── health-check.sh        ← System health
+│   └── start-colab-proxy.sh   ← Colab GPU setup
+├── ollama-service/            ← Ollama container (tinyllama)
+├── litellm-service/           ← LiteLLM router container
+├── scenarios/                 ← Evaluation scenario specs
+│   ├── agent-sim/
+│   └── arb-agent-system/
+├── skills/                    ← Agent Skills (Goose/Claude context)
+│   ├── agent-sim/SKILL.md
+│   ├── arb-agent-system/SKILL.md
+│   ├── private-ai-stack/SKILL.md
+│   └── ai-dev-platform/SKILL.md
+├── Makefile                   ← Unified control surface
+└── .env.example               ← Environment configuration template
 ```
+
+---
+
+## 🧠 LiteLLM Model Aliases
+
+LiteLLM routes your task type to the right model automatically:
+
+| Alias | Primary Model | Fallback | Best For |
+|-------|--------------|----------|----------|
+| `fast` | tinyllama (local) | — | Quick queries, always available |
+| `general` | tinyllama (local) | — | Default, unclassified tasks |
+| `code` | gpt-4.1 (OpenAI) | tinyllama | Code generation, debugging |
+| `tooling` | gpt-4.1 (OpenAI) | tinyllama | Tool use, file operations |
+| `claude` | claude-sonnet (Anthropic) | tinyllama | Complex reasoning |
+| `smart` | gpt-4.1 → claude | tinyllama | Best available model |
+
+The router classifies your task and sets `ACTIVE_MODEL` automatically:
+```
+"fix this bug"    → TASK_TYPE=code    → ACTIVE_MODEL=code    → gpt-4.1
+"read this file"  → TASK_TYPE=tooling → ACTIVE_MODEL=tooling → gpt-4.1
+"explain X"       → TASK_TYPE=general → ACTIVE_MODEL=fast    → tinyllama
+```
+
+---
+
+## 🧪 Validation Ladder
+
+```bash
+make validate
+```
+
+Runs each layer independently — isolates failures precisely:
+
+```
+Step 1: mock adapter     → proves ./ai routes correctly
+Step 2: mock server      → proves Goose/LiteLLM API call chain works
+Step 3: ollama           → proves local LLM inference works
+```
+
+---
+
+## 🏥 Health Check
+
+```bash
+make health
+```
+
+Checks:
+- LiteLLM service reachability
+- Ollama service + tinyllama model loaded
+- Mock server readiness
+- Goose CLI presence
+- Active adapter and environment configuration
+- Managed project endpoints
+
+---
+
+## 📊 Evaluation System
+
+```bash
+# Run a scenario
+./ai run "validate agent-sim protocol"
+
+# Evaluate the trace
+./ai-eval .ai_trace.log scenarios/agent-sim/protocol_validation.json
+
+# Output:
+# ✅ PASS — Score: 0.95
+#    Criteria: 3/3 met
+```
+
+Available scenarios:
+- `scenarios/agent-sim/gridworld_basic.json`
+- `scenarios/agent-sim/gridworld_chaos.json`
+- `scenarios/agent-sim/protocol_validation.json`
+- `scenarios/agent-sim/llm_vs_qlearning.json`
+- `scenarios/arb-agent-system/spread_detection.json`
+- `scenarios/arb-agent-system/health_check.json`
+
+---
+
+## 🔌 Adding Your Own Adapter
+
+Implement the five standard commands:
+
+```bash
+#!/bin/bash
+# scripts/adapters/my-agent.sh
+
+ADAPTER_NAME="my-agent"
+source "$(dirname "$0")/_base.sh"
+
+COMMAND="${1:-}"
+INPUT="${2:-}"
+
+case "$COMMAND" in
+  run)      MY_RESPONSE=$(my_agent "$INPUT") ;;
+  fix)      MY_RESPONSE=$(my_agent "Fix: $INPUT") ;;
+  explain)  MY_RESPONSE=$(my_agent "Explain: $INPUT") ;;
+  refactor) MY_RESPONSE=$(my_agent "Refactor: $INPUT") ;;
+  query)    MY_RESPONSE=$(my_agent "$INPUT") ;;
+  *)
+    build_response "error" "Unknown command: $COMMAND" "invalid_request"
+    adapter_exit
+    ;;
+esac
+
+build_response "done" "$MY_RESPONSE"
+adapter_exit
+```
+
+Activate it:
+```bash
+chmod +x scripts/adapters/my-agent.sh
+AI_ADAPTER=my-agent ./ai run "test"
+```
+
+**The interface is stable. Everything behind it is replaceable.**
 
 ---
 
 ## 🗺️ Roadmap
 
-- [x] Stable `ai` command interface
-- [x] Goose adapter
+- [x] Stable `ai` CLI interface
+- [x] Runtime v5.7 with structured trace logging
+- [x] Router v3.2 with intent classification
+- [x] LiteLLM integration (primary adapter)
+- [x] Goose agent adapter
 - [x] Mock offline adapter
-- [x] OpenAI provider
-- [x] Google Colab GPU provider
-- [x] Local Ollama provider
-- [x] Dev Container environment
-- [x] Health check system
-- [x] Provider switching
-- [ ] Session persistence across container restarts
-- [ ] Project registry — register and switch between projects
-- [ ] Ollama direct adapter (without Goose)
-- [ ] Claude adapter
-- [ ] OpenAI adapter (direct, without Goose)
-- [ ] Web UI for provider/project management
+- [x] Ollama local LLM service
+- [x] Dev Container with unified Docker stack
+- [x] Agent Skills for all managed projects
+- [x] Evaluation CLI (`ai-eval`)
+- [x] 7 evaluation scenarios
+- [x] Python tool executor with plugin system
+- [ ] Persistent sessions across container restarts
+- [ ] Multi-project registry (`make register PROJECT=...`)
+- [ ] Web UI control panel
 - [ ] CI/CD integration guide
 - [ ] Multi-user team configuration
 
 ---
 
-## 🤝 Adding Your Own Adapter
-
-The adapter interface is simple — implement these commands:
-
-```bash
-#!/bin/bash
-# your-agent.sh
-
-COMMAND=$1
-shift
-
-case "$COMMAND" in
-  run)      your_agent run "$@" ;;
-  explain)  your_agent prompt "Explain: $@" ;;
-  refactor) your_agent run "Refactor: $@" ;;
-  fix)      your_agent run "Fix: $@" ;;
-  query)    your_agent prompt "$@" ;;
-  *)        echo "Unknown: $COMMAND" ;;
-esac
-```
-
-Then activate it:
-# Set in .env
-AI_ADAPTER=your-agent
-```
-
-That's it. Your agent is now the active provider. 😄
-
----
-
 ## 🙏 Acknowledgments
 
+- [LiteLLM](https://github.com/BerriAI/litellm) — Universal LLM router
 - [Goose](https://block.github.io/goose/) — AI agent by Block
 - [Ollama](https://ollama.ai/) — Local LLM runtime
-- [private-ai-stack](https://github.com/sparky10001/private-ai-stack) — Local AI infrastructure
 - [agent-sim](https://github.com/sparky10001/agent-sim) — LLM-native RL framework
+- [private-ai-stack](https://github.com/sparky10001/private-ai-stack) — Local AI infrastructure
 
 ---
 
@@ -256,3 +377,4 @@ MIT License — see [LICENSE](LICENSE) for details.
 <p align="center">
 Built with ❤️ by James R. Glines<br>
 The interface is stable. Everything else is replaceable.
+</p>

@@ -1,109 +1,80 @@
 #!/bin/bash
 ##################################################################
-# goose-config.sh — Configure Goose AI agent (resilient + optional)
-#
-# Called by:
-#   - post-create.sh
-#   - switch-model.sh
+# goose-config.sh — Minimal Goose bootstrap (LiteLLM-native)
 #
 # Design:
-#   - Goose is OPTIONAL
-#   - Config is BEST-EFFORT (never breaks pipeline)
-#   - Protocol-driven (not provider-name driven)
+#   - Goose is a thin client
+#   - LiteLLM is the ONLY model gateway
+#   - Config is idempotent and declarative
 ##################################################################
 
-set -e
+set -euo pipefail
 
-echo "🦆 Configuring Goose..."
+echo "🦆 Configuring Goose (LiteLLM-native)..."
 
-# ---- Validate Goose is installed ----
+# ---- Ensure Goose exists ----
 if ! command -v goose >/dev/null 2>&1; then
-    echo "⚠️  Goose not installed — skipping configuration"
-    echo "   Install: make install-goose"
+    echo "⚠️ Goose not installed — skipping"
     exit 0
 fi
 
-# ---- Load .env ----
+# ---- Load environment ----
 ENV_FILE="$(dirname "$0")/../.env"
-if [ -f "$ENV_FILE" ]; then
-    export $(grep -v '^#' "$ENV_FILE" | xargs) 2>/dev/null || true
-fi
+[ -f "$ENV_FILE" ] && set -a && source "$ENV_FILE" && set +a
 
-# ---- Detect Goose CLI capabilities ----
-GOOSE_CONFIG_CMD=""
+# ---- Required LiteLLM endpoint ----
+LITELLM_HOST="${LITELLM_HOST:-http://litellm:4000}"
+LITELLM_BASE="${LITELLM_BASE_PATH:-v1/chat/completions}"
 
-if goose config set provider test >/dev/null 2>&1; then
-    GOOSE_CONFIG_CMD="config"
-elif goose configure set provider test >/dev/null 2>&1; then
-    GOOSE_CONFIG_CMD="configure"
+BASE_URL="${LITELLM_HOST}/v1"
+
+# ---- Normalize config command ----
+GOOSE_CMD=""
+
+if goose config set provider openai >/dev/null 2>&1; then
+    GOOSE_CMD="config"
+elif goose configure set provider openai >/dev/null 2>&1; then
+    GOOSE_CMD="configure"
 else
-    GOOSE_CONFIG_CMD="unsupported"
+    echo "⚠️ Goose CLI non-interactive mode not supported — skipping"
+    exit 0
 fi
 
-# ---- Wrapper for safe config calls ----
 goose_set() {
     local key="$1"
     local value="$2"
 
-    if [ "$GOOSE_CONFIG_CMD" = "config" ]; then
-        goose config set "$key" "$value" 2>/dev/null || return 1
-    elif [ "$GOOSE_CONFIG_CMD" = "configure" ]; then
-        goose configure set "$key" "$value" 2>/dev/null || return 1
+    if [ "$GOOSE_CMD" = "config" ]; then
+        goose config set "$key" "$value" 2>/dev/null || true
     else
-        return 1
+        goose configure set "$key" "$value" 2>/dev/null || true
     fi
 }
 
-# ---- Configure based on provider ----
-PROVIDER="${MODEL_PROVIDER:-openai}"
+# ==============================================================
+# 🧠 CORE CONFIG (ONLY THING THAT MATTERS)
+# ==============================================================
 
-case "$PROVIDER" in
+# Goose always talks to LiteLLM
+goose_set provider "openai-compatible"
+goose_set base_url "$BASE_URL"
 
-  mock)
-    echo "✅ Goose → mock mode (no configuration needed)"
-    ;;
-
-  openai)
-    if goose_set provider openai; then
-        goose_set base_url "https://api.openai.com/v1" || true
-
-        if [ -n "$GOOSE_MODEL" ]; then
-            goose_set model "$GOOSE_MODEL" || true
-        fi
-
-        echo "✅ Goose → OpenAI"
-    else
-        echo "⚠️  Goose CLI does not support non-interactive config"
-        echo "   Run manually: goose configure"
-    fi
-    ;;
-
-  *)
-    # Treat everything else as OpenAI-compatible
-    if [ -z "$MODEL_ENDPOINT" ]; then
-        echo "❌ MODEL_ENDPOINT required for provider: $PROVIDER"
-        exit 1
-    fi
-
-    if goose_set provider openai-compatible; then
-        goose_set base_url "$MODEL_ENDPOINT" || true
-
-        if [ -n "$GOOSE_MODEL" ]; then
-            goose_set model "$GOOSE_MODEL" || true
-        fi
-
-        echo "✅ Goose → ${PROVIDER} (${MODEL_ENDPOINT})"
-    else
-        echo "⚠️  Goose CLI does not support non-interactive config"
-        echo "   Run manually: goose configure"
-    fi
-    ;;
-
-esac
-
-# ---- Project context (informational only) ----
-if [ -n "$ACTIVE_PROJECT" ]; then
-    echo "📁 Active project context: $ACTIVE_PROJECT"
+# Optional model hint (LiteLLM handles routing anyway)
+if [ -n "${GOOSE_MODEL:-}" ]; then
+    goose_set model "$GOOSE_MODEL"
+else
+    goose_set model "fast"
 fi
 
-echo "✅ Goose configuration step complete"
+# Disable any provider-specific assumptions
+goose_set temperature "0.7" || true
+
+# ==============================================================
+# 📁 Persistence note
+# ==============================================================
+
+echo "✅ Goose configured for LiteLLM"
+echo "   Endpoint: $BASE_URL"
+echo "   Model:    ${GOOSE_MODEL:-fast}"
+echo ""
+echo "ℹ️ Goose is now a thin client — all routing handled by LiteLLM"
