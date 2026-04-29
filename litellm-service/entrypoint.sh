@@ -21,7 +21,7 @@ echo "=========================="
 echo "   Port:    $LITELLM_PORT"
 echo "   Config:  $LITELLM_CONFIG"
 echo "   Ollama:  $OLLAMA_BASE"
-echo "   Model:   ${ACTIVE_MODEL:-fast}"
+echo "   Model:   ${ACTIVE_MODEL:-balanced}"
 echo ""
 
 # ---- Validate config ----
@@ -59,7 +59,7 @@ echo "   API:      http://0.0.0.0:${LITELLM_PORT}/v1/chat/completions"
 echo ""
 
 # ---- Start LiteLLM ----
-exec litellm \
-    --config "$LITELLM_CONFIG" \
-    --port "$LITELLM_PORT" \
-    --host "0.0.0.0" \
+exec python -m litellm.proxy.proxy_cli \
+  --config "$LITELLM_CONFIG" \
+  --port "$LITELLM_PORT" \
+  --host "0.0.0.0"

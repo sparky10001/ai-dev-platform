@@ -32,10 +32,9 @@ status: ## Show service status
 	@echo ""
 	@echo "📊 LiteLLM Service Status"
 	@echo "========================="
-	@docker compose ps
 	@echo ""
 	@echo "🔍 Health check:"
-	@curl -sf http://localhost:4000/health 2>/dev/null \
+	@curl -sf http://litellm:4000/health 2>/dev/null \
 		| python3 -m json.tool 2>/dev/null \
 		|| echo "   ❌ Not reachable"
 	@echo ""
@@ -61,7 +60,7 @@ model-smart: ## Switch active model to smart (best available)
 	@echo "✅ Active model: smart (best available)"
 
 chat: ## Quick chat test (MODEL=fast MSG="hello")
-	@curl -sf http://localhost:4000/v1/chat/completions \
+	@curl -sf http://litellm:4000/v1/chat/completions \
 		-H "Content-Type: application/json" \
 		-H "Authorization: Bearer $$(grep LITELLM_MASTER_KEY .env | cut -d= -f2)" \
 		-d "{\"model\":\"$(MODEL)\",\"messages\":[{\"role\":\"user\",\"content\":\"$(MSG)\"}]}" \

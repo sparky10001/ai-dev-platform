@@ -1,15 +1,14 @@
 #!/usr/bin/env python3
 ###################################################################
-# tool_executor.py — Python Tool Execution Engine (v3.1 production)
+# tool_executor.py — Python Tool Execution Engine (v3.3 production)
 #
 # Features:
 # - Plugin auto-loading from /tools
+# - Backward compatible (legacy + MCP tool formats)
+# - Strict normalized output contract
+# - LiteLLM/OpenAI tool schema export
 # - Safe module import (no duplicate execution)
-# - Structured JSON responses (contract-safe)
-# - Tool metadata support
-# - Built-in tool discovery (--list-tools)
-# - Output normalization (string/dict safe)
-# - Silent failures (no stdout pollution)
+# - Silent + safe execution (never crashes runtime)
 ###################################################################
 
 import sys
@@ -25,31 +24,15 @@ DEBUG = os.getenv("TOOL_DEBUG", "false").lower() == "true"
 
 
 # ================================================================
-# 🏗️ RESPONSE HELPERS
+# 🧾 HELPERS
 # ================================================================
 
-def build_response(status, output, extra_meta=None):
-    return {
-        "status": status,
-        "output": output,
-        "meta": {
-            "executor": "python",
-            "timestamp": datetime.utcnow().isoformat(),
-            **(extra_meta or {}),
-        },
-    }
-
-
-def success(output, meta=None):
-    return build_response("done", output, meta)
-
-
-def error(message, meta=None):
-    return build_response("error", message, meta)
+def debug(msg):
+    if DEBUG:
+        print(f"[tool_executor] {msg}", file=sys.stderr)
 
 
 def safe_print(obj):
-    """Never crash on serialization"""
     try:
         print(json.dumps(obj))
     except Exception:
@@ -60,13 +43,63 @@ def safe_print(obj):
         }))
 
 
-def debug(msg):
-    if DEBUG:
-        print(f"[tool_executor] {msg}", file=sys.stderr)
+def timestamp():
+    return datetime.utcnow().isoformat()
 
 
 # ================================================================
-# 🔌 PLUGIN LOADER (SAFE + CACHED)
+# 🔄 TOOL SCHEMA CONVERSION (SAFE)
+# ================================================================
+
+def to_openai_tool_schema(tool_meta):
+    """
+    Converts internal tool metadata into OpenAI/LiteLLM format.
+    Handles both proper JSON Schema and loose schemas.
+    """
+    raw_schema = tool_meta.get("input_schema", {})
+
+    # ---- Case 1: Already valid JSON schema ----
+    if isinstance(raw_schema, dict) and raw_schema.get("type") == "object":
+        schema = raw_schema
+
+    # ---- Case 2: Loose schema (your current tools) ----
+    elif isinstance(raw_schema, dict):
+        properties = {}
+        required = []
+
+        for key, val in raw_schema.items():
+            properties[key] = {"type": "string"}  # safe fallback
+
+            if isinstance(val, str) and "required" in val.lower():
+                required.append(key)
+
+        schema = {
+            "type": "object",
+            "properties": properties,
+        }
+
+        if required:
+            schema["required"] = required
+
+    # ---- Fallback ----
+    else:
+        schema = {
+            "type": "object",
+            "properties": {}
+        }
+
+    return {
+        "type": "function",
+        "function": {
+            "name": tool_meta.get("name"),
+            "description": tool_meta.get("description", ""),
+            "parameters": schema
+        }
+    }
+
+
+# ================================================================
+# 🔌 TOOL LOADER
 # ================================================================
 
 def load_tools():
@@ -91,13 +124,13 @@ def load_tools():
             debug(f"Failed to load tool {tool_name}: {e}")
             continue
 
-        # ---- Register executable ----
+        # ---- Register run() ----
         if hasattr(module, "run") and callable(module.run):
             tools[tool_name] = module.run
         else:
             debug(f"Tool {tool_name} missing run()")
 
-        # ---- Register metadata ----
+        # ---- Metadata ----
         metadata[tool_name] = {
             "name": getattr(module, "name", tool_name),
             "description": getattr(module, "description", ""),
@@ -111,6 +144,92 @@ TOOLS, TOOL_METADATA = load_tools()
 
 
 # ================================================================
+# 🔄 RESULT NORMALIZATION (CRITICAL)
+# ================================================================
+
+def normalize_result(result):
+    """
+    Accepts:
+    - Legacy: {status: "done", output: ...}
+    - MCP:    {status: "success", data: ...}
+
+    Returns STRICT:
+    {
+      status: "success" | "error",
+      data: ...,
+      error: {message, type} | None,
+      meta: {}
+    }
+    """
+
+    # ---- Non-dict fallback ----
+    if not isinstance(result, dict):
+        return {
+            "status": "success",
+            "data": {"value": str(result)},
+            "error": None,
+            "meta": {}
+        }
+
+    status = result.get("status")
+
+    # ============================================================
+    # 🔁 LEGACY FORMAT SUPPORT
+    # ============================================================
+    if status == "done":
+        return {
+            "status": "success",
+            "data": result.get("output"),
+            "error": None,
+            "meta": result.get("meta", {})
+        }
+
+    if status == "error" and "output" in result:
+        return {
+            "status": "error",
+            "data": None,
+            "error": {
+                "message": result.get("output"),
+                "type": result.get("type", "tool_error")
+            },
+            "meta": result.get("meta", {})
+        }
+
+    # ============================================================
+    # ✅ MCP FORMAT
+    # ============================================================
+    if status == "success":
+        return {
+            "status": "success",
+            "data": result.get("data", {}),
+            "error": None,
+            "meta": result.get("meta", {})
+        }
+
+    if status == "error":
+        return {
+            "status": "error",
+            "data": None,
+            "error": result.get("error") or {
+                "message": "Unknown error",
+                "type": "unknown"
+            },
+            "meta": result.get("meta", {})
+        }
+
+    # ---- Unknown contract ----
+    return {
+        "status": "error",
+        "data": None,
+        "error": {
+            "message": "Invalid tool response",
+            "type": "contract_error"
+        },
+        "meta": {}
+    }
+
+
+# ================================================================
 # 🧰 BUILT-IN COMMANDS
 # ================================================================
 
@@ -121,77 +240,86 @@ def handle_list_tools():
     })
 
 
-# ================================================================
-# 🔄 RESULT NORMALIZATION
-# ================================================================
+def handle_list_tools_openai():
+    tools = []
 
-def normalize_result(result):
-    """
-    Ensures all tool outputs conform to contract:
-    - dict → pass through (must include status)
-    - string → wrap as success
-    - anything else → stringify safely
-    """
-    if isinstance(result, dict):
-        if "status" not in result:
-            return success(result)
-        return result
+    for tool_name, meta in TOOL_METADATA.items():
+        try:
+            tools.append(to_openai_tool_schema(meta))
+        except Exception as e:
+            debug(f"Schema conversion failed for {tool_name}: {e}")
 
-    if isinstance(result, str):
-        return success(result)
-
-    return success(str(result))
+    safe_print({
+        "status": "done",
+        "tools": tools
+    })
 
 
 # ================================================================
-# 🚀 MAIN EXECUTION
+# 🚀 MAIN
 # ================================================================
 
 def main():
     try:
         if len(sys.argv) < 2:
-            safe_print(error("Missing tool name"))
+            safe_print({
+                "status": "error",
+                "output": "Missing tool name"
+            })
             return
 
-        # ---- Built-in commands FIRST ----
-        if sys.argv[1] == "--list-tools":
+        cmd = sys.argv[1]
+
+        # ---- Built-ins ----
+        if cmd == "--list-tools":
             handle_list_tools()
             return
 
-        tool_name = sys.argv[1]
+        if cmd == "--list-tools-openai":
+            handle_list_tools_openai()
+            return
+
+        tool_name = cmd
         raw_input = sys.argv[2] if len(sys.argv) > 2 else "{}"
 
-        # ---- Parse JSON input ----
+        # ---- Parse input ----
         try:
             input_data = json.loads(raw_input)
         except json.JSONDecodeError:
-            safe_print(error("Invalid JSON input"))
+            safe_print({
+                "status": "error",
+                "output": "Invalid JSON input"
+            })
             return
 
-        # ---- Lookup tool ----
         tool = TOOLS.get(tool_name)
 
         if not tool:
-            safe_print(error(f"Unknown tool: {tool_name}"))
+            safe_print({
+                "status": "error",
+                "output": f"Unknown tool: {tool_name}"
+            })
             return
 
-        # ---- Execute tool safely ----
+        # ---- Execute ----
         try:
             result = tool(input_data)
             normalized = normalize_result(result)
             safe_print(normalized)
 
         except Exception as e:
-            safe_print(error(f"Tool execution failed: {str(e)}"))
+            safe_print({
+                "status": "error",
+                "output": f"Tool execution failed: {str(e)}"
+            })
 
     except Exception as fatal:
-        # Absolute safety net (never break runtime)
         safe_print({
             "status": "error",
             "output": f"Fatal executor error: {str(fatal)}",
             "meta": {
                 "executor": "python",
-                "timestamp": datetime.utcnow().isoformat()
+                "timestamp": timestamp()
             }
         })
 

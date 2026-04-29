@@ -1,12 +1,5 @@
 ###################################################################
-# run_scenario.py — Scenario spec loader and validator (v1.2)
-#
-# Loads, validates, and prepares scenario specs for execution.
-# Bridge between agent-sim scenario definitions and ai-dev-platform
-# execution engine.
-#
-# Part of the Simulation-Driven CI pipeline:
-#   scenario spec → run_scenario → execution → read_trace → evaluate
+# run_scenario.py — Scenario loader & validator (MCP v2.0)
 ###################################################################
 
 import json
@@ -14,26 +7,63 @@ import os
 from datetime import datetime
 
 name = "run_scenario"
-description = (
-    "Load, validate, and prepare a scenario spec for execution. "
-    "Use before running agent evaluations to establish the task contract."
-)
-input_schema = {
-    "path": "string (required) — path to scenario JSON file",
-    "validate_only": "bool (optional, default false) — only validate, don't prepare",
-    "override": "dict (optional) — override specific scenario fields"
-}
+description = "Load, validate, and prepare a scenario spec for execution"
 
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
 
-# ---- Required fields ----
-REQUIRED_FIELDS = [
-    "scenario_id",
-    "task",
-    "success_criteria"
-]
+# ================================================================
+# 🧾 INPUT SCHEMA
+# ================================================================
 
-# ---- Optional fields with defaults ----
+input_schema = {
+    "type": "object",
+    "properties": {
+        "path": {
+            "type": "string",
+            "description": "Path to scenario JSON file"
+        },
+        "validate_only": {
+            "type": "boolean",
+            "description": "Only validate scenario",
+            "default": False
+        },
+        "override": {
+            "type": "object",
+            "description": "Override scenario fields"
+        }
+    },
+    "required": ["path"]
+}
+
+# ================================================================
+# 🧱 RESPONSE HELPERS
+# ================================================================
+
+def success(data, meta=None):
+    return {
+        "status": "success",
+        "data": data,
+        "error": None,
+        "meta": meta or {}
+    }
+
+def failure(message, error_type="tool_error", meta=None):
+    return {
+        "status": "error",
+        "data": None,
+        "error": {
+            "message": message,
+            "type": error_type
+        },
+        "meta": meta or {}
+    }
+
+# ================================================================
+# 📋 SCHEMA RULES
+# ================================================================
+
+REQUIRED_FIELDS = ["scenario_id", "task", "success_criteria"]
+
 DEFAULTS = {
     "name": "Unnamed Scenario",
     "project": "unknown",
@@ -44,126 +74,148 @@ DEFAULTS = {
     "tags": []
 }
 
+# ================================================================
+# 🔐 PATH SAFETY
+# ================================================================
+
+def resolve_path(path):
+    if not os.path.isabs(path):
+        path = os.path.abspath(os.path.join(BASE_DIR, path))
+    if not path.startswith(BASE_DIR):
+        return None
+    return path
+
+# ================================================================
+# ✅ VALIDATION
+# ================================================================
 
 def validate_scenario(scenario):
-    """
-    Validate scenario spec against contract.
-    Returns (is_valid, list_of_errors)
-    """
     errors = []
 
-    # ---- Required fields ----
     for field in REQUIRED_FIELDS:
         if field not in scenario:
-            errors.append(f"Missing required field: '{field}'")
+            errors.append({
+                "field": field,
+                "message": f"Missing required field: '{field}'"
+            })
 
-    # ---- success_criteria must be a non-empty list ----
     criteria = scenario.get("success_criteria")
     if criteria is not None:
         if not isinstance(criteria, list):
-            errors.append("'success_criteria' must be a list")
+            errors.append({
+                "field": "success_criteria",
+                "message": "Must be a list"
+            })
         elif len(criteria) == 0:
-            errors.append("'success_criteria' must have at least one item")
+            errors.append({
+                "field": "success_criteria",
+                "message": "Must contain at least one item"
+            })
 
-    # ---- scenario_id format ----
     sid = scenario.get("scenario_id", "")
     if sid and not all(c.isalnum() or c in "-_" for c in sid):
-        errors.append(
-            "'scenario_id' must contain only alphanumeric, dash, or underscore"
-        )
+        errors.append({
+            "field": "scenario_id",
+            "message": "Invalid format (alphanumeric, dash, underscore only)"
+        })
 
-    # ---- timeout must be positive int ----
     timeout = scenario.get("timeout")
     if timeout is not None:
         if not isinstance(timeout, (int, float)) or timeout <= 0:
-            errors.append("'timeout' must be a positive number")
+            errors.append({
+                "field": "timeout",
+                "message": "Must be a positive number"
+            })
 
     return len(errors) == 0, errors
 
+# ================================================================
+# 🛠️ PREPARATION
+# ================================================================
 
 def prepare_scenario(scenario, overrides=None):
-    """
-    Apply defaults and overrides to scenario.
-    Returns prepared scenario dict.
-    """
     prepared = {**DEFAULTS, **scenario}
 
-    if overrides and isinstance(overrides, dict):
+    if isinstance(overrides, dict):
         prepared.update(overrides)
 
-    # ---- Inject runtime metadata ----
     prepared["_prepared_at"] = datetime.utcnow().isoformat()
     prepared["_runtime"] = "ai-dev-platform"
 
     return prepared
 
+# ================================================================
+# 🚀 MAIN
+# ================================================================
 
 def run(input_data):
     path = input_data.get("path")
-    validate_only = input_data.get("validate_only", False)
+    validate_only = bool(input_data.get("validate_only", False))
     overrides = input_data.get("override", {})
 
     # ---- Validate input ----
-    if not path:
-        return {"status": "error", "output": "Missing 'path'"}
+    if not isinstance(path, str) or not path:
+        return failure("Invalid or missing 'path'", "validation_error")
 
-    # ---- Resolve path ----
-    if not os.path.isabs(path):
-        full_path = os.path.abspath(os.path.join(BASE_DIR, path))
-    else:
-        full_path = os.path.abspath(path)
-
-    if not full_path.startswith(BASE_DIR):
-        return {"status": "error", "output": "Access denied (path outside workspace)"}
+    full_path = resolve_path(path)
+    if not full_path:
+        return failure("Access denied (path outside workspace)", "security_error")
 
     if not os.path.exists(full_path):
-        return {
-            "status": "error",
-            "output": f"Scenario file not found: {path}",
-            "hint": "Check scenarios/ directory for available specs"
-        }
+        return failure(
+            f"Scenario file not found: {path}",
+            "not_found",
+            meta={"hint": "Check scenarios/ directory"}
+        )
 
     # ---- Load JSON ----
     try:
         with open(full_path, "r", encoding="utf-8") as f:
             scenario = json.load(f)
     except json.JSONDecodeError as e:
-        return {
-            "status": "error",
-            "output": f"Invalid JSON in scenario file: {str(e)}"
-        }
+        return failure(
+            f"Invalid JSON: {str(e)}",
+            "parse_error"
+        )
     except Exception as e:
-        return {"status": "error", "output": f"Failed to read scenario: {str(e)}"}
+        return failure(
+            f"Failed to read scenario: {str(e)}",
+            "execution_error"
+        )
 
     # ---- Validate ----
     is_valid, errors = validate_scenario(scenario)
 
     if not is_valid:
-        return {
-            "status": "error",
-            "output": f"Invalid scenario spec: {'; '.join(errors)}",
-            "errors": errors,
-            "path": path
-        }
+        return failure(
+            "Invalid scenario spec",
+            "validation_error",
+            meta={
+                "errors": errors,
+                "path": path
+            }
+        )
 
-    # ---- Validate only mode ----
+    # ---- Validate-only mode ----
     if validate_only:
-        return {
-            "status": "done",
-            "output": f"Scenario valid: {scenario.get('scenario_id')}",
-            "scenario_id": scenario.get("scenario_id"),
-            "criteria_count": len(scenario.get("success_criteria", [])),
-            "path": path
-        }
+        return success(
+            {
+                "valid": True,
+                "scenario_id": scenario.get("scenario_id"),
+                "criteria_count": len(scenario.get("success_criteria", []))
+            },
+            meta={"path": path, "mode": "validate"}
+        )
 
     # ---- Prepare ----
     prepared = prepare_scenario(scenario, overrides)
 
-    return {
-        "status": "done",
-        "output": prepared,
-        "scenario_id": prepared["scenario_id"],
-        "task": prepared["task"],
-        "criteria_count": len(prepared["success_criteria"]),
-        "path": path
-    }
+    return success(
+        {
+            "scenario": prepared,
+            "scenario_id": prepared["scenario_id"],
+            "task": prepared["task"],
+            "criteria_count": len(prepared["success_criteria"])
+        },
+        meta={"path": path, "mode": "prepare"}
+    )

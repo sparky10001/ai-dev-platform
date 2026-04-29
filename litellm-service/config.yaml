@@ -1,154 +1,142 @@
-###################################################################
-# LiteLLM Router Configuration
-#
-# Model aliases map intent → provider/model
-# Router handles fallback, retries, and load balancing
-#
-# ACTIVE_MODEL env var selects which alias to use:
-#   fast     → tinyllama (local, free, instant)
-#   general  → tinyllama (local, free, instant)
-#   code     → gpt-4.1 (cloud, smart) or tinyllama fallback
-#   tooling  → gpt-4.1 (cloud, smart) or tinyllama fallback
-#   claude   → claude-sonnet (cloud, powerful)
-#
-# Providers enabled based on available env vars:
-#   OPENAI_API_KEY  → enables openai models
-#   ANTHROPIC_API_KEY → enables claude models
-#   Ollama always available (local, no key needed)
-###################################################################
-
 model_list:
 
   # ================================================================
-  # 🏃 FAST — Local Ollama (always available, no key required)
+  # ⚡ FAST — Local deterministic (always available, zero-cost)
   # ================================================================
   - model_name: fast
+    weight: 1.0
     litellm_params:
       model: ollama/tinyllama
       api_base: http://ollama:11434
+      timeout: 15
       stream: false
 
   # ================================================================
-  # 🌐 GENERAL — Local Ollama (default for unclassified tasks)
+  # 🧠 BALANCED — Efficient reasoning tier
   # ================================================================
-  - model_name: general
+
+  # NVIDIA NIM — primary (fast + strong)
+  - model_name: balanced
+    weight: 0.6
+    litellm_params:
+      model: nvidia_nim/mistralai/mistral-nemotron
+      api_key: os.environ/NVIDIA_NIM_API_KEY
+      api_base: https://integrate.api.nvidia.com/v1
+      timeout: 120
+      stream: false
+
+  # NVIDIA NIM — secondary (code-strong)
+  - model_name: balanced
+    weight: 0.3
+    litellm_params:
+      model: nvidia_nim/deepseek-ai/deepseek-v4-pro
+      api_key: os.environ/NVIDIA_NIM_API_KEY
+      timeout: 120
+      stream: false
+
+  # Local fallback (guaranteed execution)
+  - model_name: balanced
+    weight: 0.1
     litellm_params:
       model: ollama/tinyllama
       api_base: http://ollama:11434
+      timeout: 25
       stream: false
 
   # ================================================================
-  # 💻 CODE — OpenAI (falls back to local if no key)
+  # 🧠💥 HEAVY — Best available reasoning tier
   # ================================================================
-  - model_name: code
+
+  # OpenAI — preferred
+  - model_name: heavy
+    weight: 0.5
     litellm_params:
       model: openai/gpt-4.1
       api_key: os.environ/OPENAI_API_KEY
+      timeout: 45
       stream: false
 
-  - model_name: code
-    litellm_params:
-      model: ollama/tinyllama
-      api_base: http://ollama:11434
-      stream: false
-
-  # ================================================================
-  # 🛠️ TOOLING — OpenAI (falls back to local if no key)
-  # ================================================================
-  - model_name: tooling
-    litellm_params:
-      model: openai/gpt-4.1
-      api_key: os.environ/OPENAI_API_KEY
-      stream: false
-
-  - model_name: tooling
-    litellm_params:
-      model: ollama/tinyllama
-      api_base: http://ollama:11434
-      stream: false
-
-  # ================================================================
-  # 🤖 CLAUDE — Anthropic (future-proofed, optional)
-  # ================================================================
-  - model_name: claude
+  # Anthropic — strong fallback
+  - model_name: heavy
+    weight: 0.3
     litellm_params:
       model: anthropic/claude-sonnet-4-5
       api_key: os.environ/ANTHROPIC_API_KEY
+      timeout: 45
       stream: false
 
-  - model_name: claude
+  # NVIDIA — free + capable
+  - model_name: heavy
+    weight: 0.15
+    litellm_params:
+      model: nvidia_nim/deepseek-ai/deepseek-coder-6.7b-instruct
+      api_key: os.environ/NVIDIA_NIM_API_KEY
+      timeout: 45
+      stream: false
+
+  # Local — last resort
+  - model_name: heavy
+    weight: 0.05
     litellm_params:
       model: ollama/tinyllama
       api_base: http://ollama:11434
+      timeout: 30
       stream: false
 
-  # ================================================================
-  # 🔍 SMART — Best available model (OpenAI → Claude → local)
-  # ================================================================
-  - model_name: smart
-    litellm_params:
-      model: openai/gpt-4.1
-      api_key: os.environ/OPENAI_API_KEY
-      stream: false
-
-  - model_name: smart
-    litellm_params:
-      model: anthropic/claude-sonnet-4-5
-      api_key: os.environ/ANTHROPIC_API_KEY
-      stream: false
-
-  - model_name: smart
-    litellm_params:
-      model: ollama/tinyllama
-      api_base: http://ollama:11434
-      stream: false
 
 # ================================================================
-# 🔁 Router Settings
+# 🔁 ROUTER SETTINGS (v3)
 # ================================================================
 router_settings:
-  # Default model when ACTIVE_MODEL is not set
-  # default_model: fast
 
-  # LiteLLM handles retries per provider
+  # 🔥 Core upgrade: latency-aware routing
+  routing_strategy: least-busy
+
+  # Retry behavior
   num_retries: 2
-  retry_after: 5
+  retry_after: 1
 
-  # Fallback chain per model alias
-  # If primary fails → try next in list
-  fallbacks:
-    - code:    [general]
-    - tooling: [general]
-    - claude:  [smart, general]
-    - smart:   [general]
-    - fast:    [general]
-
-  # Timeout per request (seconds)
+  # Global timeout cap
   timeout: 60
 
-  # Route to least busy provider
-  routing_strategy: simple-shuffle
+  # Cross-tier fallback chain (unchanged philosophy)
+  fallbacks:
+    - balanced: [fast]
+    - heavy: [balanced, fast]
+
+  # Cooldown failing providers (prevents thrashing)
+  cooldown_time: 30
+
+  # (Optional but powerful) mark slow providers
+  slow_model_threshold: 10
+
+  # Enable when debugging routing decisions
+  set_verbose: false
+
 
 # ================================================================
-# ⚙️ General Settings
+# ⚙️ GENERAL SETTINGS
 # ================================================================
 general_settings:
-  # Master key for API auth (set via env)
-  # master_key: ""
+
   allow_requests_without_key: true
 
-  # Store usage in DB (optional — disabled by default)
-  # database_url: os.environ/DATABASE_URL
+  # Attach metadata for observability (passed through requests)
+  request_metadata:
+    system: devcontainer
+    router_version: v3
 
-  # Logging
-  set_verbose: false
 
 # ================================================================
-# 📊 Litellm Settings
+# 📊 LITELLM SETTINGS
 # ================================================================
 litellm_settings:
-  # Drop unsupported params (avoids errors with local models)
+
   drop_params: true
 
-  # Don't require stream parameter
+  # Turn ON temporarily for debugging
   set_verbose: false
+
+  # Future-proofing: hooks for logging systems
+  success_callback: []
+  failure_callback: []

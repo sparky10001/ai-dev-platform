@@ -1,40 +1,108 @@
+###################################################################
+# read_file.py — Read file from workspace (MCP-compliant v2.0)
+###################################################################
+
 import os
 
 name = "read_file"
-description = "Read a file from the workspace"
+description = "Read a text file from the workspace"
 
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
 
-def run(input_data):
-    rel_path = input_data.get("path", "")
+MAX_BYTES_DEFAULT = 65536  # 64KB safety limit
 
-    # ---- Resolve safe path ----
-    full_path = os.path.abspath(os.path.join(BASE_DIR, rel_path))
+# ================================================================
+# 🧾 INPUT SCHEMA
+# ================================================================
 
-    # 🔒 Prevent path traversal
-    if not full_path.startswith(BASE_DIR):
-        return {
-            "status": "error",
-            "output": "Access denied (path outside workspace)"
+input_schema = {
+    "type": "object",
+    "properties": {
+        "path": {
+            "type": "string",
+            "description": "Relative file path inside workspace"
+        },
+        "max_bytes": {
+            "type": "integer",
+            "description": "Maximum bytes to read",
+            "default": MAX_BYTES_DEFAULT
         }
+    },
+    "required": ["path"]
+}
+
+# ================================================================
+# 🧱 RESPONSE HELPERS
+# ================================================================
+
+def success(data, meta=None):
+    return {
+        "status": "success",
+        "data": data,
+        "error": None,
+        "meta": meta or {}
+    }
+
+def failure(message, error_type="tool_error", meta=None):
+    return {
+        "status": "error",
+        "data": None,
+        "error": {
+            "message": message,
+            "type": error_type
+        },
+        "meta": meta or {}
+    }
+
+# ================================================================
+# 🔐 PATH SAFETY
+# ================================================================
+
+def resolve_path(rel_path):
+    full_path = os.path.abspath(os.path.join(BASE_DIR, rel_path))
+    if not full_path.startswith(BASE_DIR):
+        return None
+    return full_path
+
+# ================================================================
+# 🚀 MAIN
+# ================================================================
+
+def run(input_data):
+    rel_path = input_data.get("path")
+    max_bytes = int(input_data.get("max_bytes", MAX_BYTES_DEFAULT))
+
+    # ---- Validate ----
+    if not isinstance(rel_path, str) or not rel_path:
+        return failure("Invalid or missing 'path'", "validation_error")
+
+    full_path = resolve_path(rel_path)
+
+    if not full_path:
+        return failure("Access denied (path outside workspace)", "security_error")
 
     if not os.path.exists(full_path):
-        return {
-            "status": "error",
-            "output": f"File not found: {rel_path}"
-        }
+        return failure(f"File not found: {rel_path}", "not_found")
+
+    if not os.path.isfile(full_path):
+        return failure(f"Not a file: {rel_path}", "validation_error")
 
     try:
-        with open(full_path, "r", encoding="utf-8") as f:
-            content = f.read()
+        # ---- Read safely with limit ----
+        with open(full_path, "rb") as f:
+            raw = f.read(max_bytes)
 
-        return {
-            "status": "done",
-            "output": content
-        }
+        content = raw.decode("utf-8", errors="replace")
+
+        return success(
+            {
+                "path": rel_path,
+                "content": content,
+                "bytes_read": len(raw),
+                "truncated": len(raw) == max_bytes
+            },
+            meta={"tool": "read_file"}
+        )
 
     except Exception as e:
-        return {
-            "status": "error",
-            "output": str(e)
-        }
+        return failure(str(e), "execution_error")

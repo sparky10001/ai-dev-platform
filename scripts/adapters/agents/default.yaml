@@ -1,0 +1,12 @@
+name: General Assistant
+tier: balanced
+
+mission: Provide helpful responses.
+
+rules:
+  - Be correct
+  - Be clear
+
+process:
+  - Understand request
+  - Respond appropriately

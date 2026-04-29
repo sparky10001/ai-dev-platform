@@ -1,31 +1,92 @@
 ###################################################################
-# read_trace.py — Execution trace reader tool (v1.2 production)
-#
-# Reads and parses .ai_trace.log JSONL files
-# Supports filtering, summarization, and session isolation
+# read_trace.py — Execution trace reader (MCP-compliant v2.0)
 ###################################################################
 
 import json
 import os
-from datetime import datetime
 
 name = "read_trace"
-description = "Read and parse the AI execution trace log for debugging and evaluation"
-input_schema = {
-    "path": "string (optional) — trace log path (default: .ai_trace.log)",
-    "last_n": "int (optional, default 50) — number of recent events to return",
-    "event_filter": "string (optional) — filter by event type (e.g. 'tool_call')",
-    "session_id": "string (optional) — filter by session ID",
-    "summarize": "bool (optional, default false) — return summary stats instead of events",
-    "since_step": "int (optional) — only return events from this step onward"
-}
+description = "Read and analyze the AI execution trace log"
 
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
 DEFAULT_TRACE = os.path.join(BASE_DIR, ".ai_trace.log")
 
+# ================================================================
+# 🧾 INPUT SCHEMA
+# ================================================================
+
+input_schema = {
+    "type": "object",
+    "properties": {
+        "path": {
+            "type": "string",
+            "description": "Trace log path",
+            "default": ".ai_trace.log"
+        },
+        "last_n": {
+            "type": "integer",
+            "description": "Number of recent events to return",
+            "default": 50
+        },
+        "event_filter": {
+            "type": "string",
+            "description": "Filter by event type"
+        },
+        "session_id": {
+            "type": "string",
+            "description": "Filter by session ID"
+        },
+        "summarize": {
+            "type": "boolean",
+            "description": "Return summary instead of raw events",
+            "default": False
+        },
+        "since_step": {
+            "type": "integer",
+            "description": "Only return events from this step onward"
+        }
+    }
+}
+
+# ================================================================
+# 🧱 RESPONSE HELPERS
+# ================================================================
+
+def success(data, meta=None):
+    return {
+        "status": "success",
+        "data": data,
+        "error": None,
+        "meta": meta or {}
+    }
+
+def failure(message, error_type="tool_error", meta=None):
+    return {
+        "status": "error",
+        "data": None,
+        "error": {
+            "message": message,
+            "type": error_type
+        },
+        "meta": meta or {}
+    }
+
+# ================================================================
+# 🔐 PATH SAFETY
+# ================================================================
+
+def resolve_path(path):
+    if not os.path.isabs(path):
+        path = os.path.abspath(os.path.join(BASE_DIR, path))
+    if not path.startswith(BASE_DIR):
+        return None
+    return path
+
+# ================================================================
+# 📄 PARSING
+# ================================================================
 
 def parse_events(path):
-    """Parse JSONL trace log into list of events."""
     events = []
 
     if not os.path.exists(path):
@@ -36,6 +97,7 @@ def parse_events(path):
             line = line.strip()
             if not line:
                 continue
+
             try:
                 event = json.loads(line)
                 event["_line"] = line_num
@@ -50,11 +112,13 @@ def parse_events(path):
 
     return events
 
+# ================================================================
+# 📊 SUMMARY
+# ================================================================
 
 def summarize_events(events):
-    """Generate summary statistics from trace events."""
     if not events:
-        return {"total": 0}
+        return {"total_events": 0}
 
     event_types = {}
     tools_called = []
@@ -85,72 +149,72 @@ def summarize_events(events):
         "event_types": event_types,
         "tools_called": tools_called,
         "error_count": len(errors),
-        "errors": errors[:10],  # cap at 10
+        "errors": errors[:10],
         "first_step": min(steps) if steps else None,
         "last_step": max(steps) if steps else None,
     }
 
+# ================================================================
+# 🚀 MAIN
+# ================================================================
 
 def run(input_data):
-    path = input_data.get("path", DEFAULT_TRACE)
-    last_n = input_data.get("last_n", 50)
-    event_filter = input_data.get("event_filter", "")
-    session_id = input_data.get("session_id", "")
-    do_summarize = input_data.get("summarize", False)
-    since_step = input_data.get("since_step", None)
+    path = input_data.get("path", ".ai_trace.log")
+    last_n = int(input_data.get("last_n", 50))
+    event_filter = input_data.get("event_filter")
+    session_id = input_data.get("session_id")
+    do_summarize = bool(input_data.get("summarize", False))
+    since_step = input_data.get("since_step")
 
     # ---- Resolve path ----
-    if not os.path.isabs(path):
-        path = os.path.abspath(os.path.join(BASE_DIR, path))
+    full_path = resolve_path(path)
+    if not full_path:
+        return failure("Access denied (path outside workspace)", "security_error")
 
-    if not path.startswith(BASE_DIR):
-        return {"status": "error", "output": "Access denied (path outside workspace)"}
+    if not os.path.exists(full_path):
+        return failure(
+            f"Trace log not found: {path}",
+            "not_found",
+            meta={"hint": "Run with --trace to generate logs"}
+        )
 
-    if not os.path.exists(path):
-        return {
-            "status": "error",
-            "output": f"Trace log not found: {path}",
-            "hint": "Run 'ai run --trace ...' to generate a trace log"
-        }
-
-    # ---- Parse ----
     try:
-        events = parse_events(path)
+        events = parse_events(full_path)
 
-        # ---- Filter by event type ----
+        # ---- Filters ----
         if event_filter:
-            events = [e for e in events if e.get("event", "") == event_filter]
+            events = [e for e in events if e.get("event") == event_filter]
 
-        # ---- Filter by session ----
         if session_id:
-            events = [e for e in events
-                     if str(e.get("session_id", "")) == str(session_id)]
+            events = [
+                e for e in events
+                if str(e.get("session_id", "")) == str(session_id)
+            ]
 
-        # ---- Filter by step ----
         if since_step is not None:
-            events = [e for e in events
-                     if e.get("step", -1) >= int(since_step)]
+            since_step = int(since_step)
+            events = [e for e in events if e.get("step", -1) >= since_step]
 
-        # ---- Summarize mode ----
+        # ---- Summarize ----
         if do_summarize:
-            summary = summarize_events(events)
-            return {
-                "status": "done",
-                "output": summary,
-                "path": path
-            }
+            return success(
+                summarize_events(events),
+                meta={"path": full_path, "mode": "summary"}
+            )
 
         # ---- Return last N ----
         total = len(events)
-        recent = events[-int(last_n):]
+        recent = events[-last_n:]
 
-        return {
-            "status": "done",
-            "output": recent,
-            "total_events": total,
-            "returned": len(recent),
-            "path": path
-        }
+        return success(
+            recent,
+            meta={
+                "path": full_path,
+                "mode": "events",
+                "total_events": total,
+                "returned": len(recent)
+            }
+        )
 
     except Exception as e:
-        return {"status": "error", "output": f"Failed to read trace: {str(e)}"}
+        return failure(f"Failed to read trace: {str(e)}", "execution_error")

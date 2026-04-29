@@ -33,15 +33,9 @@ COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
 # ---- Environment defaults ----
-ENV LITELLM_PORT=4000
 ENV LITELLM_CONFIG=/app/config.yaml
-ENV ACTIVE_MODEL=fast
 
 # ---- Expose port ----
 EXPOSE 4000
-
-HEALTHCHECK --interval=15s --timeout=5s --start-period=60s --retries=5 \
-  CMD curl -sf http://localhost:4000/health || \
-      curl -sf http://localhost:4000/v1/models || exit 1
 
 ENTRYPOINT ["/entrypoint.sh"]

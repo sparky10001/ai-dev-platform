@@ -32,8 +32,9 @@ services:
     build:
       context: ../ollama-service
       dockerfile: Dockerfile
-      args:
-        OLLAMA_IMAGE: ${OLLAMA_IMAGE:-ollama/ollama:latest}
+
+    env_file:
+      - ../ollama-service/.env
 
     container_name: ollama
 
@@ -45,8 +46,6 @@ services:
 
     environment:
       OLLAMA_HOST: 0.0.0.0
-      DEFAULT_MODEL: ${DEFAULT_MODEL:-tinyllama}
-      EXTRA_MODELS: ${EXTRA_MODELS:-}
 
     restart: unless-stopped
 
@@ -68,10 +67,16 @@ services:
       context: ../litellm-service
       dockerfile: Dockerfile
 
+    env_file:
+      - ../litellm-service/.env
+
     container_name: litellm
 
     ports:
       - "4000:4000"
+
+    volumes:
+    - ../litellm-service/config.yaml:/app/config.yaml
 
     depends_on:
       - ollama
@@ -79,21 +84,22 @@ services:
     environment:
       LITELLM_PORT: 4000
       LITELLM_CONFIG: /app/config.yaml
+      LITELLM_MODE: router
       OLLAMA_BASE_URL: http://ollama:11434
-      ACTIVE_MODEL: ${ACTIVE_MODEL:-fast}
+      LITELLM_MASTER_KEY: ai-dev-platform
 
     restart: unless-stopped
 
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:4000/v1/models || exit 1"]
-      interval: 30s
-      timeout: 10s
+      test: ["CMD-SHELL", "curl -s http://localhost:4000/ >/dev/null 2>&1 || exit 1"]
+      interval: 20s
+      timeout: 5s
       retries: 5
       start_period: 60s
 
     networks:
       - ai-net
-
+  
 # ================================================================
 # 💾 Volumes
 # ================================================================

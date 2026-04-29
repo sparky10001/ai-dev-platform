@@ -111,13 +111,13 @@ litellm)
 
   update_env "MODEL_PROVIDER"       "litellm"
   update_env "MODEL_ENDPOINT"       "$BASE"
-  update_env "AI_ADAPTER"           "litellm"
+  update_env "AI_ADAPTER"           "agent"
   update_env "LITELLM_MODEL"        "$MODEL"
   update_env "LITELLM_MASTER_KEY"   "$KEY"
   update_env "FALLBACK_CHAIN"       "litellm,mock"
 
   echo "✅ Provider: LiteLLM (unified gateway)"
-  echo "   Adapter:  litellm"
+  echo "   Adapter:  agent"
   echo "   Endpoint: $BASE"
   echo "   Model:    $MODEL"
 

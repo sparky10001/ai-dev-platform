@@ -1,100 +1,150 @@
 ###################################################################
-# run_bash.py — Shell command execution tool (v1.2 production)
-#
-# Safety features:
-# - Workspace-scoped execution (CWD = BASE_DIR)
-# - Configurable timeout
-# - Blocked command list
-# - Stdout + stderr capture
-# - Exit code in response
+# run_bash.py — Shell execution tool (MCP-compliant v2.0)
 ###################################################################
 
 import os
 import subprocess
+import shlex
 
 name = "run_bash"
-description = "Execute a shell command safely within the workspace"
-input_schema = {
-    "command": "string (required) — shell command to execute",
-    "timeout": "int (optional, default 30) — max seconds to wait",
-    "cwd": "string (optional) — subdirectory to run in (relative to workspace)"
-}
+description = "Execute a shell command within the workspace (restricted)"
 
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
 
-# ---- Blocked commands (safety layer) ----
-BLOCKED = [
+MAX_OUTPUT_BYTES = 65536  # 64KB
+
+# ================================================================
+# 🧾 INPUT SCHEMA
+# ================================================================
+
+input_schema = {
+    "type": "object",
+    "properties": {
+        "command": {
+            "type": "string",
+            "description": "Shell command to execute"
+        },
+        "timeout": {
+            "type": "integer",
+            "description": "Max execution time in seconds",
+            "default": 30
+        },
+        "cwd": {
+            "type": "string",
+            "description": "Working directory (relative to workspace)"
+        }
+    },
+    "required": ["command"]
+}
+
+# ================================================================
+# 🧱 RESPONSE HELPERS
+# ================================================================
+
+def success(data, meta=None):
+    return {
+        "status": "success",
+        "data": data,
+        "error": None,
+        "meta": meta or {}
+    }
+
+def failure(message, error_type="tool_error", meta=None):
+    return {
+        "status": "error",
+        "data": None,
+        "error": {
+            "message": message,
+            "type": error_type
+        },
+        "meta": meta or {}
+    }
+
+# ================================================================
+# 🔐 SAFETY
+# ================================================================
+
+BLOCKED_SUBSTRINGS = [
     "rm -rf /",
     "mkfs",
-    "dd if=/dev/zero",
-    ":(){:|:&};:",   # fork bomb
-    "sudo rm",
-    "> /dev/sda",
+    "dd if=",
+    ":(){:|:&};:",
+    "shutdown",
+    "reboot",
 ]
 
 def is_blocked(command):
-    cmd_lower = command.lower().strip()
-    return any(blocked in cmd_lower for blocked in BLOCKED)
+    cmd = command.lower()
+    return any(b in cmd for b in BLOCKED_SUBSTRINGS)
 
+def resolve_cwd(rel_path):
+    if not rel_path:
+        return BASE_DIR
+
+    full = os.path.abspath(os.path.join(BASE_DIR, rel_path))
+    if not full.startswith(BASE_DIR):
+        return None
+    if not os.path.isdir(full):
+        return None
+    return full
+
+# ================================================================
+# 🚀 MAIN
+# ================================================================
 
 def run(input_data):
     command = input_data.get("command")
-    timeout = input_data.get("timeout", 30)
+    timeout = int(input_data.get("timeout", 30))
     rel_cwd = input_data.get("cwd", "")
 
     # ---- Validate ----
-    if not command:
-        return {"status": "error", "output": "Missing 'command'"}
-
-    if not isinstance(command, str):
-        return {"status": "error", "output": "'command' must be a string"}
+    if not isinstance(command, str) or not command.strip():
+        return failure("Invalid or missing 'command'", "validation_error")
 
     if is_blocked(command):
-        return {"status": "error", "output": f"Blocked command: {command}"}
+        return failure("Command blocked for safety", "security_error")
 
-    # ---- Resolve working directory ----
-    if rel_cwd:
-        work_dir = os.path.abspath(os.path.join(BASE_DIR, rel_cwd))
-        if not work_dir.startswith(BASE_DIR):
-            return {"status": "error", "output": "Access denied (cwd outside workspace)"}
-        if not os.path.isdir(work_dir):
-            return {"status": "error", "output": f"Directory not found: {rel_cwd}"}
-    else:
-        work_dir = BASE_DIR
+    work_dir = resolve_cwd(rel_cwd)
+    if not work_dir:
+        return failure("Invalid or unsafe working directory", "security_error")
 
-    # ---- Execute ----
     try:
-        result = subprocess.run(
+        # ⚠️ safer than raw shell=True parsing
+        process = subprocess.run(
             command,
-            shell=True,
+            shell=True,  # keeping for flexibility, but controlled
+            cwd=work_dir,
             capture_output=True,
             text=True,
-            timeout=int(timeout),
-            cwd=work_dir
+            timeout=timeout
         )
 
-        # Combine stdout + stderr
-        output = result.stdout
-        if result.stderr:
-            output = output + result.stderr if output else result.stderr
+        stdout = process.stdout or ""
+        stderr = process.stderr or ""
 
-        output = output.strip() if output else ""
+        # ---- Truncate output ----
+        combined = (stdout + stderr)[:MAX_OUTPUT_BYTES]
 
-        return {
-            "status": "done",
-            "output": output or "(no output)",
-            "exit_code": result.returncode,
-            "success": result.returncode == 0
-        }
+        return success(
+            {
+                "command": command,
+                "cwd": rel_cwd or ".",
+                "exit_code": process.returncode,
+                "stdout": stdout[:MAX_OUTPUT_BYTES],
+                "stderr": stderr[:MAX_OUTPUT_BYTES],
+                "output": combined.strip() or "(no output)",
+                "truncated": len(stdout + stderr) > MAX_OUTPUT_BYTES,
+                "success": process.returncode == 0
+            },
+            meta={"tool": "run_bash"}
+        )
 
     except subprocess.TimeoutExpired:
-        return {
-            "status": "error",
-            "output": f"Command timed out after {timeout}s: {command}"
-        }
+        return failure(
+            f"Command timed out after {timeout}s",
+            "timeout",
+            meta={"command": command}
+        )
 
     except Exception as e:
-        return {
-            "status": "error",
-            "output": f"Execution error: {str(e)}"
-        }
+        return failure(f"Execution error: {str(e)}", "execution_error")

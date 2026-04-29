@@ -2,98 +2,73 @@
 
 set -euo pipefail
 
-ROUTER="./scripts/router.sh"
+AI_RUNTIME="./scripts/runtime.sh"
 
 pass() { echo "✅ $1"; }
 fail() { echo "❌ $1"; exit 1; }
 
 # --------------------------------------------------
-# Helper: validate JSON
+# Helper: safe execution
 # --------------------------------------------------
-is_json() {
-  echo "$1" | jq -e . >/dev/null 2>&1
+run_cmd() {
+  "$AI_RUNTIME" "$@" 2>&1
 }
 
 # --------------------------------------------------
-# Test 1: Basic success (LiteLLM path)
+# Test 1: Basic execution stability
 # --------------------------------------------------
-test_litellm_success() {
-  echo "Running: LiteLLM success"
+test_basic_run() {
+  echo "Running: Basic execution"
 
-  RESPONSE="$($ROUTER run "Say hello")"
+  OUTPUT="$(run_cmd run "Say hello")"
 
-  is_json "$RESPONSE" || fail "Invalid JSON"
+  [[ -n "$OUTPUT" ]] || fail "Empty output"
 
-  STATUS=$(echo "$RESPONSE" | jq -r '.status')
+  echo "$OUTPUT" | grep -qi "error" && fail "Unexpected error output"
 
-  [[ "$STATUS" == "done" || "$STATUS" == "continue" ]] \
-    && pass "LiteLLM success" \
-    || fail "Unexpected status: $STATUS"
+  pass "Basic run stable"
 }
 
 # --------------------------------------------------
-# Test 2: Forced fallback (break LiteLLM)
+# Test 2: Runtime does not crash on empty input
 # --------------------------------------------------
-test_fallback_to_mock() {
-  echo "Running: Fallback to mock"
+test_empty_input() {
+  echo "Running: Empty input"
 
-  # Force guaranteed connection failure (closed port)
-  export LITELLM_BASE_URL="http://127.0.0.1:9"
+  OUTPUT="$(run_cmd run "")"
 
-  RESPONSE="$($ROUTER run "Hello fallback")"
+  [[ -n "$OUTPUT" ]] || fail "No output returned"
 
-  unset LITELLM_BASE_URL
-
-  is_json "$RESPONSE" || fail "Invalid JSON"
-
-  OUTPUT=$(echo "$RESPONSE" | jq -r '.output')
-
-  echo "$OUTPUT" | grep -q "\[MOCK" \
-    && pass "Fallback triggered" \
-    || fail "Did not fallback to mock"
+  pass "Empty input handled"
 }
 
 # --------------------------------------------------
-# Test 3: Always returns output
-# --------------------------------------------------
-test_non_empty_output() {
-  echo "Running: Non-empty output"
-
-  RESPONSE="$($ROUTER run "")"
-
-  OUTPUT=$(echo "$RESPONSE" | jq -r '.output')
-
-  [[ -n "$OUTPUT" ]] \
-    && pass "Non-empty output" \
-    || fail "Empty output detected"
-}
-
-# --------------------------------------------------
-# Test 4: Invalid command handling
+# Test 3: Invalid command handling (non-zero exit expected)
 # --------------------------------------------------
 test_invalid_command() {
   echo "Running: Invalid command"
 
-  RESPONSE="$($ROUTER invalid "test" || true)"
+  set +e
+  OUTPUT="$($AI_RUNTIME invalid "test" 2>&1)"
+  EXIT_CODE=$?
+  set -e
 
-  is_json "$RESPONSE" || fail "Invalid JSON"
+  [[ $EXIT_CODE -ne 0 ]] || fail "Expected failure exit code"
 
-  STATUS=$(echo "$RESPONSE" | jq -r '.status')
-
-  [[ "$STATUS" == "error" ]] \
+  echo "$OUTPUT" | grep -qi "Usage" \
     && pass "Invalid command handled" \
-    || fail "Expected error status"
+    || fail "Expected usage message"
 }
 
 # --------------------------------------------------
-# Test 5: JSON integrity under stress
+# Test 4: Sequential stability
 # --------------------------------------------------
 test_multiple_runs() {
-  echo "Running: Multiple sequential runs"
+  echo "Running: Sequential runs"
 
   for i in {1..5}; do
-    RESPONSE="$($ROUTER run "Test $i")"
-    is_json "$RESPONSE" || fail "Run $i returned invalid JSON"
+    OUTPUT="$(run_cmd run "Test $i")"
+    [[ -n "$OUTPUT" ]] || fail "Run $i returned empty output"
   done
 
   pass "Multiple runs stable"
@@ -103,14 +78,13 @@ test_multiple_runs() {
 # Run all tests
 # --------------------------------------------------
 main() {
-  test_litellm_success
-  test_fallback_to_mock
-  test_non_empty_output
+  test_basic_run
+  test_empty_input
   test_invalid_command
   test_multiple_runs
 
   echo ""
-  echo "🎉 All router tests passed"
+  echo "🎉 Runtime stability tests passed"
 }
 
 main

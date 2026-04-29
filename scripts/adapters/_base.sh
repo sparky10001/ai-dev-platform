@@ -5,7 +5,7 @@
 # # v8.1 change:
 # - Fallback logic is preserved for reference only
 # - NO adapters should call these directly anymore
-# - LiteLLM + router.sh are now the single source of truth
+# - LiteLLM + runtime.sh are now the single source of truth
 ###################################################################
 
 ADAPTER_NAME="${ADAPTER_NAME:-unknown}"
@@ -218,7 +218,7 @@ run_fallback_chain() {
 }
 
 attempt_with_fallback() {
-  echo "[base.sh] attempt_with_fallback disabled (use router.sh)" >&2
+  echo "[base.sh] attempt_with_fallback handled by runtime.sh + LiteLLM routing" >&2
   return 1
 }
 

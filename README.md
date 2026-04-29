@@ -23,7 +23,7 @@ Developer
 scripts/runtime.sh            ← Execution engine + trace logging
     │
     ▼
-scripts/router.sh             ← Intent classification + normalization
+scripts/adapter               ← Intent classification + normalization
     │
     ▼
 LiteLLM │ Goose │ Mock        ← Swappable adapters
@@ -182,7 +182,6 @@ ai-dev-platform/
 │   └── post-create.sh
 ├── scripts/
 │   ├── runtime.sh             ← Execution engine (v5.7)
-│   ├── router.sh              ← Intent router (v3.2)
 │   ├── tool_executor.sh       ← Tool dispatch wrapper
 │   ├── tool_executor.py       ← Python tool engine (v3.1)
 │   ├── tools/                 ← Tool plugins

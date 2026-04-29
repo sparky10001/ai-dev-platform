@@ -1,0 +1,17 @@
+{
+  "scenario_id": "test_list_files_v2",
+  "task": "Create a file called hello.txt with content 'hi' and then list files",
+  "success_criteria": [
+    {
+      "type": "tool_used",
+      "tool": "write_file"
+    },
+    {
+      "type": "tool_used",
+      "tool": "list_files"
+    },
+    {
+      "type": "no_errors"
+    }
+  ]
+}
