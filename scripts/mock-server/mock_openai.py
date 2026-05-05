@@ -1,31 +1,50 @@
+#!/usr/bin/env python3
 ###################################################################
-# mock_openai.py — Minimal OpenAI-compatible mock server
+# mock_openai.py — OpenAI-compatible mock server (v2.0)
 #
 # Purpose:
-#   Validate that Goose → API call chain works correctly
-#   without requiring a real AI provider
+#   - Validate full AI pipeline (LiteLLM → adapters → agent)
+#   - Provide deterministic + debuggable responses
+#   - Support streaming + failure injection
 #
-# Usage:
-#   uvicorn mock_openai:app --host 0.0.0.0 --port 8000
+# Features:
+#   - /health (liveness)
+#   - /v1/models (OpenAI-compatible)
+#   - /v1/chat/completions (standard + streaming)
+#   - Latency + failure simulation via env
 #
-# Test:
-#   curl http://localhost:8000/health
-#   curl http://localhost:8000/v1/models
-#   curl http://localhost:8000/v1/chat/completions \
-#     -H "Content-Type: application/json" \
-#     -d '{"model":"mock-model","messages":[{"role":"user","content":"hello"}]}'
+# Env Controls:
+#   MOCK_DELAY_MS=0
+#   MOCK_FAIL_RATE=0.0   (0.0–1.0)
+#   MOCK_DEBUG=1
 ###################################################################
 
 import json
+import os
 import time
+import random
+from typing import List, Optional
+
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
 
-app = FastAPI(title="Mock OpenAI Server", version="1.0.0")
+# ================================================================
+# ⚙️ Config
+# ================================================================
+
+MOCK_DELAY_MS = int(os.getenv("MOCK_DELAY_MS", "0"))
+MOCK_FAIL_RATE = float(os.getenv("MOCK_FAIL_RATE", "0.0"))
+MOCK_DEBUG = os.getenv("MOCK_DEBUG", "0") == "1"
+
+APP_VERSION = "2.0.0"
+
+app = FastAPI(title="Mock OpenAI Server", version=APP_VERSION)
 
 
-# ---- Models ----
+# ================================================================
+# 🧱 Models
+# ================================================================
 
 class Message(BaseModel):
     role: str
@@ -34,71 +53,163 @@ class Message(BaseModel):
 
 class ChatRequest(BaseModel):
     model: str
-    messages: list
-    temperature: float = 0.7
-    max_tokens: int = 100
-    stream: bool = False
+    messages: List[Message]
+    temperature: Optional[float] = 0.7
+    max_tokens: Optional[int] = 100
+    stream: Optional[bool] = False
 
 
-# ---- Health ----
+# ================================================================
+# 🧰 Helpers
+# ================================================================
+
+def maybe_delay():
+    if MOCK_DELAY_MS > 0:
+        time.sleep(MOCK_DELAY_MS / 1000.0)
+
+
+def maybe_fail():
+    if MOCK_FAIL_RATE > 0 and random.random() < MOCK_FAIL_RATE:
+        return JSONResponse(
+            status_code=500,
+            content={
+                "error": {
+                    "message": "Mock failure injected",
+                    "type": "mock_error"
+                }
+            }
+        )
+    return None
+
+
+def extract_last_user_message(messages: List[Message]) -> str:
+    for msg in reversed(messages):
+        if msg.role == "user":
+            return msg.content
+    return ""
+
+
+def debug_log(data):
+    if MOCK_DEBUG:
+        print(f"[MOCK DEBUG] {json.dumps(data, indent=2)}")
+
+
+# ================================================================
+# ❤️ Health
+# ================================================================
 
 @app.get("/health")
 def health():
     return {
         "status": "ok",
-        "server": "mock-openai",
-        "version": "1.0.0"
+        "service": "mock-openai",
+        "version": APP_VERSION,
+        "timestamp": int(time.time())
     }
 
 
-# ---- Models endpoint ----
+# ================================================================
+# 📦 Models endpoint
+# ================================================================
 
 @app.get("/v1/models")
 def list_models():
+    now = int(time.time())
+
     return {
         "object": "list",
         "data": [
             {
-                "id": "mock-model",
+                "id": "mock-fast",
                 "object": "model",
-                "created": int(time.time()),
+                "created": now,
+                "owned_by": "mock"
+            },
+            {
+                "id": "mock-code",
+                "object": "model",
+                "created": now,
                 "owned_by": "mock"
             }
         ]
     }
 
 
-# ---- Chat completions ----
+# ================================================================
+# 💬 Chat completions
+# ================================================================
 
 @app.post("/v1/chat/completions")
 async def chat(req: ChatRequest, request: Request):
 
-    # Extract last user message
-    user_msg = ""
-    for msg in reversed(req.messages):
-        if msg.get("role") == "user":
-            user_msg = msg.get("content", "")
-            break
+    # Failure injection
+    failure = maybe_fail()
+    if failure:
+        return failure
 
-    # Debug info — echoes full request context
+    maybe_delay()
+
+    user_msg = extract_last_user_message(req.messages)
+
     debug_info = {
         "model": req.model,
         "message_count": len(req.messages),
         "temperature": req.temperature,
+        "stream": req.stream,
         "last_user_message": user_msg,
-        "all_roles": [m.get("role") for m in req.messages]
+        "roles": [m.role for m in req.messages],
     }
 
-    # Mock response content
+    debug_log(debug_info)
+
     content = (
-        f"[MOCK SERVER] Received: {user_msg}\n"
-        f"Debug: {json.dumps(debug_info, indent=2)}"
+        f"[MOCK:{req.model}] {user_msg}\n"
+        f"(messages={len(req.messages)}, temp={req.temperature})"
     )
 
+    created = int(time.time())
+    completion_id = f"mock-{created}"
+
+    # ------------------------------------------------------------
+    # 🔄 Streaming response (SSE)
+    # ------------------------------------------------------------
+    if req.stream:
+
+        def event_stream():
+            tokens = content.split()
+
+            for i, token in enumerate(tokens):
+                chunk = {
+                    "id": completion_id,
+                    "object": "chat.completion.chunk",
+                    "created": created,
+                    "model": req.model,
+                    "choices": [
+                        {
+                            "index": 0,
+                            "delta": {
+                                "content": token + " "
+                            },
+                            "finish_reason": None
+                        }
+                    ]
+                }
+                yield f"data: {json.dumps(chunk)}\n\n"
+                time.sleep(0.02)
+
+            # Final chunk
+            yield f"data: {json.dumps({'choices':[{'finish_reason':'stop'}]})}\n\n"
+            yield "data: [DONE]\n\n"
+
+        return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+    # ------------------------------------------------------------
+    # 📦 Standard response
+    # ------------------------------------------------------------
     return {
-        "id": f"mock-{int(time.time())}",
+        "id": completion_id,
         "object": "chat.completion",
-        "created": int(time.time()),
+        "created": created,
         "model": req.model,
         "choices": [
             {
@@ -112,23 +223,29 @@ async def chat(req: ChatRequest, request: Request):
         ],
         "usage": {
             "prompt_tokens": len(user_msg.split()),
-            "completion_tokens": 20,
-            "total_tokens": len(user_msg.split()) + 20
+            "completion_tokens": len(content.split()),
+            "total_tokens": len(user_msg.split()) + len(content.split())
         }
     }
 
 
-# ---- Catch-all for debugging unknown routes ----
+# ================================================================
+# ❌ Catch-all (debugging)
+# ================================================================
 
 @app.api_route("/{path:path}", methods=["GET", "POST", "PUT", "DELETE"])
 async def catch_all(path: str, request: Request):
     body = await request.body()
+
     return JSONResponse(
         status_code=404,
         content={
-            "error": f"Route not found: /{path}",
+            "error": {
+                "message": f"Route not found: /{path}",
+                "type": "invalid_request_error"
+            },
             "method": request.method,
             "body": body.decode() if body else None,
-            "hint": "Available routes: /health, /v1/models, /v1/chat/completions"
+            "hint": "Available: /health, /v1/models, /v1/chat/completions"
         }
     )

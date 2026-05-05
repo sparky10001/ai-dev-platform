@@ -63,6 +63,7 @@ RUN python3 -m venv /opt/venv \
     && /opt/venv/bin/pip install \
         fastapi \
         pydantic \
+        pyyaml\
         uvicorn
 
 # Fix venv ownership

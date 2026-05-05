@@ -18,10 +18,34 @@ ENV_FILE="${SCRIPT_DIR}/../.env"
 ADAPTERS_DIR="${SCRIPT_DIR}/adapters"
 
 # ---- Session + Trace ----
-# seconds+PID — portable across Linux and macOS (%N not on macOS)
 SESSION_ID="$(date +%s)_$$"
 TRACE_ENABLED=0
-TRACE_LOG="${SCRIPT_DIR}/../.ai_trace.${SESSION_ID}.log"
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+TRACE_DIR="${AI_TRACE_DIR:-$ROOT_DIR/logs/traces}"
+mkdir -p "$TRACE_DIR"
+
+export AI_TRACE_DIR="$TRACE_DIR"
+
+TRACE_LOG="${TRACE_DIR}/ai_trace.${SESSION_ID}.log"
+
+touch "$TRACE_LOG"
+
+# Optional pointer (safe alternative to symlink)
+echo "$TRACE_LOG" > "${TRACE_DIR}/latest.txt"
+
+echo "📋 Trace: $TRACE_LOG" >&2
+
+# ---- Workspace (per-session) ----
+RUNS_DIR="${ROOT_DIR}/runs"
+
+WORKSPACE_DIR="${RUNS_DIR}/${SESSION_ID}/files"
+
+mkdir -p "$WORKSPACE_DIR"
+
+export AI_SESSION_ID="$SESSION_ID"
+export AI_WORKSPACE_DIR="$WORKSPACE_DIR"
 
 # ---------------------------------------------------------------
 # 🔧 Load env

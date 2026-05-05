@@ -56,7 +56,7 @@ if [[ "${MODEL_PROVIDER}" == "litellm" || "${AI_ADAPTER}" == "litellm" ]]; then
     BASE_NO_V1=$(echo "$BASE" | sed 's|/v1$||')
 
     # Try /health first
-    if curl -sf "${BASE_NO_V1}/health" --max-time 3 > /dev/null 2>&1; then
+    if curl -sf "${BASE_NO_V1}/health" -H "Authorization: Bearer ai-dev-platform" --max-time 45 > /dev/null 2>&1; then
         pass "LiteLLM healthy (/health)"
     
     # Fallback: OpenAI-compatible probe
@@ -144,7 +144,7 @@ case "${AI_ADAPTER:-}" in
         pass "Mock adapter active (no external dependencies)"
         ;;
 
-    litellm)
+    agent)
         if [ -n "${MODEL_ENDPOINT:-}" ]; then
             check_litellm "$MODEL_ENDPOINT"
         else

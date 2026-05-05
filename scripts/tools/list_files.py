@@ -1,17 +1,20 @@
+#!/usr/bin/env python3
 ###################################################################
-# list_files.py — List files in workspace (MCP-compliant v2.0)
+# list_files.py — List files in workspace (MCP-compliant v3.0)
+#
+# Fixes:
+# - Uses AI_WORKSPACE_DIR (session-isolated filesystem)
+# - Strong path sandboxing
+# - Deterministic output
 ###################################################################
 
 import os
 
 name = "list_files"
-description = "List files and directories within a workspace directory"
-
-# Workspace root (safe boundary)
-BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
+description = "List files and directories within the session workspace"
 
 # ================================================================
-# 🧾 INPUT SCHEMA (JSON Schema for tool calling)
+# 🧾 INPUT SCHEMA
 # ================================================================
 
 input_schema = {
@@ -49,13 +52,18 @@ def failure(message, error_type="tool_error", meta=None):
     }
 
 # ================================================================
-# 🔐 PATH RESOLUTION
+# 🔐 WORKSPACE RESOLUTION (CRITICAL)
 # ================================================================
 
-def resolve_path(rel_path):
-    full_path = os.path.abspath(os.path.join(BASE_DIR, rel_path))
-    if not full_path.startswith(BASE_DIR):
+WORKSPACE_DIR = os.getenv("AI_WORKSPACE_DIR") or os.getcwd()
+
+def resolve_path(rel_path: str):
+    full_path = os.path.abspath(os.path.join(WORKSPACE_DIR, rel_path))
+
+    # Prevent escaping workspace
+    if not full_path.startswith(os.path.abspath(WORKSPACE_DIR)):
         return None
+
     return full_path
 
 # ================================================================
@@ -84,19 +92,22 @@ def run(input_data):
 
         for name_ in os.listdir(full_path):
             entry_path = os.path.join(full_path, name_)
+
             entries.append({
                 "name": name_,
                 "type": "directory" if os.path.isdir(entry_path) else "file"
             })
 
-        # ✅ Deterministic output (important for LLMs)
+        # ✅ Deterministic output (important for LLM + evals)
         entries.sort(key=lambda x: (x["type"], x["name"]))
 
         return success(
             {
                 "path": rel_path,
+                "absolute_path": full_path,
                 "entries": entries,
-                "count": len(entries)
+                "count": len(entries),
+                "workspace": WORKSPACE_DIR
             },
             meta={"tool": "list_files"}
         )

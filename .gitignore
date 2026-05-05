@@ -1,4 +1,28 @@
 .env
 node_modules/
 __pycache__/
+
+# =========================================================
+# 🧾 Logs & traces
+# =========================================================
+
+logs/
 *.log
+.ai_trace*
+
+# =========================================================
+# 🧪 Agent run artifacts (ephemeral)
+# =========================================================
+
+# Ignore everything under runs/
+runs/*
+
+# Keep the directory itself
+!runs/
+!runs/.gitkeep
+
+# Ignore all nested content explicitly
+runs/**
+
+# Re-allow .gitkeep ONLY
+!runs/.gitkeep

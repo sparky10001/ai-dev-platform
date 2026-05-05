@@ -1,13 +1,17 @@
+#!/usr/bin/env python3
 ###################################################################
-# read_file.py — Read file from workspace (MCP-compliant v2.0)
+# read_file.py — Read file from workspace (MCP-compliant v3.0)
+#
+# Fixes:
+# - Uses AI_WORKSPACE_DIR (session-isolated filesystem)
+# - Strong path sandboxing
+# - Safe byte-limited reads
 ###################################################################
 
 import os
 
 name = "read_file"
-description = "Read a text file from the workspace"
-
-BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
+description = "Read a text file from the session workspace"
 
 MAX_BYTES_DEFAULT = 65536  # 64KB safety limit
 
@@ -55,13 +59,18 @@ def failure(message, error_type="tool_error", meta=None):
     }
 
 # ================================================================
-# 🔐 PATH SAFETY
+# 🔐 WORKSPACE RESOLUTION (CRITICAL)
 # ================================================================
 
-def resolve_path(rel_path):
-    full_path = os.path.abspath(os.path.join(BASE_DIR, rel_path))
-    if not full_path.startswith(BASE_DIR):
+WORKSPACE_DIR = os.getenv("AI_WORKSPACE_DIR") or os.getcwd()
+
+def resolve_path(rel_path: str):
+    full_path = os.path.abspath(os.path.join(WORKSPACE_DIR, rel_path))
+
+    # Prevent escaping workspace
+    if not full_path.startswith(os.path.abspath(WORKSPACE_DIR)):
         return None
+
     return full_path
 
 # ================================================================
@@ -75,6 +84,9 @@ def run(input_data):
     # ---- Validate ----
     if not isinstance(rel_path, str) or not rel_path:
         return failure("Invalid or missing 'path'", "validation_error")
+
+    if max_bytes <= 0:
+        return failure("max_bytes must be > 0", "validation_error")
 
     full_path = resolve_path(rel_path)
 
@@ -94,12 +106,18 @@ def run(input_data):
 
         content = raw.decode("utf-8", errors="replace")
 
+        # Detect true truncation (file larger than max_bytes)
+        file_size = os.path.getsize(full_path)
+        truncated = file_size > max_bytes
+
         return success(
             {
                 "path": rel_path,
+                "absolute_path": full_path,
                 "content": content,
                 "bytes_read": len(raw),
-                "truncated": len(raw) == max_bytes
+                "truncated": truncated,
+                "workspace": WORKSPACE_DIR
             },
             meta={"tool": "read_file"}
         )

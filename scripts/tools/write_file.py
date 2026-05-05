@@ -1,13 +1,17 @@
+#!/usr/bin/env python3
 ###################################################################
-# write_file.py — File write tool (MCP-compliant v2.0)
+# write_file.py — File write tool (MCP-compliant v3.0)
+#
+# Fixes:
+# - Uses AI_WORKSPACE_DIR (session-isolated filesystem)
+# - Strong path sandboxing
+# - Correct overwrite detection
 ###################################################################
 
 import os
 
 name = "write_file"
-description = "Write a file within the workspace"
-
-BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
+description = "Write a file within the session workspace"
 
 MAX_BYTES = 262144  # 256KB safety limit
 
@@ -59,13 +63,18 @@ def failure(message, error_type="tool_error", meta=None):
     }
 
 # ================================================================
-# 🔐 PATH SAFETY
+# 🔐 WORKSPACE RESOLUTION (CRITICAL)
 # ================================================================
 
-def resolve_path(rel_path):
-    full = os.path.abspath(os.path.join(BASE_DIR, rel_path))
-    if not full.startswith(BASE_DIR):
+WORKSPACE_DIR = os.getenv("AI_WORKSPACE_DIR") or os.getcwd()
+
+def resolve_path(rel_path: str):
+    full = os.path.abspath(os.path.join(WORKSPACE_DIR, rel_path))
+
+    # Prevent escaping workspace (../ attacks)
+    if not full.startswith(os.path.abspath(WORKSPACE_DIR)):
         return None
+
     return full
 
 # ================================================================
@@ -84,7 +93,9 @@ def run(input_data):
     if not isinstance(content, str):
         return failure("Invalid or missing 'content'", "validation_error")
 
-    if len(content.encode("utf-8")) > MAX_BYTES:
+    encoded = content.encode("utf-8")
+
+    if len(encoded) > MAX_BYTES:
         return failure(
             f"Content exceeds max size ({MAX_BYTES} bytes)",
             "limit_exceeded"
@@ -94,8 +105,10 @@ def run(input_data):
     if not full_path:
         return failure("Access denied (path outside workspace)", "security_error")
 
-    # ---- Overwrite protection ----
-    if os.path.exists(full_path) and not overwrite:
+    # ---- Overwrite detection BEFORE write ----
+    existed_before = os.path.exists(full_path)
+
+    if existed_before and not overwrite:
         return failure(
             f"File exists and overwrite disabled: {rel_path}",
             "conflict"
@@ -112,8 +125,10 @@ def run(input_data):
         return success(
             {
                 "path": rel_path,
-                "bytes_written": len(content.encode("utf-8")),
-                "overwritten": os.path.exists(full_path),
+                "absolute_path": full_path,
+                "bytes_written": len(encoded),
+                "overwritten": existed_before,
+                "workspace": WORKSPACE_DIR
             },
             meta={"tool": "write_file"}
         )

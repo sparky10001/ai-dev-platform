@@ -1,15 +1,19 @@
 #!/bin/bash
 ###################################################################
-# ai — Root CLI (stable interface) v1.1
+# ai — Root CLI (stable interface) v1.2
 #
-# Fixes from v1.0:
-# - --trace flag now properly passed through to runtime.sh
-#   (was setting AI_TRACE=1 env var but runtime checks --trace flag)
+# Adds:
+# - agent debug support (ai debug agent <name>)
+# - --agent override (future routing control)
+# - clean flag pass-through
+#
+# Architecture:
+# CLI → runtime → agent.py → (router + agent spec + LLM)
 ###################################################################
 
 set -euo pipefail
 
-VERSION="1.1.0"
+VERSION="1.2.0"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 RUNTIME="${SCRIPT_DIR}/scripts/runtime.sh"
@@ -17,6 +21,7 @@ RUNTIME="${SCRIPT_DIR}/scripts/runtime.sh"
 # ---- Defaults ----
 TRACE=0
 ADAPTER=""
+AGENT=""
 SHOW_VERSION=0
 
 # ---- Parse global flags ----
@@ -32,6 +37,10 @@ while [[ $# -gt 0 ]]; do
             ADAPTER="${1#*=}"
             shift
             ;;
+        --agent=*)
+            AGENT="${1#*=}"
+            shift
+            ;;
         --version)
             SHOW_VERSION=1
             shift
@@ -41,17 +50,20 @@ while [[ $# -gt 0 ]]; do
             echo ""
             echo "Commands:"
             echo "  run | explain | fix | refactor | query"
+            echo "  debug agent <name>"
             echo ""
             echo "Global Options:"
             echo "  --trace            Enable step tracing"
-            echo "  --adapter=NAME     Override adapter (e.g. agent, mock)"
+            echo "  --adapter=NAME     Override adapter (agent, mock, etc)"
+            echo "  --agent=NAME       Override agent spec (fix, explain, query)"
             echo "  --model=TIER       Override model tier (fast|balanced|heavy)"
             echo "  --version          Show version"
             echo ""
             echo "Examples:"
-            echo "  ai run 'analyze agent-sim architecture'"
+            echo "  ai run 'analyze architecture'"
             echo "  ai fix 'ImportError in runner.py' --trace"
             echo "  ai query 'what should I build next' --model=fast"
+            echo "  ai debug agent fix"
             exit 0
             ;;
         *)
@@ -67,24 +79,92 @@ if [ "$SHOW_VERSION" -eq 1 ]; then
     exit 0
 fi
 
-# ---- Validate command ----
+# ---- Validate ----
 if [ ${#ARGS[@]} -eq 0 ]; then
     echo "Usage: ai <command> [args]"
     echo "Run 'ai --help' for full usage"
     exit 1
 fi
 
-# ---- Inject env overrides ----
-# Note: AI_TRACE exported for any scripts that check env
-# --trace flag also prepended to ARGS so runtime.sh receives it
+COMMAND="${ARGS[0]:-}"
+
+# ---------------------------------------------------------------
+# 🔍 DEBUG COMMANDS (handled at CLI level)
+# ---------------------------------------------------------------
+if [ "$COMMAND" = "debug" ]; then
+    SUB="${ARGS[1]:-}"
+
+    if [ "$SUB" = "agent" ]; then
+        AGENT_NAME="${ARGS[2]:-default}"
+        AGENT_FILE="${SCRIPT_DIR}/agents/${AGENT_NAME}.yaml"
+
+        if [ ! -f "$AGENT_FILE" ]; then
+            echo "❌ Agent spec not found: $AGENT_NAME"
+            exit 1
+        fi
+
+        echo "📄 Agent Spec: $AGENT_NAME"
+        echo "--------------------------------"
+        cat "$AGENT_FILE"
+        exit 0
+    fi
+
+    echo "Unknown debug command"
+    exit 1
+fi
+
+# ---------------------------------------------------------------
+# 🌐 ENV INJECTION
+# ---------------------------------------------------------------
 [ "$TRACE" -eq 1 ] && export AI_TRACE=1
 [ -n "$ADAPTER" ] && export AI_ADAPTER="$ADAPTER"
+[ -n "$AGENT" ] && export AI_AGENT="$AGENT"
 
-# ---- Build final args ----
-# Prepend --trace flag so runtime.sh receives it as a positional flag
+# ---------------------------------------------------------------
+# 🧱 BUILD FINAL ARGS
+# ---------------------------------------------------------------
 FINAL_ARGS=()
+
+# ensure runtime gets --trace flag
 [ "$TRACE" -eq 1 ] && FINAL_ARGS+=("--trace")
+
+# pass everything else through untouched
 FINAL_ARGS+=("${ARGS[@]}")
 
-# ---- Execute runtime ----
+# ---------------------------------------------------------------
+# 🤖 AGENT COMMANDS
+# ---------------------------------------------------------------
+if [ "$COMMAND" = "agents" ]; then
+    SUB="${ARGS[1]:-}"
+
+    AGENTS_DIR="${SCRIPT_DIR}/agents"
+
+    case "$SUB" in
+        list)
+            echo "📦 Available agents:"
+            for f in "$AGENTS_DIR"/*.yaml; do
+                name=$(basename "$f" .yaml)
+                echo "  - $name"
+            done
+            exit 0
+            ;;
+
+        validate)
+            echo "🔍 Validating agents..."
+            python3 "$SCRIPT_DIR/scripts/validate_agents.py"
+            exit $?
+            ;;
+
+        *)
+            echo "Usage:"
+            echo "  ai agents list"
+            echo "  ai agents validate"
+            exit 1
+            ;;
+    esac
+fi
+
+# ---------------------------------------------------------------
+# 🚀 EXECUTE
+# ---------------------------------------------------------------
 exec bash "$RUNTIME" "${FINAL_ARGS[@]}"
