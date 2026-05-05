@@ -1,18 +1,14 @@
 #!/bin/bash
 ###################################################################
-# runtime.sh — AI Runtime (v7.2 PRODUCTION)
+# runtime.sh — AI Runtime (v7.4)
 #
-# Responsibilities:
-# - Resolve model tier
-# - Route to adapter
-# - Enforce strict JSON contract
-# - Provide structured trace logging (evaluation-ready)
-# - Enforce execution safety (timeouts)
-#
-# DOES NOT:
-# - Run tools
-# - Loop steps
-# - Interpret agent state
+# Fixes from v7.3:
+# - CRITICAL: removed PARSED_JSON="" + PARSED_OUTPUT="" variable
+#   reset that was wiping parsed adapter output before contract
+#   checks and field extraction — caused all agent tool calls
+#   to appear broken (empty STATUS/OUTPUT/trace)
+# - Consolidated to single PARSED_OUTPUT variable throughout
+# - Trace merge now correctly reads from PARSED_OUTPUT
 ###################################################################
 
 set -euo pipefail
@@ -22,7 +18,8 @@ ENV_FILE="${SCRIPT_DIR}/../.env"
 ADAPTERS_DIR="${SCRIPT_DIR}/adapters"
 
 # ---- Session + Trace ----
-SESSION_ID="$(date +%s%N)"
+# seconds+PID — portable across Linux and macOS (%N not on macOS)
+SESSION_ID="$(date +%s)_$$"
 TRACE_ENABLED=0
 TRACE_LOG="${SCRIPT_DIR}/../.ai_trace.${SESSION_ID}.log"
 
@@ -34,6 +31,9 @@ if [ -f "$ENV_FILE" ]; then
   source "$ENV_FILE"
   set +a
 fi
+
+# Check AI_TRACE env var (set by ai CLI) OR --trace flag
+[ "${AI_TRACE:-0}" = "1" ] && TRACE_ENABLED=1
 
 # ---------------------------------------------------------------
 # 🧠 Command → Model Tier Mapping
@@ -65,14 +65,14 @@ ARGS=()
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --trace) TRACE_ENABLED=1 ;;
-    --model=*) MODEL_OVERRIDE="${1#*=}" ;;
-    *) ARGS+=("$1") ;;
+    --trace)     TRACE_ENABLED=1 ;;
+    --model=*)   MODEL_OVERRIDE="${1#*=}" ;;
+    *)           ARGS+=("$1") ;;
   esac
   shift
 done
 
-INPUT="${ARGS[*]}"
+INPUT="${ARGS[*]:-}"
 
 # ---------------------------------------------------------------
 # 🎯 Resolve model tier
@@ -92,12 +92,12 @@ ADAPTER_NAME="${AI_ADAPTER:-agent}"
 ADAPTER="${ADAPTERS_DIR}/${ADAPTER_NAME}.sh"
 
 if [ ! -f "$ADAPTER" ]; then
-  echo "❌ Adapter not found: $ADAPTER_NAME"
+  echo "❌ Adapter not found: $ADAPTER_NAME (looked in $ADAPTERS_DIR)"
   exit 1
 fi
 
 # ---------------------------------------------------------------
-# 🧾 Trace helpers (structured + deterministic)
+# 🧾 Trace helpers
 # ---------------------------------------------------------------
 STEP=0
 
@@ -126,11 +126,16 @@ log_event() {
 # Initialize trace file
 if [ "$TRACE_ENABLED" -eq 1 ]; then
   : > "$TRACE_LOG"
-  log_event "start" "$(jq -n --arg input "$INPUT" '{input: $input}')"
+  log_event "start" "$(jq -n \
+    --arg input "$INPUT" \
+    --arg command "$COMMAND" \
+    --arg model "$RESOLVED_MODEL" \
+    --arg adapter "$ADAPTER_NAME" \
+    '{input:$input, command:$command, model:$model, adapter:$adapter}')"
 fi
 
 # ---------------------------------------------------------------
-# 🚀 Execute adapter (with timeout guard)
+# 🚀 Execute adapter
 # ---------------------------------------------------------------
 RAW_OUTPUT=""
 EXIT_CODE=0
@@ -143,10 +148,10 @@ if [ $EXIT_CODE -ne 0 ]; then
   if [ $EXIT_CODE -eq 124 ]; then
     echo "❌ Adapter timed out (${RUNTIME_TIMEOUT}s)"
   else
-    echo "❌ Adapter execution failed"
+    echo "❌ Adapter execution failed (exit $EXIT_CODE)"
   fi
-
-  log_event "runtime_error" "$(jq -n --arg code "$EXIT_CODE" '{exit_code: $code}')"
+  log_event "runtime_error" \
+    "$(jq -n --argjson code "$EXIT_CODE" '{exit_code:$code}')"
   exit 1
 fi
 
@@ -156,15 +161,35 @@ fi
 if ! echo "$RAW_OUTPUT" | jq empty >/dev/null 2>&1; then
   echo "❌ Invalid JSON from adapter"
   echo "$RAW_OUTPUT"
-
-  log_event "invalid_json" "$(jq -n --arg raw "$RAW_OUTPUT" '{raw: $raw}')"
+  log_event "invalid_json" \
+    "$(jq -n --arg raw "$RAW_OUTPUT" '{raw:$raw}')"
   exit 1
 fi
 
-# Normalize JSON once
+# ---------------------------------------------------------------
+# ✅ Parse into single variable — used everywhere below
+# Fix v7.4: was split across PARSED_JSON + PARSED_OUTPUT with
+# a reset block in the middle that wiped both variables
+# ---------------------------------------------------------------
 PARSED_OUTPUT=$(echo "$RAW_OUTPUT" | jq -c '.')
 
 log_event "agent_output" "$PARSED_OUTPUT"
+
+# ---------------------------------------------------------------
+# 🔥 Merge agent trace into runtime trace log
+# Reads from PARSED_OUTPUT — not from a reset empty variable
+# ---------------------------------------------------------------
+if [ "$TRACE_ENABLED" -eq 1 ]; then
+  AGENT_TRACE=$(echo "$PARSED_OUTPUT" | jq -c '.meta.trace // []' \
+    2>/dev/null || echo "[]")
+
+  if [ "$AGENT_TRACE" != "[]" ]; then
+    echo "$AGENT_TRACE" | jq -c \
+      --arg session "$SESSION_ID" \
+      '.[] | .session_id = $session' \
+      >> "$TRACE_LOG" 2>/dev/null || true
+  fi
+fi
 
 # ---------------------------------------------------------------
 # 🔒 Enforce strict contract
@@ -188,26 +213,17 @@ fi
 STATUS=$(echo "$PARSED_OUTPUT" | jq -r '.status')
 OUTPUT=$(echo "$PARSED_OUTPUT" | jq -r '.output // empty')
 MODEL=$(echo "$PARSED_OUTPUT" | jq -r '.meta.model // empty')
-PROVIDER=$(echo "$PARSED_OUTPUT" | jq -r '.meta.provider // empty')
 
 # ---------------------------------------------------------------
-# 🧾 Trace passthrough (agent → runtime)
+# 🧾 End trace
 # ---------------------------------------------------------------
 if [ "$TRACE_ENABLED" -eq 1 ]; then
-  TRACE_DATA=$(echo "$PARSED_OUTPUT" | jq -c '.meta.trace // empty')
-
-  if [ -n "$TRACE_DATA" ] && [ "$TRACE_DATA" != "null" ]; then
-    if echo "$TRACE_DATA" | jq -e 'type=="array"' >/dev/null 2>&1; then
-      echo "$TRACE_DATA" | jq -c --arg session "$SESSION_ID" '
-        .[] | .session_id = $session
-      ' >> "$TRACE_LOG" 2>/dev/null || true
-    fi
-  fi
-
   log_event "end" "$(jq -n \
     --arg status "$STATUS" \
     --arg model "$MODEL" \
-    '{status: $status, model: $model}')"
+    '{status:$status, model:$model}')"
+
+  echo "📋 Trace: $TRACE_LOG" >&2
 fi
 
 # ---------------------------------------------------------------

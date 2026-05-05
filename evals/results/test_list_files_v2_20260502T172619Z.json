@@ -1,0 +1,30 @@
+{
+  "scenario_id": "test_list_files_v2",
+  "timestamp": "20260502T172619Z",
+  "model": "balanced",
+  "score": 1,
+  "passed": 3,
+  "total": 3,
+  "results": [
+    {
+      "criteria": {
+        "type": "tool_used",
+        "tool": "write_file"
+      },
+      "passed": true
+    },
+    {
+      "criteria": {
+        "type": "tool_used",
+        "tool": "list_files"
+      },
+      "passed": true
+    },
+    {
+      "criteria": {
+        "type": "no_errors"
+      },
+      "passed": true
+    }
+  ]
+}

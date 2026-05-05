@@ -21,7 +21,7 @@ echo "=========================="
 echo "   Port:    $LITELLM_PORT"
 echo "   Config:  $LITELLM_CONFIG"
 echo "   Ollama:  $OLLAMA_BASE"
-echo "   Model:   ${ACTIVE_MODEL:-balanced}"
+# echo "   Model:   ${ACTIVE_MODEL:-balanced}"
 echo ""
 
 # ---- Validate config ----

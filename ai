@@ -1,17 +1,15 @@
 #!/bin/bash
 ###################################################################
-# ai — Root CLI (stable interface)
+# ai — Root CLI (stable interface) v1.1
 #
-# Responsibilities:
-#   - Argument parsing (light)
-#   - Environment overrides
-#   - UX / help / version
-#   - Delegation to runtime
+# Fixes from v1.0:
+# - --trace flag now properly passed through to runtime.sh
+#   (was setting AI_TRACE=1 env var but runtime checks --trace flag)
 ###################################################################
 
 set -euo pipefail
 
-VERSION="1.0.0"
+VERSION="1.1.0"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 RUNTIME="${SCRIPT_DIR}/scripts/runtime.sh"
@@ -21,7 +19,7 @@ TRACE=0
 ADAPTER=""
 SHOW_VERSION=0
 
-# ---- Parse global flags (before command) ----
+# ---- Parse global flags ----
 ARGS=()
 
 while [[ $# -gt 0 ]]; do
@@ -46,8 +44,14 @@ while [[ $# -gt 0 ]]; do
             echo ""
             echo "Global Options:"
             echo "  --trace            Enable step tracing"
-            echo "  --adapter=NAME     Override adapter"
+            echo "  --adapter=NAME     Override adapter (e.g. agent, mock)"
+            echo "  --model=TIER       Override model tier (fast|balanced|heavy)"
             echo "  --version          Show version"
+            echo ""
+            echo "Examples:"
+            echo "  ai run 'analyze agent-sim architecture'"
+            echo "  ai fix 'ImportError in runner.py' --trace"
+            echo "  ai query 'what should I build next' --model=fast"
             exit 0
             ;;
         *)
@@ -66,12 +70,21 @@ fi
 # ---- Validate command ----
 if [ ${#ARGS[@]} -eq 0 ]; then
     echo "Usage: ai <command> [args]"
+    echo "Run 'ai --help' for full usage"
     exit 1
 fi
 
 # ---- Inject env overrides ----
+# Note: AI_TRACE exported for any scripts that check env
+# --trace flag also prepended to ARGS so runtime.sh receives it
 [ "$TRACE" -eq 1 ] && export AI_TRACE=1
 [ -n "$ADAPTER" ] && export AI_ADAPTER="$ADAPTER"
 
+# ---- Build final args ----
+# Prepend --trace flag so runtime.sh receives it as a positional flag
+FINAL_ARGS=()
+[ "$TRACE" -eq 1 ] && FINAL_ARGS+=("--trace")
+FINAL_ARGS+=("${ARGS[@]}")
+
 # ---- Execute runtime ----
-exec bash "$RUNTIME" "${ARGS[@]}"
+exec bash "$RUNTIME" "${FINAL_ARGS[@]}"

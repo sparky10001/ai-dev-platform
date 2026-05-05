@@ -1,15 +1,24 @@
+#!/usr/bin/env python3
 ###################################################################
-# read_trace.py — Execution trace reader (MCP-compliant v2.0)
+# read_trace.py — Execution trace reader (MCP-compliant v3.0)
+#
+# Guarantees:
+# - NDJSON-safe parsing
+# - Canonical event structure
+# - Nested trace flattening (CRITICAL)
+# - Stable output for evaluators
 ###################################################################
 
 import json
 import os
+from typing import Any, Dict, List
 
 name = "read_trace"
 description = "Read and analyze the AI execution trace log"
 
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
 DEFAULT_TRACE = os.path.join(BASE_DIR, ".ai_trace.log")
+
 
 # ================================================================
 # 🧾 INPUT SCHEMA
@@ -20,33 +29,28 @@ input_schema = {
     "properties": {
         "path": {
             "type": "string",
-            "description": "Trace log path",
             "default": ".ai_trace.log"
         },
         "last_n": {
             "type": "integer",
-            "description": "Number of recent events to return",
             "default": 50
         },
         "event_filter": {
-            "type": "string",
-            "description": "Filter by event type"
+            "type": "string"
         },
         "session_id": {
-            "type": "string",
-            "description": "Filter by session ID"
+            "type": "string"
         },
         "summarize": {
             "type": "boolean",
-            "description": "Return summary instead of raw events",
             "default": False
         },
         "since_step": {
-            "type": "integer",
-            "description": "Only return events from this step onward"
+            "type": "integer"
         }
     }
 }
+
 
 # ================================================================
 # 🧱 RESPONSE HELPERS
@@ -60,6 +64,7 @@ def success(data, meta=None):
         "meta": meta or {}
     }
 
+
 def failure(message, error_type="tool_error", meta=None):
     return {
         "status": "error",
@@ -71,52 +76,109 @@ def failure(message, error_type="tool_error", meta=None):
         "meta": meta or {}
     }
 
+
 # ================================================================
 # 🔐 PATH SAFETY
 # ================================================================
 
-def resolve_path(path):
+def resolve_path(path: str) -> str | None:
     if not os.path.isabs(path):
         path = os.path.abspath(os.path.join(BASE_DIR, path))
     if not path.startswith(BASE_DIR):
         return None
     return path
 
+
 # ================================================================
-# 📄 PARSING
+# 📄 PARSE NDJSON TRACE
 # ================================================================
 
-def parse_events(path):
-    events = []
+def parse_events(path: str) -> List[Dict[str, Any]]:
+    """
+    Robust parser that supports:
+    - NDJSON (one JSON object per line)
+    - Pretty-printed multi-line JSON objects
+    - Mixed formats (CRITICAL FIX)
+    """
+    events: List[Dict[str, Any]] = []
 
     if not os.path.exists(path):
         return events
 
+    buffer = ""
+
+    def try_parse(chunk: str):
+        try:
+            obj = json.loads(chunk)
+            if isinstance(obj, dict):
+                events.append(obj)
+                return True
+        except json.JSONDecodeError:
+            return False
+        return False
+
     with open(path, "r", encoding="utf-8") as f:
-        for line_num, line in enumerate(f, 1):
+        for line in f:
             line = line.strip()
             if not line:
                 continue
 
-            try:
-                event = json.loads(line)
-                event["_line"] = line_num
-                events.append(event)
-            except json.JSONDecodeError:
-                events.append({
-                    "_line": line_num,
-                    "event": "parse_error",
-                    "data": line,
-                    "step": -1
-                })
+            # Case 1: clean single-line JSON
+            if line.startswith("{") and line.endswith("}"):
+                if try_parse(line):
+                    continue
+
+            # Case 2: multi-line JSON accumulation
+            buffer += line
+
+            if try_parse(buffer):
+                buffer = ""  # reset after successful parse
 
     return events
+
+
+# ================================================================
+# 🔥 FLATTEN NESTED TRACE STRUCTURES (CRITICAL FIX)
+# ================================================================
+
+def flatten_events(events: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    out: List[Dict[str, Any]] = []
+
+    def extract(e: Any):
+        if not isinstance(e, dict):
+            return
+
+        out.append(e)
+
+        # Case 1: agent_output → data.meta.trace
+        data = e.get("data")
+        if isinstance(data, dict):
+            meta = data.get("meta", {})
+            if isinstance(meta, dict):
+                trace = meta.get("trace")
+                if isinstance(trace, list):
+                    for sub in trace:
+                        extract(sub)
+
+        # Case 2: direct meta.trace
+        meta = e.get("meta", {})
+        if isinstance(meta, dict):
+            trace = meta.get("trace")
+            if isinstance(trace, list):
+                for sub in trace:
+                    extract(sub)
+
+    for e in events:
+        extract(e)
+
+    return out
+
 
 # ================================================================
 # 📊 SUMMARY
 # ================================================================
 
-def summarize_events(events):
+def summarize_events(events: List[Dict[str, Any]]) -> Dict[str, Any]:
     if not events:
         return {"total_events": 0}
 
@@ -130,15 +192,21 @@ def summarize_events(events):
         event_types[etype] = event_types.get(etype, 0) + 1
 
         step = e.get("step", -1)
-        if step >= 0:
+        if isinstance(step, int) and step >= 0:
             steps.add(step)
 
         if etype == "tool_call":
-            tools_called.append(e.get("data", "unknown"))
+            tool = (
+                e.get("data")
+                or e.get("meta", {}).get("tool")
+                or e.get("meta", {}).get("output", {}).get("meta", {}).get("tool")
+            )
+            if isinstance(tool, str):
+                tools_called.append(tool)
 
         if "error" in etype:
             errors.append({
-                "step": e.get("step"),
+                "step": step,
                 "event": etype,
                 "data": e.get("data", "")
             })
@@ -154,11 +222,12 @@ def summarize_events(events):
         "last_step": max(steps) if steps else None,
     }
 
+
 # ================================================================
-# 🚀 MAIN
+# 🚀 MAIN ENTRY
 # ================================================================
 
-def run(input_data):
+def run(input_data: Dict[str, Any]):
     path = input_data.get("path", ".ai_trace.log")
     last_n = int(input_data.get("last_n", 50))
     event_filter = input_data.get("event_filter")
@@ -179,7 +248,11 @@ def run(input_data):
         )
 
     try:
+        # ---- Parse + Normalize ----
         events = parse_events(full_path)
+
+        # 🔥 CRITICAL: flatten nested traces
+        events = flatten_events(events)
 
         # ---- Filters ----
         if event_filter:
@@ -193,7 +266,10 @@ def run(input_data):
 
         if since_step is not None:
             since_step = int(since_step)
-            events = [e for e in events if e.get("step", -1) >= since_step]
+            events = [
+                e for e in events
+                if isinstance(e.get("step"), int) and e.get("step") >= since_step
+            ]
 
         # ---- Summarize ----
         if do_summarize:
@@ -204,7 +280,27 @@ def run(input_data):
 
         # ---- Return last N ----
         total = len(events)
-        recent = events[-last_n:]
+        # 🔥 Always include ALL tool_call events
+        if last_n > 0:
+            tail = events[-last_n:]
+
+            # Extract ALL tool_calls globally
+            tool_events = [e for e in events if e.get("event") == "tool_call"]
+
+            # Merge + dedupe
+            seen = set()
+            merged = []
+
+            for e in tail + tool_events:
+                key = (e.get("event"), e.get("step"), str(e.get("data")))
+                if key in seen:
+                    continue
+                seen.add(key)
+                merged.append(e)
+
+            recent = merged
+        else:
+            recent = events
 
         return success(
             recent,

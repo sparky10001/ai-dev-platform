@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
 ###################################################################
-# run_scenario.sh — Scenario execution + evaluation loop (v3.0)
+# run_scenario.sh — Scenario execution + evaluation loop (v5.0)
 #
-# Guarantees:
-# - Deterministic model selection (scenario-first)
-# - CLI override support (--model=...)
-# - Strict JSON handling (no silent failures)
-# - Trace-driven evaluation
-# - Clean result persistence
+# Fixes from v4.0:
+# - CRITICAL: now captures per-session trace path from runtime stderr
+#   (was reading .ai_trace.log — the old shared file — instead of
+#   the per-session .ai_trace.{SESSION_ID}.log that runtime writes)
+# - Passes exact trace path to read_trace tool
+# - Flattens nested meta.trace events from agent_output event
+#   so evaluate_trace sees tool_call events directly
 ###################################################################
 
 set -euo pipefail
@@ -34,7 +35,7 @@ TRACE_FLAG="--trace"
 for arg in "$@"; do
   case "$arg" in
     --model=*) CLI_MODEL="${arg#*=}" ;;
-    --trace) TRACE_FLAG="--trace" ;;
+    --trace)   TRACE_FLAG="--trace" ;;
   esac
 done
 
@@ -45,7 +46,6 @@ done
 echo "📘 Loading scenario..."
 
 SCENARIO_JSON=$(python3 "$EXECUTOR" run_scenario "{\"path\": \"$SCENARIO_PATH\"}")
-
 STATUS=$(echo "$SCENARIO_JSON" | jq -r '.status')
 
 if [ "$STATUS" != "success" ]; then
@@ -54,20 +54,52 @@ if [ "$STATUS" != "success" ]; then
   exit 1
 fi
 
-SCENARIO_DATA=$(echo "$SCENARIO_JSON" | jq -c '.data')
+# Normalize (handles stringified JSON)
+SCENARIO_DATA=$(echo "$SCENARIO_JSON" | jq -c '
+  if (.data | type) == "string"
+  then (.data | fromjson)
+  else (.data // .)
+  end
+')
 
-TASK=$(echo "$SCENARIO_DATA" | jq -r '.task')
-CRITERIA=$(echo "$SCENARIO_DATA" | jq -c '.success_criteria')
-SCENARIO_ID=$(echo "$SCENARIO_DATA" | jq -r '.scenario_id')
+if [ -z "$SCENARIO_DATA" ] || [ "$SCENARIO_DATA" = "null" ]; then
+  echo "❌ Scenario data empty after normalization"
+  exit 1
+fi
+
+TASK=$(echo "$SCENARIO_DATA" | jq -r '.task // empty')
+
+if [ -z "$TASK" ]; then
+  echo "❌ Scenario missing task"
+  echo "$SCENARIO_DATA" | jq
+  exit 1
+fi
+
+# ---------------------------------------------------------------
+# 🎯 Extract criteria
+# ---------------------------------------------------------------
+
+CRITERIA=$(echo "$SCENARIO_DATA" | jq -c '
+  .success_criteria // .criteria //
+  .scenario.success_criteria // .scenario.criteria // []
+')
+
+[ -z "$CRITERIA" ] || [ "$CRITERIA" = "null" ] && CRITERIA="[]"
+
+CRITERIA_LEN=$(echo "$CRITERIA" | jq 'length')
+
+if [ "$CRITERIA_LEN" -eq 0 ]; then
+  echo "❌ Scenario missing success_criteria"
+  echo "$SCENARIO_DATA" | jq
+  exit 1
+fi
+
+SCENARIO_ID=$(echo "$SCENARIO_DATA" | jq -r '.scenario_id // "unknown_scenario"')
 SCENARIO_MODEL=$(echo "$SCENARIO_DATA" | jq -r '.model // empty')
 
 # ---------------------------------------------------------------
-# 🎯 Resolve model (deterministic priority)
+# 🎯 Resolve model
 # ---------------------------------------------------------------
-# Priority:
-# 1. CLI override
-# 2. Scenario model
-# 3. Runtime default (mapping)
 
 RESOLVED_MODEL=""
 
@@ -78,9 +110,7 @@ elif [ -n "$SCENARIO_MODEL" ] && [ "$SCENARIO_MODEL" != "null" ]; then
 fi
 
 MODEL_FLAG=""
-if [ -n "$RESOLVED_MODEL" ]; then
-  MODEL_FLAG="--model=$RESOLVED_MODEL"
-fi
+[ -n "$RESOLVED_MODEL" ] && MODEL_FLAG="--model=$RESOLVED_MODEL"
 
 echo "🚀 Running agent..."
 echo "Task:   $TASK"
@@ -88,22 +118,62 @@ echo "Model:  ${RESOLVED_MODEL:-runtime-default}"
 
 # ---------------------------------------------------------------
 # 🧠 Execute runtime
+#
+# Fix v5.0: Capture stderr separately so we can extract the
+# per-session trace path that runtime.sh prints to stderr.
+# runtime.sh prints: "📋 Trace: /path/to/.ai_trace.SESSION.log"
 # ---------------------------------------------------------------
 
-OUTPUT=$(AI_TRACE=1 bash "$RUNTIME" run "$TASK" $TRACE_FLAG $MODEL_FLAG || true)
+TMP_STDERR=$(mktemp)
+
+OUTPUT=$(AI_TRACE=1 bash "$RUNTIME" \
+  run "$TASK" $TRACE_FLAG $MODEL_FLAG \
+  2>"$TMP_STDERR" || true)
+
+# Extract trace path from runtime stderr
+TRACE_FILE=$(grep "^📋 Trace:" "$TMP_STDERR" \
+  | head -n1 \
+  | sed 's/^📋 Trace: //' \
+  | tr -d '[:space:]')
+
+rm -f "$TMP_STDERR"
 
 echo "🧠 Agent output:"
 echo "$OUTPUT"
 
+if [ -z "$TRACE_FILE" ] || [ ! -f "$TRACE_FILE" ]; then
+  echo "❌ Trace file not found: '${TRACE_FILE}'"
+  echo "   Ensure runtime.sh has TRACE_ENABLED=1 and --trace flag"
+  exit 1
+fi
+
+echo "📋 Trace: $TRACE_FILE"
+
 # ---------------------------------------------------------------
-# 📊 Read trace
+# 📊 Read trace from the exact session file
+#
+# Fix v5.0: Pass explicit path to read_trace — was reading
+# default .ai_trace.log (old shared file) instead of the
+# per-session file runtime.sh creates
 # ---------------------------------------------------------------
 
 echo "📊 Reading trace..."
 
-TRACE_JSON=$(python3 "$EXECUTOR" read_trace '{"last_n": 200}')
+# Escape path for JSON
+TRACE_PATH_JSON=$(python3 -c "import json; print(json.dumps('$TRACE_FILE'))")
 
-TRACE_STATUS=$(echo "$TRACE_JSON" | jq -r '.status')
+RAW_TRACE_OUTPUT=$(python3 "$EXECUTOR" read_trace \
+  "{\"path\": ${TRACE_PATH_JSON}, \"last_n\": 500}" 2>&1)
+
+TRACE_JSON=$(echo "$RAW_TRACE_OUTPUT" | sed -n '/^{/,$p')
+
+if ! echo "$TRACE_JSON" | jq empty >/dev/null 2>&1; then
+  echo "❌ Invalid JSON from read_trace"
+  echo "$RAW_TRACE_OUTPUT"
+  exit 1
+fi
+
+TRACE_STATUS=$(echo "$TRACE_JSON" | jq -r '.status // empty')
 
 if [ "$TRACE_STATUS" != "success" ]; then
   echo "❌ Failed to read trace"
@@ -111,12 +181,71 @@ if [ "$TRACE_STATUS" != "success" ]; then
   exit 1
 fi
 
-EVENTS=$(echo "$TRACE_JSON" | jq -c '.data')
+# ---------------------------------------------------------------
+# 📦 Extract + flatten events
+#
+# The trace file contains:
+#   - runtime events (start, agent_output, end)
+#   - agent_output.data.meta.trace contains nested tool_call events
+#
+# We need to flatten so evaluate_trace sees tool_call events directly.
+# ---------------------------------------------------------------
 
-if [ "$EVENTS" = "null" ] || [ "$EVENTS" = "[]" ]; then
-  echo "❌ No trace events found"
+RAW_EVENTS=$(echo "$TRACE_JSON" | jq -c '.data // []')
+
+# Flatten: extract nested tool_call events from agent_output.data.meta.trace
+EVENTS=$(python3 - <<PYEOF
+import json, sys
+
+raw = json.loads("""${RAW_EVENTS}""")
+
+def flatten(events):
+    out = []
+    for e in events:
+        if not isinstance(e, dict):
+            continue
+        out.append(e)
+        # Dig into agent_output nested trace
+        data = e.get("data", {})
+        if isinstance(data, dict):
+            meta = data.get("meta", {})
+            if isinstance(meta, dict):
+                for sub in meta.get("trace", []):
+                    out.append(sub)
+        # Dig into direct meta.trace
+        meta = e.get("meta", {})
+        if isinstance(meta, dict):
+            for sub in meta.get("trace", []):
+                out.append(sub)
+    return out
+
+flattened = flatten(raw)
+print(json.dumps(flattened))
+PYEOF
+)
+
+if [ -z "$EVENTS" ] || [ "$EVENTS" = "null" ] || [ "$EVENTS" = "[]" ]; then
+  echo "❌ No events found in trace"
   exit 1
 fi
+
+# Quick debug — show tool calls found
+TOOLS_FOUND=$(echo "$EVENTS" | python3 -c "
+import json, sys
+events = json.load(sys.stdin)
+tools = [e.get('data') for e in events if e.get('event') == 'tool_call']
+print('Tools called: ' + ', '.join(tools) if tools else 'Tools called: none')
+")
+echo "🔍 $TOOLS_FOUND"
+
+# ---------------------------------------------------------------
+# 🧪 Build evaluation input
+# ---------------------------------------------------------------
+
+EVAL_INPUT=$(jq -n \
+  --argjson events "$EVENTS" \
+  --argjson criteria "$CRITERIA" \
+  '{events: $events, criteria: $criteria}')
 
 # ---------------------------------------------------------------
 # 🧪 Evaluate
@@ -124,10 +253,7 @@ fi
 
 echo "🧪 Evaluating..."
 
-EVAL_JSON=$(python3 "$EXECUTOR" evaluate_trace "$(jq -n \
-  --argjson events "$EVENTS" \
-  --argjson criteria "$CRITERIA" \
-  '{events: $events, criteria: $criteria}')")
+EVAL_JSON=$(python3 "$EXECUTOR" evaluate_trace "$EVAL_INPUT")
 
 echo "$EVAL_JSON" | jq
 
@@ -147,11 +273,10 @@ echo "🎯 SCORE: $SCORE"
 # ✅ Pass/Fail
 # ---------------------------------------------------------------
 
-PASS=$(python3 - <<EOF
-score = float("$SCORE")
-print("1" if score >= 1.0 else "0")
-EOF
-)
+PASS=$(python3 -c "
+score = float('$SCORE')
+print('1' if score >= 1.0 else '0')
+")
 
 if [ "$PASS" != "1" ]; then
   echo "⚠️ Scenario failed"
@@ -168,7 +293,6 @@ RESULTS_DIR="${ROOT_DIR}/evals/results"
 mkdir -p "$RESULTS_DIR"
 
 TIMESTAMP=$(date -u +"%Y%m%dT%H%M%SZ")
-
 RESULT_FILE="${RESULTS_DIR}/${SCENARIO_ID}_${TIMESTAMP}.json"
 
 jq -n \
@@ -186,4 +310,4 @@ jq -n \
     results: $eval.data.results
   }' > "$RESULT_FILE"
 
-echo "📁 Saved result → $RESULT_FILE"
+echo "📁 Saved → $RESULT_FILE"

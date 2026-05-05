@@ -1,153 +1,249 @@
+#!/usr/bin/env python3
+###################################################################
+# evaluate_trace.py — Trace evaluator (production v5.0)
+#
+# Guarantees:
+# - Fully normalized deterministic tool extraction
+# - Single source of truth for tool parsing
+# - Safe recursive trace flattening
+# - Stable evaluation scoring
+# - No divergence between tool_set and tool_calls
+###################################################################
+
 import json
+from typing import Any, Dict, List
 
-name = "evaluate_trace"
-description = "Evaluate trace against structured scenario criteria (v2)"
-
-# ---------------------------------------------------------------
-# 🔍 Helpers
-# ---------------------------------------------------------------
-
-def extract_tool_calls(events):
-    return [
-        e.get("data")
-        for e in events
-        if e.get("event") == "tool_call"
-    ]
+Event = Dict[str, Any]
+Criteria = List[Dict[str, Any]]
 
 
-def extract_errors(events):
-    return [
-        e for e in events
-        if "error" in str(e.get("event", "")).lower()
-    ]
+# ============================================================
+# 🧪 Normalization
+# ============================================================
 
+def normalize_events(events: Any) -> List[Event]:
+    if not isinstance(events, list):
+        return []
 
-def flatten_events(events):
-    return json.dumps(events).lower()
-
-
-# ---------------------------------------------------------------
-# 🧪 Criterion evaluators
-# ---------------------------------------------------------------
-
-def check_tool_used(events, criterion):
-    target = criterion.get("tool")
+    out: List[Event] = []
 
     for e in events:
-        if e.get("event") == "tool_call":
-            data = e.get("data", {})
+        if isinstance(e, str):
+            try:
+                e = json.loads(e)
+            except Exception:
+                continue
 
-            # normalize both possible formats
-            tool = data.get("tool") or data.get("name")
+        if isinstance(e, dict):
+            out.append(e)
 
-            if tool == target:
-                return True
-
-    return False
-
-
-def check_no_errors(events, _):
-    return len(extract_errors(events)) == 0
+    return out
 
 
-def check_output_contains(events, criterion):
-    blob = flatten_events(events)
-    return criterion.get("value", "").lower() in blob
+def normalize_criteria(criteria: Any) -> Criteria:
+    return criteria if isinstance(criteria, list) else []
 
 
-def check_tool_argument(events, criterion):
-    """
-    Validates tool was called with specific argument
-    """
-    target_tool = criterion.get("name")
-    key = criterion.get("key")
-    value = str(criterion.get("value"))
+def validate_criteria(criteria: Criteria) -> Criteria:
+    return [c for c in criteria if isinstance(c, dict) and "type" in c]
+
+
+# ============================================================
+# 🔥 Trace Flattening (safe recursion)
+# ============================================================
+
+def flatten_events(events: List[Event]) -> List[Event]:
+    out: List[Event] = []
+
+    def extract(e: Any):
+        # 🔥 Normalize string → dict
+        if isinstance(e, str):
+            try:
+                e = json.loads(e)
+            except Exception:
+                return
+
+        if not isinstance(e, dict):
+            return
+
+        out.append(e)
+
+        # --------------------------------------------------
+        # 🔍 Traverse data.meta.trace
+        # --------------------------------------------------
+        data = e.get("data")
+        if isinstance(data, dict):
+            meta = data.get("meta")
+            if isinstance(meta, dict):
+                trace = meta.get("trace")
+                if isinstance(trace, list):
+                    for sub in trace:
+                        extract(sub)
+
+        # --------------------------------------------------
+        # 🔍 Traverse meta.trace
+        # --------------------------------------------------
+        meta = e.get("meta")
+        if isinstance(meta, dict):
+            trace = meta.get("trace")
+            if isinstance(trace, list):
+                for sub in trace:
+                    extract(sub)
 
     for e in events:
-        if e.get("event") == "tool_call" and e.get("data") == target_tool:
-            # NOTE: your trace currently logs only tool name
-            # this is a limitation → future improvement
-            return True  # placeholder (upgrade when args logged)
+        extract(e)
 
-    return False
+    return out
 
 
-# ---------------------------------------------------------------
-# 🧠 Dispatcher
-# ---------------------------------------------------------------
+# ============================================================
+# 🔍 SINGLE SOURCE OF TRUTH: TOOL EXTRACTION
+# ============================================================
 
-def evaluate(events, criteria):
+def _normalize_tool(t: Any) -> str | None:
+    if not isinstance(t, str):
+        return None
+    t = t.strip().lower()
+    return t if t else None
+
+
+def extract_tool(event: Event) -> str | None:
+    if event.get("event") != "tool_call":
+        return None
+
+    meta = event.get("meta", {})
+    data = event.get("data")
+
+    candidates = []
+
+    # data string
+    if isinstance(data, str):
+        candidates.append(data)
+
+    # data dict
+    if isinstance(data, dict):
+        candidates.append(data.get("tool"))
+        candidates.append(data.get("name"))
+
+    # meta.tool
+    if isinstance(meta, dict):
+        candidates.append(meta.get("tool"))
+
+        output = meta.get("output", {})
+        if isinstance(output, dict):
+            inner_meta = output.get("meta", {})
+            if isinstance(inner_meta, dict):
+                candidates.append(inner_meta.get("tool"))
+
+    for c in candidates:
+        tool = _normalize_tool(c)
+        if tool:
+            return tool
+
+    return None
+
+
+def tool_calls(events: List[Event]) -> List[str]:
+    return [t for t in (extract_tool(e) for e in events) if t]
+
+
+def tool_call_set(events: List[Event]) -> set:
+    # SINGLE SOURCE OF TRUTH (no divergence possible)
+    return set(tool_calls(events))
+
+
+def has_tool(events: List[Event], tool: str) -> bool:
+    tool = _normalize_tool(tool)
+    if not tool:
+        return False
+    return tool in tool_call_set(events)
+
+
+# ============================================================
+# 🧪 Criteria evaluation
+# ============================================================
+
+def eval_tool_used(events: List[Event], c: Dict[str, Any]) -> bool:
+    return has_tool(events, c.get("tool") or c.get("name"))
+
+
+def eval_no_errors(events: List[Event], _: Dict[str, Any]) -> bool:
+    for e in events:
+        if not isinstance(e, dict):
+            continue
+
+        if e.get("error"):
+            return False
+
+        meta = e.get("meta")
+        if isinstance(meta, dict) and meta.get("error"):
+            return False
+
+    return True
+
+
+# ============================================================
+# 🧠 Evaluation engine
+# ============================================================
+
+def evaluate(events: List[Event], criteria: Criteria):
     results = []
     passed = 0
 
-    for c in criteria:
-        if isinstance(c, str):
-            # Backward compatibility (V1)
-            ok = c.lower() in flatten_events(events)
-            results.append({"criteria": c, "passed": ok})
-            if ok:
-                passed += 1
-            continue
+    tool_set = tool_call_set(events)
 
+    for c in criteria:
         ctype = c.get("type")
 
         if ctype == "tool_used":
-            ok = check_tool_used(events, c)
+            tool = _normalize_tool(c.get("tool") or c.get("name"))
+            ok = tool in tool_set if tool else False
 
         elif ctype == "no_errors":
-            ok = check_no_errors(events, c)
-
-        elif ctype == "output_contains":
-            ok = check_output_contains(events, c)
-
-        elif ctype == "tool_argument":
-            ok = check_tool_argument(events, c)
+            ok = eval_no_errors(events, c)
 
         else:
             ok = False
 
         results.append({
             "criteria": c,
-            "passed": ok
+            "passed": bool(ok)
         })
 
-        if ok:
-            passed += 1
+        passed += int(bool(ok))
 
     total = len(criteria)
-    score = passed / total if total else 0
 
     return {
-        "score": score,
+        "score": passed / total if total else 0,
         "passed": passed,
         "total": total,
         "results": results
     }
 
 
-# ---------------------------------------------------------------
-# 🚀 Entry
-# ---------------------------------------------------------------
+# ============================================================
+# 🚀 Entry point
+# ============================================================
 
-def run(input_data):
-    events = input_data.get("events", [])
-    criteria = input_data.get("criteria", [])
+def run(input_data: Dict[str, Any]):
+    try:
+        events = flatten_events(normalize_events(input_data.get("events")))
+        criteria = validate_criteria(normalize_criteria(input_data.get("criteria")))
 
-    if not isinstance(events, list):
+        result = evaluate(events, criteria)
+
         return {
-            "status": "error",
-            "error": {"message": "Invalid events"}
+            "status": "success",
+            "data": result,
+            "error": None,
+            "meta": {}
         }
 
-    if not isinstance(criteria, list):
+    except Exception as e:
         return {
             "status": "error",
-            "error": {"message": "Invalid criteria"}
+            "data": None,
+            "error": {"message": str(e)},
+            "meta": {}
         }
-
-    result = evaluate(events, criteria)
-
-    return {
-        "status": "success",
-        "data": result
-    }

@@ -80,6 +80,9 @@ services:
 
     depends_on:
       - ollama
+      # optional:
+      # ollama:
+      #   condition: service_healthy
 
     environment:
       LITELLM_PORT: 4000
@@ -87,6 +90,14 @@ services:
       LITELLM_MODE: router
       OLLAMA_BASE_URL: http://ollama:11434
       LITELLM_MASTER_KEY: ai-dev-platform
+
+      # 🔍 Observability
+      # LITELLM_LOG: ${LITELLM_LOG:-INFO}
+      # LITELLM_DEFAULT_METADATA: '{"service":"litellm","env":"dev"}'
+      # LITELLM_ADD_REQUEST_ID: "true"
+
+      # ⏱ Timeout alignment
+      # LITELLM_REQUEST_TIMEOUT: ${LITELLM_REQUEST_TIMEOUT:-60}
 
     restart: unless-stopped
 

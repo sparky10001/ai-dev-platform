@@ -138,5 +138,5 @@ litellm_settings:
   set_verbose: false
 
   # Future-proofing: hooks for logging systems
-  success_callback: []
-  failure_callback: []
+  # success_callback: []
+  # failure_callback: []

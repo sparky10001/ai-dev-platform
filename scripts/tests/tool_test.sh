@@ -17,7 +17,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 EXECUTOR="${ROOT_DIR}/scripts/tool_executor.py"
-AGENT="${ROOT_DIR}/scripts/adapters/agent.py"
+AGENT="${ROOT_DIR}/scripts/agent.py"
 RUNTIME="${ROOT_DIR}/scripts/runtime.sh"
 
 PASS_COUNT=0

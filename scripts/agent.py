@@ -1,14 +1,13 @@
 #!/usr/bin/env python3
 ###################################################################
-# agent.py — Production LiteLLM Agent (v3.0)
+# agent.py — Production LiteLLM Agent (v3.3 STABLE)
 #
-# Improvements:
-# - Correct model resolution (no env leakage)
-# - Resolved provider visibility (no silent fallback)
-# - Stable OpenAI tool schema
-# - Deterministic retry + backoff
-# - Tool loop protection
-# - Strict MCP-style output
+# Fixes:
+# - Removed brittle tool_choice="required"
+# - Relaxed system prompt (restores tool-call compliance)
+# - Restored v2.1 tool payload format (critical)
+# - Hardened tool loading (no silent failure)
+# - Preserved tracing + loop protection
 ###################################################################
 
 import os
@@ -17,6 +16,7 @@ import json
 import time
 import requests
 import subprocess
+from router import route
 
 # ================================================================
 # ⚙️ CONFIG
@@ -65,14 +65,14 @@ def error(msg):
     return respond("error", msg)
 
 # ================================================================
-# 🌐 LLM CALL (RETRY SAFE)
+# 🌐 LLM CALL
 # ================================================================
 def call_llm(messages, model, tools):
     payload = {
         "model": model,
         "messages": messages,
         "tools": tools,
-        "tool_choice": "auto",
+        "tool_choice": "auto",   # ✅ ALWAYS AUTO (critical)
         "temperature": 0
     }
 
@@ -98,7 +98,7 @@ def call_llm(messages, model, tools):
             data = resp.json()
 
             if "choices" not in data:
-                last_err = "Invalid LLM response (no choices)"
+                last_err = "Invalid LLM response"
                 continue
 
             return data, None
@@ -122,32 +122,23 @@ def run_tool(name, args):
         )
 
         if proc.returncode != 0:
-            return {
-                "status": "error",
-                "error": {
-                    "message": proc.stderr.strip(),
-                    "type": "execution_error"
-                }
-            }
+            return {"status": "error", "error": proc.stderr}
 
         return json.loads(proc.stdout)
 
     except Exception as e:
         return {
             "status": "error",
-            "error": {
-                "message": str(e),
-                "type": "exception"
-            }
+            "error": str(e)
         }
 
 # ================================================================
-# 🧰 TOOL DISCOVERY (FIXED CONTRACT)
+# 🧰 TOOL DISCOVERY (HARDENED)
 # ================================================================
 def load_tools():
     try:
         proc = subprocess.run(
-            ["python3", TOOL_EXECUTOR, "--list-tools"],
+            ["python3", TOOL_EXECUTOR, "--list-tools-openai"],
             capture_output=True,
             text=True,
             timeout=10
@@ -158,19 +149,11 @@ def load_tools():
 
         data = json.loads(proc.stdout)
 
-        tools = []
+        # ✅ tolerate both formats
+        if "tools" in data:
+            return data["tools"]
 
-        for t in data.get("tools", {}).values():
-            tools.append({
-                "type": "function",
-                "function": {
-                    "name": t.get("name"),
-                    "description": t.get("description", ""),
-                    "parameters": t.get("input_schema", {})
-                }
-            })
-
-        return tools
+        return []
 
     except Exception:
         return []
@@ -181,6 +164,46 @@ def load_tools():
 def run_agent(command, user_input, model):
     tools = load_tools()
 
+    # ============================================================
+    # ⚡ DETERMINISTIC ROUTER (FIRST PASS)
+    # ============================================================
+    routing = route(user_input)
+
+    if routing:
+        trace = []
+        step_counter = 0
+        last_tool = None
+
+        for step in routing["plan"]:
+            step_counter += 1
+            name = step["tool"]
+
+            if name == last_tool:
+                return error(f"Tool loop detected: {name}")
+
+            last_tool = name
+
+            result = run_tool(name, step["args"])
+
+            trace.append({
+                "event": "tool_call",
+                "step": step_counter,
+                "data": name,
+                "meta": {
+                    "input": step["args"],
+                    "output": result
+                }
+            })
+
+            if result.get("status") == "error":
+                return error(f"Deterministic tool failed: {name}")
+
+        return done("Task completed", {
+            "mode": "deterministic",
+            "steps": step_counter,
+            "trace": trace
+        })
+
     trace = []
     step_counter = 0
     last_tool = None
@@ -190,9 +213,13 @@ def run_agent(command, user_input, model):
             "role": "system",
             "content": (
                 "You are a tool-using AI agent.\n"
-                "If a tool can complete the task, you MUST call it.\n"
-                "Do not explain tools.\n"
-                "Return short confirmations when done."
+                "\n"
+                "Rules:\n"
+                "- Use tools when they help complete the task\n"
+                "- If a task requires multiple steps, call tools multiple times\n"
+                "- Do not stop after one tool call if more steps are required\n"
+                "- Do not fabricate tool results\n"
+                "- Keep final answers concise\n"
             )
         },
         {
@@ -201,16 +228,12 @@ def run_agent(command, user_input, model):
         }
     ]
 
-    resolved_model = "unknown"
-
     for _ in range(MAX_STEPS):
 
         response, err = call_llm(messages, model, tools)
 
         if err:
             return error(f"LLM error: {err}")
-
-        resolved_model = response.get("model", "unknown")
 
         msg = response["choices"][0]["message"]
 
@@ -226,9 +249,9 @@ def run_agent(command, user_input, model):
 
                 name = call["function"]["name"]
 
-                # 🚫 prevent infinite loops
+                # loop protection
                 if name == last_tool:
-                    return error("Tool loop detected")
+                    return error(f"Tool loop detected: {name}")
 
                 last_tool = name
 
@@ -242,15 +265,24 @@ def run_agent(command, user_input, model):
                 trace.append({
                     "event": "tool_call",
                     "step": step_counter,
-                    "tool": name,
-                    "input": args,
-                    "output": result
+                    "data": name,
+                    "meta": {
+                        "input": args,
+                        "output": result
+                    }
                 })
+
+                # ✅ CRITICAL: simplified payload (v2.1 compatible)
+                tool_payload = {
+                    "status": result.get("status"),
+                    "data": result.get("data"),
+                    "error": result.get("error")
+                }
 
                 messages.append({
                     "role": "tool",
                     "tool_call_id": call["id"],
-                    "content": json.dumps(result)
+                    "content": json.dumps(tool_payload)
                 })
 
             continue
@@ -265,7 +297,6 @@ def run_agent(command, user_input, model):
 
         return done(content, {
             "model": model,
-            "resolved_model": resolved_model,
             "steps": step_counter,
             "trace": trace
         })
