@@ -36,7 +36,6 @@ setup:
 	@chmod +x ai-eval 2>/dev/null || true
 	@chmod +x scripts/*.sh
 	@chmod +x scripts/adapters/*.sh 2>/dev/null || true
-	@chmod +x scripts/tool_executor.sh 2>/dev/null || true
 	@pip install -r scripts/mock-server/requirements.txt -q 2>/dev/null || true
 	@echo "✅ Setup complete"
 
@@ -232,7 +231,7 @@ validate:
 
 	@echo "Step 1 — Mock (offline)"
 	@$(MAKE) mock --no-print-directory
-	@./ai run "ping" | grep -q "mock" && echo "✅ Mock OK" || (echo "❌ Mock failed"; exit 1)
+	@./ai run "ping" | jq -e '.status == "done"' >/dev/null && echo "✅ Runtime OK" || (echo "❌ Runtime failed"; exit 1)
 
 	@echo ""
 	@echo "Step 2 — Mock server (OpenAI-compatible)"

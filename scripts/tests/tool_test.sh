@@ -24,6 +24,18 @@ PASS_COUNT=0
 FAIL_COUNT=0
 
 # ---------------------------------------------------------------
+# 🧹 Temp test workspace
+# ---------------------------------------------------------------
+TEST_TMP_DIR="${ROOT_DIR}/tmp/tests"
+mkdir -p "$TEST_TMP_DIR"
+
+cleanup() {
+  rm -f "${TEST_TMP_DIR}"/* 2>/dev/null || true
+}
+
+trap cleanup EXIT
+
+# ---------------------------------------------------------------
 # 🧪 Helpers
 # ---------------------------------------------------------------
 pass() {
@@ -71,10 +83,11 @@ test_tool_list_openai() {
 # 3️⃣ Tool Execution (read_file)
 # ---------------------------------------------------------------
 test_read_file() {
-  tmpfile="${ROOT_DIR}/.test_file.txt"
+  tmpfile="${TEST_TMP_DIR}/.test_file.txt"
   echo "hello world" > "$tmpfile"
 
-  output=$(python3 "$EXECUTOR" read_file "{\"path\": \".test_file.txt\"}")
+  output=$(python3 "$EXECUTOR" read_file \
+  "{\"path\": \"${tmpfile}\"}")
 
   rm -f "$tmpfile"
 
@@ -86,10 +99,13 @@ test_read_file() {
 # 4️⃣ Tool Execution (write_file)
 # ---------------------------------------------------------------
 test_write_file() {
-  output=$(python3 "$EXECUTOR" write_file "{\"path\": \".test_write.txt\", \"content\": \"ok\"}")
+  outfile="${TEST_TMP_DIR}/.test_write.txt"
+
+  output=$(python3 "$EXECUTOR" write_file \
+    "{\"path\": \"${outfile}\", \"content\": \"ok\"}")
 
   echo "$output" | jq -e '.status == "success"' >/dev/null &&
-  test -f "${ROOT_DIR}/.test_write.txt"
+  test -f "$outfile"
 }
 
 # ---------------------------------------------------------------

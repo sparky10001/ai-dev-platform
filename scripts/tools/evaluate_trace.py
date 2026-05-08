@@ -1,21 +1,42 @@
 #!/usr/bin/env python3
 ###################################################################
-# evaluate_trace.py — Trace evaluator (production v5.0)
+# evaluate_trace.py — Trace evaluator (v8.0 CONTRACT COMPLIANT)
 #
 # Guarantees:
-# - Fully normalized deterministic tool extraction
-# - Single source of truth for tool parsing
-# - Safe recursive trace flattening
-# - Stable evaluation scoring
-# - No divergence between tool_set and tool_calls
+# - Full tool contract compliance (name, description, input_schema)
+# - Deterministic evaluation
+# - Single source of truth for tool extraction
+# - Safe normalization + flattening
 ###################################################################
 
 import json
 from typing import Any, Dict, List
 
+# ============================================================
+# 🧾 TOOL METADATA (REQUIRED FOR v8)
+# ============================================================
+
+name = "evaluate_trace"
+
+description = "Evaluate a runtime trace against success criteria"
+
+input_schema = {
+    "type": "object",
+    "properties": {
+        "events": {
+            "type": "array",
+            "description": "List of runtime trace events"
+        },
+        "criteria": {
+            "type": "array",
+            "description": "List of evaluation criteria"
+        }
+    },
+    "required": ["events", "criteria"]
+}
+
 Event = Dict[str, Any]
 Criteria = List[Dict[str, Any]]
-
 
 # ============================================================
 # 🧪 Normalization
@@ -49,14 +70,13 @@ def validate_criteria(criteria: Criteria) -> Criteria:
 
 
 # ============================================================
-# 🔥 Trace Flattening (safe recursion)
+# 🔥 Flatten (SAFE)
 # ============================================================
 
 def flatten_events(events: List[Event]) -> List[Event]:
     out: List[Event] = []
 
     def extract(e: Any):
-        # 🔥 Normalize string → dict
         if isinstance(e, str):
             try:
                 e = json.loads(e)
@@ -68,9 +88,7 @@ def flatten_events(events: List[Event]) -> List[Event]:
 
         out.append(e)
 
-        # --------------------------------------------------
-        # 🔍 Traverse data.meta.trace
-        # --------------------------------------------------
+        # Traverse data.meta.trace
         data = e.get("data")
         if isinstance(data, dict):
             meta = data.get("meta")
@@ -80,9 +98,7 @@ def flatten_events(events: List[Event]) -> List[Event]:
                     for sub in trace:
                         extract(sub)
 
-        # --------------------------------------------------
-        # 🔍 Traverse meta.trace
-        # --------------------------------------------------
+        # Traverse meta.trace
         meta = e.get("meta")
         if isinstance(meta, dict):
             trace = meta.get("trace")
@@ -97,7 +113,7 @@ def flatten_events(events: List[Event]) -> List[Event]:
 
 
 # ============================================================
-# 🔍 SINGLE SOURCE OF TRUTH: TOOL EXTRACTION
+# 🔍 TOOL EXTRACTION (SINGLE SOURCE OF TRUTH)
 # ============================================================
 
 def _normalize_tool(t: Any) -> str | None:
@@ -116,16 +132,13 @@ def extract_tool(event: Event) -> str | None:
 
     candidates = []
 
-    # data string
     if isinstance(data, str):
         candidates.append(data)
 
-    # data dict
     if isinstance(data, dict):
         candidates.append(data.get("tool"))
         candidates.append(data.get("name"))
 
-    # meta.tool
     if isinstance(meta, dict):
         candidates.append(meta.get("tool"))
 
@@ -148,7 +161,6 @@ def tool_calls(events: List[Event]) -> List[str]:
 
 
 def tool_call_set(events: List[Event]) -> set:
-    # SINGLE SOURCE OF TRUTH (no divergence possible)
     return set(tool_calls(events))
 
 
@@ -160,7 +172,7 @@ def has_tool(events: List[Event], tool: str) -> bool:
 
 
 # ============================================================
-# 🧪 Criteria evaluation
+# 🧪 Criteria
 # ============================================================
 
 def eval_tool_used(events: List[Event], c: Dict[str, Any]) -> bool:
@@ -183,7 +195,7 @@ def eval_no_errors(events: List[Event], _: Dict[str, Any]) -> bool:
 
 
 # ============================================================
-# 🧠 Evaluation engine
+# 🧠 Evaluation
 # ============================================================
 
 def evaluate(events: List[Event], criteria: Criteria):
@@ -223,7 +235,7 @@ def evaluate(events: List[Event], criteria: Criteria):
 
 
 # ============================================================
-# 🚀 Entry point
+# 🚀 ENTRYPOINT
 # ============================================================
 
 def run(input_data: Dict[str, Any]):
@@ -244,6 +256,6 @@ def run(input_data: Dict[str, Any]):
         return {
             "status": "error",
             "data": None,
-            "error": {"message": str(e)},
+            "error": {"message": str(e), "type": "evaluation_error"},
             "meta": {}
         }

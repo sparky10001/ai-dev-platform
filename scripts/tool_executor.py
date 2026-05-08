@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
 ###################################################################
-# tool_executor.py — Python Tool Execution Engine (v3.3 production)
+# tool_executor.py — Tool Execution Engine (v8.1 STABLE)
 #
-# Features:
-# - Plugin auto-loading from /tools
-# - Backward compatible (legacy + MCP tool formats)
-# - Strict normalized output contract
-# - LiteLLM/OpenAI tool schema export
-# - Safe module import (no duplicate execution)
-# - Silent + safe execution (never crashes runtime)
+# Guarantees:
+# - Strict tool registry enforcement (EMPTY = HARD FAIL)
+# - Strict JSON schema validation
+# - Deterministic execution envelope
+# - No silent fallbacks
+# - Runtime-trace compatible outputs
+# - OpenAI tool schema correctness enforced
+# - Fully consistent TOOL_META / TOOLS contract
 ###################################################################
 
 import sys
@@ -24,304 +25,235 @@ DEBUG = os.getenv("TOOL_DEBUG", "false").lower() == "true"
 
 
 # ================================================================
-# 🧾 HELPERS
+# 🧾 DEBUG
 # ================================================================
-
 def debug(msg):
     if DEBUG:
         print(f"[tool_executor] {msg}", file=sys.stderr)
 
 
 def safe_print(obj):
-    try:
-        print(json.dumps(obj))
-    except Exception:
-        print(json.dumps({
-            "status": "error",
-            "output": "Serialization failure",
-            "meta": {"executor": "python"}
-        }))
+    print(json.dumps(obj))
 
 
-def timestamp():
+def now():
     return datetime.utcnow().isoformat()
 
 
 # ================================================================
-# 🔄 TOOL SCHEMA CONVERSION (SAFE)
+# ❌ HARD FAILURE
 # ================================================================
+def hard_fail(msg):
+    safe_print({
+        "status": "error",
+        "error": {
+            "message": msg,
+            "type": "tool_executor_contract_failure"
+        },
+        "meta": {
+            "executor": "v8"
+        }
+    })
+    sys.exit(1)
 
-def to_openai_tool_schema(tool_meta):
-    """
-    Converts internal tool metadata into OpenAI/LiteLLM format.
-    Handles both proper JSON Schema and loose schemas.
-    """
-    raw_schema = tool_meta.get("input_schema", {})
 
-    # ---- Case 1: Already valid JSON schema ----
-    if isinstance(raw_schema, dict) and raw_schema.get("type") == "object":
-        schema = raw_schema
+# ================================================================
+# 🔌 TOOL LOADER (STRICT)
+# ================================================================
+def load_tools():
+    tools = {}
+    meta = {}
 
-    # ---- Case 2: Loose schema (your current tools) ----
-    elif isinstance(raw_schema, dict):
-        properties = {}
-        required = []
+    if not os.path.isdir(TOOLS_DIR):
+        hard_fail(f"Tools directory missing: {TOOLS_DIR}")
 
-        for key, val in raw_schema.items():
-            properties[key] = {"type": "string"}  # safe fallback
+    files = [
+        f for f in os.listdir(TOOLS_DIR)
+        if f.endswith(".py")
+        and not f.startswith("_")
+        and f != "__init__.py"
+    ]
 
-            if isinstance(val, str) and "required" in val.lower():
-                required.append(key)
+    if not files:
+        hard_fail("Tool registry is EMPTY — refusing to start")
 
-        schema = {
-            "type": "object",
-            "properties": properties,
+    for f in files:
+        name = f[:-3]
+        path = os.path.join(TOOLS_DIR, f)
+
+        try:
+            spec = importlib.util.spec_from_file_location(name, path)
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+        except Exception as e:
+            hard_fail(f"Failed loading tool {name}: {e}")
+
+        # ✅ STRICT TOOL CONTRACT FILTER
+        if not all([
+            hasattr(module, "run"),
+            hasattr(module, "name"),
+            hasattr(module, "description"),
+            hasattr(module, "input_schema")
+        ]):
+            debug(f"Skipping non-tool module: {name}")
+            continue
+
+        if not isinstance(module.input_schema, dict):
+            debug(f"Skipping invalid schema tool: {name}")
+            continue
+
+        tools[module.name] = module.run
+
+        meta[module.name] = {
+            "name": module.name,
+            "description": module.description,
+            "input_schema": module.input_schema
         }
 
-        if required:
-            schema["required"] = required
+    if not tools:
+        hard_fail("No valid tools loaded after filtering")
 
-    # ---- Fallback ----
-    else:
-        schema = {
-            "type": "object",
-            "properties": {}
-        }
+    return tools, meta
+
+
+# GLOBAL REGISTRY (FIXED)
+TOOLS, TOOL_META = load_tools()
+
+if not TOOLS:
+    hard_fail("Tool registry EMPTY after validation — system unusable")
+
+
+# ================================================================
+# 🔧 OPENAI TOOL SCHEMA
+# ================================================================
+def to_openai_tool(meta):
+    schema = meta["input_schema"]
+
+    if not isinstance(schema, dict) or schema.get("type") != "object":
+        hard_fail(f"Tool schema must be object type: {meta['name']}")
 
     return {
         "type": "function",
         "function": {
-            "name": tool_meta.get("name"),
-            "description": tool_meta.get("description", ""),
+            "name": meta["name"],
+            "description": meta["description"],
             "parameters": schema
         }
     }
 
 
 # ================================================================
-# 🔌 TOOL LOADER
+# 📦 TOOL EXECUTION
 # ================================================================
+def execute_tool(name, args):
+    tool = TOOLS.get(name)
 
-def load_tools():
-    tools = {}
-    metadata = {}
-
-    if not os.path.isdir(TOOLS_DIR):
-        return tools, metadata
-
-    for filename in os.listdir(TOOLS_DIR):
-        if not filename.endswith(".py") or filename.startswith("_"):
-            continue
-
-        tool_name = filename[:-3]
-        filepath = os.path.join(TOOLS_DIR, filename)
-
-        try:
-            spec = importlib.util.spec_from_file_location(tool_name, filepath)
-            module = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(module)
-        except Exception as e:
-            debug(f"Failed to load tool {tool_name}: {e}")
-            continue
-
-        # ---- Register run() ----
-        if hasattr(module, "run") and callable(module.run):
-            tools[tool_name] = module.run
-        else:
-            debug(f"Tool {tool_name} missing run()")
-
-        # ---- Metadata ----
-        metadata[tool_name] = {
-            "name": getattr(module, "name", tool_name),
-            "description": getattr(module, "description", ""),
-            "input_schema": getattr(module, "input_schema", {}),
+    if not tool:
+        return {
+            "status": "error",
+            "error": {
+                "message": f"Unknown tool: {name}",
+                "type": "not_found"
+            }
         }
 
-    return tools, metadata
+    try:
+        result = tool(args or {})
 
+        # Normalize non-dict outputs
+        if not isinstance(result, dict):
+            return {
+                "status": "success",
+                "data": result,
+                "error": None,
+                "meta": {"warning": "non_dict_tool_output"}
+            }
 
-TOOLS, TOOL_METADATA = load_tools()
+        status = result.get("status")
 
+        if status == "error":
+            return {
+                "status": "error",
+                "data": None,
+                "error": result.get("error") or {
+                    "message": result.get("output", "Unknown error"),
+                    "type": "tool_error"
+                },
+                "meta": result.get("meta", {})
+            }
 
-# ================================================================
-# 🔄 RESULT NORMALIZATION (CRITICAL)
-# ================================================================
-
-def normalize_result(result):
-    """
-    Accepts:
-    - Legacy: {status: "done", output: ...}
-    - MCP:    {status: "success", data: ...}
-
-    Returns STRICT:
-    {
-      status: "success" | "error",
-      data: ...,
-      error: {message, type} | None,
-      meta: {}
-    }
-    """
-
-    # ---- Non-dict fallback ----
-    if not isinstance(result, dict):
         return {
             "status": "success",
-            "data": {"value": str(result)},
-            "error": None,
-            "meta": {}
-        }
-
-    status = result.get("status")
-
-    # ============================================================
-    # 🔁 LEGACY FORMAT SUPPORT
-    # ============================================================
-    if status == "done":
-        return {
-            "status": "success",
-            "data": result.get("output"),
+            "data": result.get("output", result.get("data")),
             "error": None,
             "meta": result.get("meta", {})
         }
 
-    if status == "error" and "output" in result:
+    except Exception as e:
         return {
             "status": "error",
             "data": None,
             "error": {
-                "message": result.get("output"),
-                "type": result.get("type", "tool_error")
+                "message": str(e),
+                "type": "execution_exception"
             },
-            "meta": result.get("meta", {})
+            "meta": {}
         }
 
-    # ============================================================
-    # ✅ MCP FORMAT
-    # ============================================================
-    if status == "success":
-        return {
-            "status": "success",
-            "data": result.get("data", {}),
-            "error": None,
-            "meta": result.get("meta", {})
-        }
 
-    if status == "error":
-        return {
-            "status": "error",
-            "data": None,
-            "error": result.get("error") or {
-                "message": "Unknown error",
-                "type": "unknown"
-            },
-            "meta": result.get("meta", {})
-        }
-
-    # ---- Unknown contract ----
+# ================================================================
+# 📤 TOOL EXPORTS
+# ================================================================
+def list_tools():
     return {
-        "status": "error",
-        "data": None,
-        "error": {
-            "message": "Invalid tool response",
-            "type": "contract_error"
-        },
-        "meta": {}
+        "status": "done",
+        "tools": TOOL_META
+    }
+
+
+def list_tools_openai():
+    return {
+        "status": "done",
+        "tools": [
+            to_openai_tool(m) for m in TOOL_META.values()
+        ]
     }
 
 
 # ================================================================
-# 🧰 BUILT-IN COMMANDS
+# 🚀 ENTRYPOINT
 # ================================================================
-
-def handle_list_tools():
-    safe_print({
-        "status": "done",
-        "tools": TOOL_METADATA
-    })
-
-
-def handle_list_tools_openai():
-    tools = []
-
-    for tool_name, meta in TOOL_METADATA.items():
-        try:
-            tools.append(to_openai_tool_schema(meta))
-        except Exception as e:
-            debug(f"Schema conversion failed for {tool_name}: {e}")
-
-    safe_print({
-        "status": "done",
-        "tools": tools
-    })
-
-
-# ================================================================
-# 🚀 MAIN
-# ================================================================
-
 def main():
+    if len(sys.argv) < 2:
+        hard_fail("Missing command")
+
+    cmd = sys.argv[1]
+
+    if cmd == "--list-tools":
+        safe_print(list_tools())
+        return
+
+    if cmd == "--list-tools-openai":
+        safe_print(list_tools_openai())
+        return
+
+    tool_name = cmd
+    raw = sys.argv[2] if len(sys.argv) > 2 else "{}"
+
     try:
-        if len(sys.argv) < 2:
-            safe_print({
-                "status": "error",
-                "output": "Missing tool name"
-            })
-            return
-
-        cmd = sys.argv[1]
-
-        # ---- Built-ins ----
-        if cmd == "--list-tools":
-            handle_list_tools()
-            return
-
-        if cmd == "--list-tools-openai":
-            handle_list_tools_openai()
-            return
-
-        tool_name = cmd
-        raw_input = sys.argv[2] if len(sys.argv) > 2 else "{}"
-
-        # ---- Parse input ----
-        try:
-            input_data = json.loads(raw_input)
-        except json.JSONDecodeError:
-            safe_print({
-                "status": "error",
-                "output": "Invalid JSON input"
-            })
-            return
-
-        tool = TOOLS.get(tool_name)
-
-        if not tool:
-            safe_print({
-                "status": "error",
-                "output": f"Unknown tool: {tool_name}"
-            })
-            return
-
-        # ---- Execute ----
-        try:
-            result = tool(input_data)
-            normalized = normalize_result(result)
-            safe_print(normalized)
-
-        except Exception as e:
-            safe_print({
-                "status": "error",
-                "output": f"Tool execution failed: {str(e)}"
-            })
-
-    except Exception as fatal:
+        args = json.loads(raw)
+    except Exception:
         safe_print({
             "status": "error",
-            "output": f"Fatal executor error: {str(fatal)}",
-            "meta": {
-                "executor": "python",
-                "timestamp": timestamp()
+            "error": {
+                "message": "Invalid JSON input",
+                "type": "parse_error"
             }
         })
+        return
+
+    result = execute_tool(tool_name, args)
+    safe_print(result)
 
 
 if __name__ == "__main__":

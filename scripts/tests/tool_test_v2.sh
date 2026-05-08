@@ -23,14 +23,15 @@ FAIL_COUNT=0
 SKIP_COUNT=0
 
 # ---------------------------------------------------------------
-# 🧹 Cleanup — runs on exit (success or failure)
+# 🧹 Temp test workspace
 # ---------------------------------------------------------------
+TEST_TMP_DIR="${ROOT_DIR}/tmp/tests"
+mkdir -p "$TEST_TMP_DIR"
+
 cleanup() {
-  rm -f \
-    "${ROOT_DIR}/.test_file.txt" \
-    "${ROOT_DIR}/.test_write.txt" \
-    2>/dev/null || true
+  rm -f "${TEST_TMP_DIR}"/* 2>/dev/null || true
 }
+
 trap cleanup EXIT
 
 # ---------------------------------------------------------------
@@ -100,11 +101,12 @@ test_tool_list_openai() {
 # Fix v1.1: Use full path — resolves against BASE_DIR correctly
 # ---------------------------------------------------------------
 test_read_file() {
-  local tmpfile="${ROOT_DIR}/.test_file.txt"
+  local tmpfile="${TEST_TMP_DIR}/.test_file.txt"
   echo "hello world" > "$tmpfile"
 
   # Use full absolute path — read_file.py resolves relative to BASE_DIR
-  output=$(python3 "$EXECUTOR" read_file "{\"path\": \"${tmpfile}\"}")
+  output=$(python3 "$EXECUTOR" read_file \
+  "{\"path\": \"${tmpfile}\"}")
 
   local result
   result=$(echo "$output" | jq -e '.status == "success"' >/dev/null 2>&1 \
@@ -121,10 +123,10 @@ test_read_file() {
 # Fix v1.1: Clean up artifact after test
 # ---------------------------------------------------------------
 test_write_file() {
-  local outfile="${ROOT_DIR}/.test_write.txt"
+  local outfile="${TEST_TMP_DIR}/.test_write.txt"
 
   output=$(python3 "$EXECUTOR" write_file \
-    "{\"path\": \".test_write.txt\", \"content\": \"ok\"}")
+    "{\"path\": \"${outfile}\", \"content\": \"ok\"}")
 
   local result
   if echo "$output" | jq -e '.status == "success"' >/dev/null 2>&1 \

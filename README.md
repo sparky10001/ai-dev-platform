@@ -8,16 +8,6 @@ One stable interface. Any AI agent. Any compute. Anywhere.
 
 ---
 
-## 🧠 Core Principle# 🤖 AI Dev Platform
-
-> Stop managing AI tools. Start managing AI outcomes.
-
-**A portable, provider-agnostic AI development environment for developers who build serious things.**
-
-One stable interface. Any AI agent. Any compute. Anywhere.
-
----
-
 ## 🧠 Core Principle
 
 > **Only one thing is stable: the AI interface.**
@@ -27,42 +17,45 @@ One stable interface. Any AI agent. Any compute. Anywhere.
 Developer
     │
     ▼
-./ai run "your task"          ← Stable CLI — never changes
+./ai run "your task"              ← Stable CLI — never changes
     │
     ▼
-scripts/runtime.sh            ← Execution engine + per-session trace logging
+scripts/runtime.sh (v8.5)         ← Execution engine + trace logging
     │
     ▼
-scripts/router.py             ← Intent classification → model tier
+scripts/adapters/agent.sh         ← Shim → agent.py
     │
     ▼
-scripts/adapters/agent.sh     ← Active adapter (agent | goose | mock)
+scripts/agent.py (v8.6)           ← Deterministic agent loop
     │
     ▼
-scripts/agent.py              ← LiteLLM agent loop + tool execution
+scripts/router.py (v6.1)          ← Intent → deterministic plan
     │
     ▼
-LiteLLM (http://litellm:4000) ← Universal router
+scripts/tool_executor.py          ← MCP-compliant plugin engine
     │
     ▼
-Ollama │ OpenAI │ Claude │ NVIDIA NIM   ← Replaceable compute
+scripts/tools/*.py                ← Tool plugins
 ```
 
-Swap the adapter. Swap the model. Swap the compute.
+Swap the model. Swap the compute. Swap the adapter.
 **Your workflow never changes.**
 
 ---
 
 ## ✨ Features
 
-- **Provider Agnostic** — LiteLLM routes to Ollama, OpenAI, Anthropic/Claude, NVIDIA NIM, or fully offline mock
-- **Intent-Based Routing** — command type maps automatically to the right model tier (fast / balanced / heavy)
-- **Tool-Using Agent** — native OpenAI function-calling loop with 9 built-in tools
-- **Simulation-Driven CI** — scenario specs, trace evaluation, and automated scoring
-- **Portable** — unified Docker stack, works on any machine or on a plane
-- **Project Aware** — inject context for agent-sim, arb-agent-system, private-ai-stack
-- **Fully Tested** — 14-test suite covering tools, agent, and runtime layers
-- **Offline Mode** — mock adapter works without internet
+- **Deterministic Planning** — `router.py` converts intent to a structured tool execution plan — no LLM guessing required for well-known tasks
+- **Provider Agnostic** — LiteLLM routes to Ollama, OpenAI, Anthropic/Claude, NVIDIA NIM, or Colab GPU
+- **Tier-Based Routing** — `fast` / `balanced` / `heavy` model tiers map automatically to command type
+- **Run Persistence** — Every run stored in `runs/<run_id>/` with `trace.json` and `result.json`
+- **Structured Trace Logging** — Per-session NDJSON traces in `logs/traces/` with `tool_call` + `tool_result` events
+- **Scenario-Driven Evaluation** — Run scenarios, score traces, pass/fail against structured criteria
+- **MCP-Compliant Tools** — Plugin system with OpenAI function schema export for LLM tool-calling
+- **Log Management** — `log_manager.py` handles trace rotation, run retention, and disk cleanup
+- **Portable** — Unified Dev Container — clone, open, done
+- **Offline Mode** — Mock adapter works with zero network
+- **Agent Skills** — SKILL.md context files for Goose and Claude on all managed projects
 
 ---
 
@@ -77,22 +70,22 @@ cd ai-dev-platform
 
 Open in VS Code → **Reopen in Container**
 
-The unified Docker stack builds automatically — Ollama pulls tinyllama, LiteLLM starts, environment configures itself.
+Everything builds automatically — Ollama pulls tinyllama, LiteLLM starts, environment configures. First run takes ~3 minutes.
 
 ```bash
-make status          # verify active configuration
-make health          # check all services
-./ai run "hello"     # test the full chain
+make status
+make health
+./ai run "say hello"
 ```
 
-### Option 2 — Local Setup
+### Option 2 — Manual Setup
 
 ```bash
 git clone https://github.com/sparky10001/ai-dev-platform.git
 cd ai-dev-platform
 make setup
-make litellm-fast    # local tinyllama via LiteLLM
-./ai run "hello"
+./scripts/switch-model.sh litellm-fast
+./ai run "say hello"
 ```
 
 ---
@@ -101,12 +94,12 @@ make litellm-fast    # local tinyllama via LiteLLM
 
 | Tool | Required | Notes |
 |------|----------|-------|
-| Docker | ✅ Yes | Unified dev stack |
+| Docker | ✅ Yes | Dev Container + Ollama + LiteLLM services |
 | VS Code | ✅ Yes | With Dev Containers extension |
-| OpenAI API Key | Optional | `litellm-code` / `litellm-heavy` |
-| Anthropic API Key | Optional | `litellm-claude` / `litellm-heavy` |
-| NVIDIA NIM API Key | Optional | `litellm-balanced` (free at build.nvidia.com) |
-| Goose CLI | Optional | `make install-goose` |
+| Goose CLI | Optional | `make install-goose` — only needed for Goose adapter mode |
+| OpenAI API Key | Optional | Enables `heavy` tier (gpt-4.1) |
+| Anthropic API Key | Optional | Enables `heavy` tier (claude-sonnet) |
+| NVIDIA NIM API Key | Optional | Free at build.nvidia.com — enables `balanced` tier |
 
 ---
 
@@ -115,94 +108,57 @@ make litellm-fast    # local tinyllama via LiteLLM
 Everything flows through one stable interface:
 
 ```bash
-ai run      "analyze the agent-sim protocol layer"
+ai run      "create a file called hello.txt with content 'hi'"
 ai fix      "ImportError in agent_runner.py line 42"
 ai explain  "how does Q-learning convergence work"
 ai refactor "simplify the env_interface adapter"
 ai query    "what should I build next"
+
+# Global flags
+ai --trace run "debug this"          # enable per-session trace logging
+ai --model=heavy run "complex task"  # override model tier
+ai --adapter=mock run "offline"      # override adapter
 ```
 
 **Same commands. Any backend. Any environment.**
 
-Flags:
-```bash
-./ai run "task" --trace          # enable per-session trace logging
-./ai run "task" --model=heavy    # override model tier
-./ai --adapter=mock run "task"   # override adapter
-```
-
 ---
 
-## 🧠 Model Tiers
+## 🧠 How Routing Works
 
-Commands map automatically to model tiers. LiteLLM handles routing and fallback:
+`router.py` converts user input into a deterministic execution plan:
 
-| Tier | Command | Primary | Fallback | Use When |
-|------|---------|---------|----------|----------|
-| `fast` | `query` | tinyllama (local) | — | Quick queries, always available |
-| `balanced` | `explain` | NVIDIA NIM DeepSeek-R1 | tinyllama | Efficient reasoning |
-| `heavy` | `run`, `fix`, `refactor` | gpt-4.1 → claude-sonnet | tinyllama | Complex tasks |
-
-Override with:
-```bash
-./ai run "task" --model=fast     # force local
-./ai run "task" --model=heavy    # force best available
-ACTIVE_MODEL=balanced ./ai run "task"
 ```
+"create a file called hello.txt with content 'hi' and then list files"
+    │
+    ▼ router.py (deterministic planner)
+    │
+    ├── step 1: write_file  {"path": "hello.txt", "content": "hi"}
+    └── step 2: list_files  {"path": "."}
+```
+
+For unrecognized tasks, the router falls back to the LLM agent via LiteLLM. Commands auto-map to model tiers:
+
+| Command | Tier | Primary Model |
+|---------|------|---------------|
+| `query` | fast | tinyllama (local) |
+| `explain` | balanced | DeepSeek R1 (NVIDIA NIM) → tinyllama |
+| `fix` | heavy | gpt-4.1 → claude-sonnet → tinyllama |
+| `run` | heavy | gpt-4.1 → claude-sonnet → tinyllama |
+| `refactor` | heavy | gpt-4.1 → claude-sonnet → tinyllama |
 
 ---
 
 ## 🔄 Switching Providers
 
 ```bash
-# LiteLLM tiers (recommended)
-make litellm-fast      # tinyllama local — always available, no keys
-make litellm-balanced  # NVIDIA NIM — free, strong reasoning
-make litellm-code      # gpt-4.1 cloud
-make litellm-claude    # claude-sonnet cloud
-make litellm-heavy     # best available (gpt-4.1 → claude → tinyllama)
-
-# Direct adapters
-make mock              # offline — no AI calls
-make mock-local        # Goose → local mock OpenAI server
-
-# GPU
-make colab             # Google Colab GPU via ngrok
-```
-
----
-
-## 🌍 Environment Scenarios
-
-### 🏠 At Home — Private Local AI
-```bash
-make litellm-fast
-make ctx-agent-sim
-./ai run "review the Q-learning convergence issue"
-# tinyllama runs locally — no data leaves your network
-```
-
-### ☁️ At Work — Cloud Intelligence
-```bash
-make litellm-heavy
-make ctx-arb
-./ai run "refactor the risk service"
-# gpt-4.1 via LiteLLM — falls back to tinyllama if key missing
-```
-
-### ✈️ On a Plane — Offline
-```bash
-make mock
-./ai run "plan the next sprint"
-# → [MOCK] Would run: plan the next sprint
-# No internet required
-```
-
-### 🖥️ Need GPU — Google Colab
-```bash
-make colab
-./ai run "train Q-agent for 10000 episodes"
-# Routes to Colab GPU via ngrok
+./scripts/switch-model.sh litellm-fast      # tinyllama local
+./scripts/switch-model.sh litellm-balanced  # NVIDIA NIM → tinyllama fallback
+./scripts/switch-model.sh litellm-code      # gpt-4.1 → tinyllama fallback
+./scripts/switch-model.sh litellm-claude    # claude-sonnet → tinyllama fallback
+./scripts/switch-model.sh litellm-smart     # best available model
+./scripts/switch-model.sh mock              # offline — no AI calls
+./scripts/switch-model.sh colab             # Google Colab GPU via ngrok
 ```
 
 ---
@@ -215,122 +171,160 @@ ai-dev-platform/
 ├── ai-eval                         ← Evaluation CLI
 ├── .devcontainer/
 │   ├── docker-compose.yml          ← Unified stack (devcontainer + ollama + litellm)
-│   ├── Dockerfile                  ← Dev environment
+│   ├── Dockerfile                  ← Ubuntu 22.04 + Python + Docker CLI + Goose
 │   ├── goose-config.sh
-│   └── post-create.sh              ← Auto-starts Ollama + LiteLLM
+│   └── post-create.sh
 ├── scripts/
-│   ├── runtime.sh                  ← Execution engine (v7.4) + per-session traces
-│   ├── router.py                   ← Intent → model tier classification
-│   ├── agent.py                    ← LiteLLM agent loop (v3.3)
-│   ├── tool_executor.py            ← Python tool engine (v3.3)
-│   ├── tool_executor.sh            ← Shell wrapper
-│   ├── run_scenario.sh             ← Scenario execution + evaluation (v5.0)
-│   ├── compare.sh                  ← Model comparison runner
-│   ├── regression.sh               ← Regression test runner
+│   ├── runtime.sh                  ← Execution engine (v8.5)
+│   ├── agent.py                    ← Agent loop (v8.6) — deterministic planner
+│   ├── router.py                   ← Intent → plan (v6.1)
+│   ├── tool_executor.py            ← Plugin engine (v3.3)
+│   ├── tool_executor.sh            ← Thin bash wrapper
+│   ├── run_scenario.sh             ← Scenario runner (v3.2)
+│   ├── run_scenario.py             ← Scenario loader (v2)
+│   ├── switch-model.sh             ← Provider switching (v7.0)
 │   ├── health-check.sh             ← System health
-│   ├── switch-model.sh             ← Provider switching (v6.0)
 │   ├── start-colab-proxy.sh        ← Colab GPU setup
+│   ├── compare.sh                  ← Model comparison runner
+│   ├── regression.sh               ← Regression runner
+│   ├── debug_routing.sh            ← Routing debug helper
 │   ├── adapters/
 │   │   ├── _base.sh                ← Shared contract utilities (v8)
-│   │   ├── agent.sh                ← agent.py shim (primary adapter)
-│   │   ├── goose.sh                ← Goose agent adapter
-│   │   └── mock.sh                 ← Offline adapter
-│   ├── tools/                      ← Tool plugins (MCP-compatible)
+│   │   ├── agent.sh                ← Shim → agent.py (v9)
+│   │   ├── goose.sh                ← Goose adapter
+│   │   ├── mock.sh                 ← Offline adapter
+│   │   └── agents/                 ← Per-command agent YAML configs
+│   │       ├── default.yaml
+│   │       ├── explain.yaml
+│   │       ├── fix.yaml
+│   │       └── query.yaml
+│   ├── tools/                      ← Tool plugins (MCP-compliant)
 │   │   ├── read_file.py
 │   │   ├── write_file.py
 │   │   ├── list_files.py
 │   │   ├── run_bash.py
 │   │   ├── http_get.py
 │   │   ├── read_trace.py
-│   │   ├── run_scenario.py
-│   │   ├── evaluate_trace.py       ← Structured criteria evaluation (v5.0)
+│   │   ├── evaluate_trace.py       ← Structured criteria evaluator (v2.0)
 │   │   └── compare_results.py
+│   ├── lib/
+│   │   └── trace_logger.py         ← Per-session NDJSON trace logger
 │   ├── mock-server/                ← Local OpenAI-compatible test server
 │   └── tests/
-│       └── tool_test.sh                 ← 14-test validation suite (v1.2)
+│       ├── tool_test_v2.sh         ← Tool + agent + runtime tests (14/14)
+│       ├── test_adapters.sh        ← Adapter validation (10/10)
+│       ├── runtime_tests.sh        ← Runtime stability tests (6/6)
+│       ├── goose_tests.sh
+│       ├── tool_test.sh
 ├── ollama-service/                 ← Ollama container (tinyllama)
-├── litellm-service/                ← LiteLLM router (v2.3 config)
-│   └── config.yaml                 ← Tier routing: fast/balanced/heavy
-├── scenarios/                      ← Evaluation scenario specs
-│   ├── agent-sim/                  ← GridWorld, protocol, LLM benchmark
-│   ├── arb-agent-system/           ← Health, spread detection, data validation
-│   └── tests/                      ← Platform self-tests
+├── litellm-service/                ← LiteLLM router container
+│   └── config.yaml                 ← Tier routing (fast/balanced/heavy)
+├── scenarios/
+│   ├── agent-sim/
+│   ├── arb-agent-system/
+│   └── tests/
 ├── evals/
-│   └── results/                    ← Saved evaluation results (JSON)
-├── skills/                         ← Agent Skills context files
+│   └── results/                    ← Scored evaluation results (JSON)
+├── runs/                           ← Per-run storage (trace.json + result.json)
+├── logs/
+│   ├── traces/                     ← Per-session NDJSON trace logs
+│   └── evals/                      ← Per-run eval records
+├── skills/                         ← Agent Skills (Goose/Claude context)
 │   ├── agent-sim/SKILL.md
 │   ├── arb-agent-system/SKILL.md
 │   ├── private-ai-stack/SKILL.md
 │   └── ai-dev-platform/SKILL.md
-├── Makefile                        ← Unified control surface
+├── Makefile
 └── .env.example
 ```
-
----
-
-## 🧰 Tool System
-
-The agent has 9 built-in tools, auto-discovered at runtime:
-
-| Tool | Description |
-|------|-------------|
-| `read_file` | Read any workspace file |
-| `write_file` | Write files with path traversal protection |
-| `list_files` | Directory listing with type metadata |
-| `run_bash` | Execute shell commands in workspace |
-| `http_get` | HTTP GET with JSON auto-detection |
-| `read_trace` | Parse per-session AI trace logs |
-| `run_scenario` | Load and validate scenario specs |
-| `evaluate_trace` | Score trace against structured criteria |
-| `compare_results` | Compare evaluation runs |
-
-Tools follow MCP format and are auto-exported as OpenAI function schemas.
-
----
-
-## 🧪 Scenario-Driven Evaluation
-
-Run agent tasks against defined success criteria:
-
-```bash
-# Run a scenario
-./scripts/run_scenario.sh scenarios/tests/test_list_files_v2.json --model=balanced
-
-# Output:
-# 🔍 Tools called: write_file, list_files
-# 🎯 SCORE: 1
-# ✅ Scenario passed
-# 📁 Saved → evals/results/test_list_files_v2_20260502T170417Z.json
-```
-
-Scenario spec format:
-```json
-{
-  "scenario_id": "my_scenario",
-  "task": "Create a file and list directory",
-  "success_criteria": [
-    {"type": "tool_used", "tool": "write_file"},
-    {"type": "tool_used", "tool": "list_files"},
-    {"type": "no_errors"}
-  ]
-}
-```
-
-Supported criterion types: `tool_used`, `no_errors`, `output_contains`
 
 ---
 
 ## 🧪 Test Suite
 
 ```bash
-./scripts/tests/tool_test_v2.sh
+# Full suite
+./scripts/tests/tool_test_v2.sh    # 14/14 — tool + agent + runtime
+./scripts/tests/test_adapters.sh   # 10/10 — adapter validation
+./scripts/tests/runtime_tests.sh   #  6/6  — runtime stability
 ```
 
-Runs 14 tests across tool, agent, and runtime layers:
+All tests pass against live LiteLLM when reachable — skip gracefully when offline.
+
+---
+
+## 📊 Scenario Evaluation
+
+```bash
+./scripts/run_scenario.sh scenarios/tests/test_list_files_v3.json --model=fast
+
+# 📘 Loading scenario...
+# 🚀 Running scenario...
+# 🎯 SCORE: 1
+# ✅ Scenario passed
 ```
-📦 Tool Layer (9 tests)   — no LiteLLM required
-🤖 Agent + Runtime (3 tests) — skipped gracefully if LiteLLM offline
+
+Criteria types:
+```json
+{"type": "tool_used",       "tool": "write_file"}
+{"type": "no_errors"}
+{"type": "output_contains", "value": "hello"}
 ```
+
+Results saved to `evals/results/`. Run data saved to `runs/<run_id>/`.
+
+---
+
+## 🧹 Log Management
+
+```bash
+# Clean up old traces and runs
+python3 scripts/lib/log_manager.py
+
+# Protect current trace from cleanup
+python3 scripts/lib/log_manager.py --protect logs/traces/ai_trace.*.log
+
+# Dry run (preview what would be removed)
+AI_LOG_DRY_RUN=1 python3 scripts/lib/log_manager.py
+```
+
+Configurable via environment:
+```bash
+AI_LOG_MAX_FILES=50        # max trace files to keep
+AI_LOG_MAX_SIZE_MB=5       # max file size before truncation
+AI_MAX_RUN_DIRS=50         # max run directories to keep
+AI_RUN_RETENTION_SEC=86400 # run retention in seconds (default: 24h)
+```
+
+---
+
+## 🔌 Adding Your Own Tool
+
+Drop a Python file in `scripts/tools/`:
+
+```python
+# scripts/tools/my_tool.py
+name = "my_tool"
+description = "Does something useful"
+input_schema = {
+    "type": "object",
+    "properties": {
+        "input": {"type": "string", "description": "The input"}
+    },
+    "required": ["input"]
+}
+
+def run(input_data):
+    result = do_something(input_data.get("input"))
+    return {
+        "status": "success",
+        "data": result,
+        "error": None,
+        "meta": {"tool": "my_tool"}
+    }
+```
+
+Auto-discovered on next run. No registration needed.
 
 ---
 
@@ -347,19 +341,16 @@ COMMAND="${1:-}"
 INPUT="${2:-}"
 
 case "$COMMAND" in
-  run)      MY_RESPONSE=$(my_agent "$INPUT") ;;
-  fix)      MY_RESPONSE=$(my_agent "Fix: $INPUT") ;;
-  explain)  MY_RESPONSE=$(my_agent "Explain: $INPUT") ;;
-  refactor) MY_RESPONSE=$(my_agent "Refactor: $INPUT") ;;
-  query)    MY_RESPONSE=$(my_agent "$INPUT") ;;
+  run|fix|explain|refactor|query)
+    RESPONSE=$(my_agent_cli "$INPUT")
+    build_response "done" "$RESPONSE"
+    adapter_exit
+    ;;
   *)
     build_response "error" "Unknown command: $COMMAND" "invalid_request"
     adapter_exit
     ;;
 esac
-
-build_response "done" "$MY_RESPONSE"
-adapter_exit
 ```
 
 ```bash
@@ -374,31 +365,33 @@ AI_ADAPTER=my-agent ./ai run "test"
 ## 🗺️ Roadmap
 
 - [x] Stable `ai` CLI (v1.1)
-- [x] Runtime v7.4 with per-session trace logging
-- [x] LiteLLM tier routing (fast / balanced / heavy)
-- [x] LiteLLM v2.3 config (NVIDIA NIM + OpenAI + Anthropic + Ollama)
-- [x] agent.py v3.3 — native tool-calling loop
-- [x] 9-tool MCP-compatible plugin system
-- [x] Scenario-driven evaluation with structured criteria
-- [x] 14-test validation suite
-- [x] Unified Docker stack (devcontainer + ollama + litellm)
+- [x] Runtime v8.5 — per-session trace logging to `logs/traces/`
+- [x] Deterministic planner — `router.py` converts intent to tool plan
+- [x] Agent loop v8.6 — run persistence in `runs/`
+- [x] `TraceLogger` — structured NDJSON with `tool_call` + `tool_result` events
+- [x] `log_manager.py` — automated trace + run cleanup
+- [x] LiteLLM tier routing (fast/balanced/heavy)
+- [x] MCP-compliant tool plugin system with OpenAI schema export
+- [x] `evaluate_trace` — structured criteria evaluator
+- [x] 30/30 tests passing across all test suites
+- [x] Unified Dev Container (devcontainer + ollama + litellm)
 - [x] Agent Skills for all managed projects
-- [x] Goose adapter
-- [x] Mock offline adapter
+- [x] NVIDIA NIM free tier integration
 - [ ] Persistent sessions across container restarts
 - [ ] Multi-project registry (`make register PROJECT=...`)
 - [ ] Web UI control panel
-- [ ] CI/CD integration guide
-- [ ] NVIDIA NIM adapter (direct, without LiteLLM)
+- [ ] CI/CD integration guide (GitHub Actions)
+- [ ] Router coverage expansion (more matchers)
+- [ ] Multi-user team configuration
 
 ---
 
 ## 🙏 Acknowledgments
 
 - [LiteLLM](https://github.com/BerriAI/litellm) — Universal LLM router
-- [Ollama](https://ollama.ai/) — Local LLM runtime
 - [Goose](https://block.github.io/goose/) — AI agent by Block
-- [NVIDIA NIM](https://build.nvidia.com/) — Free GPU inference API
+- [Ollama](https://ollama.ai/) — Local LLM runtime
+- [NVIDIA NIM](https://build.nvidia.com) — Free-tier cloud inference
 - [agent-sim](https://github.com/sparky10001/agent-sim) — LLM-native RL framework
 - [private-ai-stack](https://github.com/sparky10001/private-ai-stack) — Local AI infrastructure
 
