@@ -36,6 +36,10 @@ from core.benchmarks.matrices import build_benchmark_matrix
 from core.benchmarks.runner import run_benchmark_matrix
 from core.benchmarks.exporter import export_benchmark_suite_json
 from core.benchmarks.exporter import export_benchmark_suite_markdown
+from core.strategies.branching import execute_strategy_experiment
+from core.strategies.evaluator import compare_strategy_variants
+from core.strategies.exporter import export_strategy_experiment_json
+from core.strategies.exporter import export_strategy_experiment_markdown
 
 
 def _to_jsonable(obj: Any) -> Any:
@@ -78,7 +82,10 @@ def _usage() -> str:
         '  ai-orchestrate export-experiment <run_path...> <output.(md|json)> [--pretty]\n'
         '  ai-orchestrate benchmark-suite <scenario_dir> [--pretty]\n'
         '  ai-orchestrate benchmark-matrix <scenario_dir> [--planner=...] [--policy=...] [--pretty]\n'
-        '  ai-orchestrate export-benchmark-suite <scenario_dir> <output.(md|json)> [--pretty]'
+        '  ai-orchestrate export-benchmark-suite <scenario_dir> <output.(md|json)> [--pretty]\n'
+        '  ai-orchestrate strategy-experiment <task> [--planner=...] [--policy=...] [--pretty]\n'
+        '  ai-orchestrate compare-strategies <task> [--planner=...] [--policy=...] [--pretty]\n'
+        '  ai-orchestrate export-strategy-experiment <task> <output.(md|json)> [--planner=...] [--policy=...] [--pretty]'
     )
 
 
@@ -194,6 +201,81 @@ def main(argv: list[str] | None = None) -> int:
                 replay = load_orchestration_trace(positional[0])
                 summary = summarize_replay(replay)
                 _emit(summary.model_dump(mode='json'), pretty=pretty)
+            except Exception as exc:
+                _emit({'status': 'error', 'error': str(exc)}, pretty=pretty)
+            return 0
+
+        if command == 'strategy-experiment':
+            pretty = '--pretty' in raw
+            planners = [arg.split('=', 1)[1] for arg in raw if arg.startswith('--planner=')]
+            policies = [arg.split('=', 1)[1] for arg in raw if arg.startswith('--policy=')]
+            positional = [arg for arg in raw if not arg.startswith('--')]
+            if len(positional) < 1:
+                print('error: strategy-experiment requires task text', file=sys.stderr)
+                print(_usage(), file=sys.stderr)
+                return 2
+            task = ' '.join(positional)
+            try:
+                exp = execute_strategy_experiment(
+                    task=task,
+                    planner_strategies=(planners or ['deterministic']),
+                    policies=(policies or ['default']),
+                    trace=True,
+                )
+                _emit(exp.model_dump(mode='json'), pretty=pretty)
+            except Exception as exc:
+                _emit({'status': 'error', 'error': str(exc)}, pretty=pretty)
+            return 0
+
+        if command == 'compare-strategies':
+            pretty = '--pretty' in raw
+            planners = [arg.split('=', 1)[1] for arg in raw if arg.startswith('--planner=')]
+            policies = [arg.split('=', 1)[1] for arg in raw if arg.startswith('--policy=')]
+            positional = [arg for arg in raw if not arg.startswith('--')]
+            if len(positional) < 1:
+                print('error: compare-strategies requires task text', file=sys.stderr)
+                print(_usage(), file=sys.stderr)
+                return 2
+            task = ' '.join(positional)
+            try:
+                exp = execute_strategy_experiment(
+                    task=task,
+                    planner_strategies=(planners or ['deterministic', 'noop']),
+                    policies=(policies or ['default']),
+                    trace=True,
+                )
+                variants = sorted(exp.variants, key=lambda v: v.strategy_id)
+                comparisons = []
+                for i in range(len(variants) - 1):
+                    comparisons.append(compare_strategy_variants(variants[i], variants[i + 1]).model_dump(mode='json'))
+                _emit(comparisons, pretty=pretty)
+            except Exception as exc:
+                _emit({'status': 'error', 'error': str(exc)}, pretty=pretty)
+            return 0
+
+        if command == 'export-strategy-experiment':
+            pretty = '--pretty' in raw
+            positional = [arg for arg in raw if not arg.startswith('--')]
+            planners = [arg.split('=', 1)[1] for arg in raw if arg.startswith('--planner=')]
+            policies = [arg.split('=', 1)[1] for arg in raw if arg.startswith('--policy=')]
+            if len(positional) < 2:
+                print('error: export-strategy-experiment requires task text and output path', file=sys.stderr)
+                print(_usage(), file=sys.stderr)
+                return 2
+            output_path = positional[-1]
+            task = ' '.join(positional[:-1])
+            try:
+                exp = execute_strategy_experiment(
+                    task=task,
+                    planner_strategies=(planners or ['deterministic', 'noop']),
+                    policies=(policies or ['default']),
+                    trace=True,
+                )
+                if output_path.lower().endswith('.md'):
+                    written = export_strategy_experiment_markdown(exp, output_path)
+                else:
+                    written = export_strategy_experiment_json(exp, output_path)
+                _emit({'status': 'success', 'path': written}, pretty=pretty)
             except Exception as exc:
                 _emit({'status': 'error', 'error': str(exc)}, pretty=pretty)
             return 0

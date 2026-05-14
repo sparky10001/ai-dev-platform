@@ -30,6 +30,8 @@ Stage 4 tests are additive and currently isolated from the Phase 3E validation g
   - `scripts/tests/control_plane_experiment_tests.sh`
 - Stage 4N policy/planner benchmark suites:
   - `scripts/tests/control_plane_benchmark_tests.sh`
+- Stage 4O multi-strategy orchestration experiments:
+  - `scripts/tests/control_plane_strategy_tests.sh`
 
 ## Convenience Command
 

@@ -8,6 +8,9 @@ One stable interface.
 Any AI agent.  
 Any compute.  
 Anywhere.
+Now with deterministic orchestration experimentation,
+replay-safe evaluation,
+and adaptive strategy benchmarking.
 
 ---
 
@@ -74,6 +77,7 @@ Swap the compute.
 - **Evaluation + Comparison Layer** — deterministic orchestration scoring, benchmarking, and replay comparison
 - **Experiment Tracking + Datasets** — deterministic replay-backed experiment manifests, datasets, and benchmark corpora
 - **Benchmark Suites** — deterministic planner/policy scenario-matrix benchmarking
+- **Multi-Strategy Experiments** — deterministic orchestration branching and A/B strategy comparison
 - **Tool-Using Agent Runtime** — native OpenAI function-calling loop with dynamic tool execution
 - **Dataset Export Layer** — deterministic NDJSON corpora generation
 - **Schema Compatibility Contracts** — backward-compatible runtime guarantees
@@ -328,10 +332,16 @@ control-plane/
 │   │   ├── tracker.py
 │   │   ├── datasets.py
 │   │   └── exporter.py
-│   └── benchmarks/
+│   ├── benchmarks/
+│   │   ├── models.py
+│   │   ├── matrices.py
+│   │   ├── runner.py
+│   │   ├── evaluator.py
+│   │   └── exporter.py
+│   └── strategies/
 │       ├── models.py
-│       ├── matrices.py
-│       ├── runner.py
+│       ├── planner_variants.py
+│       ├── branching.py
 │       ├── evaluator.py
 │       └── exporter.py
 ├── tools/
@@ -376,6 +386,8 @@ evaluation + comparison
 experiment tracking + datasets
   ↓
 benchmark suites + matrices
+  ↓
+multi-strategy experiments
 ```
 
 The control-plane currently supports:
@@ -402,6 +414,14 @@ The control-plane currently supports:
 - policy benchmark suites
 - orchestration scenario matrices
 - deterministic benchmark aggregation
+- orchestration strategy branching
+- planner/policy A/B experimentation
+- deterministic best-strategy selection
+- replay-safe strategy corpora
+- orchestration graph variation testing
+- orchestration strategy corpora
+- replay-safe orchestration branching
+- deterministic orchestration strategy evaluation
 
 ---
 
@@ -715,6 +735,69 @@ Benchmark validation is included in:
 make control-plane-tests
 ```
 
+# 🌿 Multi-Strategy Experiments
+
+Stage 4O introduces deterministic orchestration branching and multi-strategy experimentation.
+
+The strategy layer enables orchestration A/B testing across planner and policy variants while preserving replay-safe execution semantics.
+
+Strategy capabilities:
+
+- orchestration branching
+- planner strategy comparison
+- policy strategy comparison
+- orchestration A/B experimentation
+- orchestration graph variation testing
+- deterministic best-strategy selection
+- replay-safe strategy corpora
+
+Strategy flow:
+
+```text
+task
+→ planner/policy variants
+→ orchestration branching
+→ replay/evaluation
+→ strategy comparison
+→ best-strategy selection
+→ deterministic exports
+```
+
+Supported strategy CLI commands:
+
+```bash
+./ai-orchestrate strategy-experiment \
+  "Create a file and list files" \
+  --planner=deterministic \
+  --planner=baseline \
+  --policy=default
+
+./ai-orchestrate compare-strategies \
+  "Create a file and list files" \
+  --planner=deterministic \
+  --planner=baseline
+
+./ai-orchestrate export-strategy-experiment \
+  "Create a file and list files" \
+  report.md
+```
+
+Strategy features:
+
+- deterministic orchestration branching
+- replay-safe strategy comparison
+- orchestration A/B testing
+- planner/policy variant evaluation
+- deterministic tie-breaking
+- markdown strategy reports
+- JSON strategy exports
+
+Strategy validation is included in:
+
+```bash
+make control-plane-tests
+```
+
 ---
 
 # 🧠 Runtime Philosophy
@@ -810,7 +893,8 @@ ai-dev-platform/
 │   │   ├── replay/
 │   │   ├── evals/
 │   │   ├── experiments/
-│   │   └── benchmarks/
+│   │   ├── benchmarks/
+│   │   └── strategies/
 │   ├── tools/
 │   ├── dags/
 │   ├── scenarios/
@@ -923,6 +1007,7 @@ make control-plane-replay-tests
 make control-plane-eval-tests
 make control-plane-experiment-tests
 make control-plane-benchmark-tests
+make control-plane-strategy-tests
 ```
 
 Important:
@@ -1002,7 +1087,7 @@ AI_ADAPTER=my-agent ./ai run "test"
 - [x] Orchestration evaluation/comparison
 - [x] Orchestration datasets/experiment tracking
 - [x] Policy/planner benchmark suites
-- [ ] Multi-strategy orchestration experiments
+- [x] Multi-strategy orchestration experiments
 - [ ] Adaptive orchestration heuristics
 - [ ] Parallel DAG execution
 - [ ] Orchestration API
