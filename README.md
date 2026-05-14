@@ -72,6 +72,7 @@ Swap the compute.
 - **Control-Plane Scenario Testing** — deterministic orchestration scenario validation
 - **Replay + Introspection Layer** — deterministic orchestration reconstruction, lineage, and export tooling
 - **Evaluation + Comparison Layer** — deterministic orchestration scoring, benchmarking, and replay comparison
+- **Experiment Tracking + Datasets** — deterministic replay-backed experiment manifests, datasets, and benchmark corpora
 - **Tool-Using Agent Runtime** — native OpenAI function-calling loop with dynamic tool execution
 - **Dataset Export Layer** — deterministic NDJSON corpora generation
 - **Schema Compatibility Contracts** — backward-compatible runtime guarantees
@@ -314,11 +315,17 @@ control-plane/
 │   │   ├── loader.py
 │   │   ├── introspection.py
 │   │   └── exporter.py
-│   └── evals/
+│   ├── evals/
+│   │   ├── models.py
+│   │   ├── evaluator.py
+│   │   ├── comparator.py
+│   │   ├── benchmarks.py
+│   │   └── exporter.py
+│   └── experiments/
 │       ├── models.py
-│       ├── evaluator.py
-│       ├── comparator.py
-│       ├── benchmarks.py
+│       ├── manifests.py
+│       ├── tracker.py
+│       ├── datasets.py
 │       └── exporter.py
 ├── tools/
 │   ├── contracts.py
@@ -358,6 +365,8 @@ scenario evaluation
 replay + introspection
   ↓
 evaluation + comparison
+  ↓
+experiment tracking + datasets
 ```
 
 The control-plane currently supports:
@@ -376,6 +385,10 @@ The control-plane currently supports:
 - orchestration replay comparison
 - orchestration benchmarking
 - deterministic orchestration scoring
+- orchestration experiment manifests
+- replay-backed dataset generation
+- orchestration benchmark corpora
+- deterministic experiment exports
 
 ---
 
@@ -573,6 +586,60 @@ Evaluation features:
 - JSON evaluation exports
 
 Evaluation validation is included in:
+
+```bash
+make control-plane-tests
+```
+
+# 🧪 Experiment Tracking + Datasets
+
+Stage 4M introduces deterministic orchestration experiment tracking and replay-backed dataset generation.
+
+The experiment layer operates entirely on replay-safe orchestration artifacts.
+
+Experiment capabilities:
+
+- orchestration experiment manifests
+- replay dataset generation
+- benchmark corpora construction
+- orchestration lineage metadata
+- evaluation history aggregation
+- deterministic experiment exports
+- replay-safe dataset construction
+
+Experiment flow:
+
+```text
+ReplayDag
+→ evaluation
+→ experiment tracker
+→ dataset builder
+→ manifest aggregation
+→ deterministic exports
+```
+
+Supported experiment CLI commands:
+
+```bash
+./ai-orchestrate track-run runs/<run_id>
+
+./ai-orchestrate track-experiment runs/a runs/b runs/c
+
+./ai-orchestrate build-dataset runs/a runs/b runs/c
+
+./ai-orchestrate export-experiment runs/a runs/b report.md
+```
+
+Experiment features:
+
+- deterministic experiment manifests
+- replay-backed datasets
+- benchmark corpus generation
+- evaluation lineage tracking
+- markdown experiment exports
+- JSON dataset exports
+
+Experiment validation is included in:
 
 ```bash
 make control-plane-tests
@@ -782,6 +849,7 @@ make control-plane-policy-tests
 make control-plane-scenario-tests
 make control-plane-replay-tests
 make control-plane-eval-tests
+make control-plane-experiment-tests
 ```
 
 Important:
@@ -859,7 +927,8 @@ AI_ADAPTER=my-agent ./ai run "test"
 - [x] Control-plane scenario testing
 - [x] Orchestration replay/introspection
 - [x] Orchestration evaluation/comparison
-- [ ] Orchestration datasets/experiment tracking
+- [x] Orchestration datasets/experiment tracking
+- [ ] Policy/planner benchmark suites
 - [ ] Parallel DAG execution
 - [ ] Orchestration API
 - [ ] Web UI

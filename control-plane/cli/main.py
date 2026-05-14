@@ -27,6 +27,11 @@ from core.replay.exporter import export_replay_summary_json
 from core.evals.evaluator import evaluate_replay
 from core.evals.comparator import compare_replays
 from core.evals.benchmarks import benchmark_replays
+from core.experiments.tracker import track_replay
+from core.experiments.tracker import track_replays
+from core.experiments.datasets import build_replay_dataset
+from core.experiments.exporter import export_manifest_json
+from core.experiments.exporter import export_manifest_markdown
 
 
 def _to_jsonable(obj: Any) -> Any:
@@ -62,7 +67,11 @@ def _usage() -> str:
         '  ai-orchestrate export-run <run_path> <output.(md|json)> [--pretty]\n'
         '  ai-orchestrate evaluate-run <run_path> [--pretty]\n'
         '  ai-orchestrate compare-runs <run_path_a> <run_path_b> [--pretty]\n'
-        '  ai-orchestrate benchmark-runs <run_path...> [--pretty]'
+        '  ai-orchestrate benchmark-runs <run_path...> [--pretty]\n'
+        '  ai-orchestrate track-run <run_path> [--pretty]\n'
+        '  ai-orchestrate track-experiment <run_path...> [--pretty]\n'
+        '  ai-orchestrate build-dataset <run_path...> [--pretty]\n'
+        '  ai-orchestrate export-experiment <run_path...> <output.(md|json)> [--pretty]'
     )
 
 
@@ -178,6 +187,72 @@ def main(argv: list[str] | None = None) -> int:
                 replay = load_orchestration_trace(positional[0])
                 summary = summarize_replay(replay)
                 _emit(summary.model_dump(mode='json'), pretty=pretty)
+            except Exception as exc:
+                _emit({'status': 'error', 'error': str(exc)}, pretty=pretty)
+            return 0
+
+        if command == 'track-run':
+            positional, pretty, _trace, _strategy, _policy_name = _parse_flags(raw, allow_trace=False, allow_strategy=False)
+            if len(positional) < 1:
+                print('error: track-run requires run_path', file=sys.stderr)
+                print(_usage(), file=sys.stderr)
+                return 2
+            try:
+                replay = load_orchestration_trace(positional[0])
+                ev = evaluate_replay(replay)
+                tracked = track_replay(replay, evaluation=ev)
+                _emit(tracked.model_dump(mode='json'), pretty=pretty)
+            except Exception as exc:
+                _emit({'status': 'error', 'error': str(exc)}, pretty=pretty)
+            return 0
+
+        if command == 'track-experiment':
+            positional, pretty, _trace, _strategy, _policy_name = _parse_flags(raw, allow_trace=False, allow_strategy=False)
+            if len(positional) < 1:
+                print('error: track-experiment requires run paths', file=sys.stderr)
+                print(_usage(), file=sys.stderr)
+                return 2
+            try:
+                replays = [load_orchestration_trace(p) for p in positional]
+                evals = [evaluate_replay(r) for r in replays]
+                manifest = track_replays(replays, evaluations=evals, experiment_id='experiment_cli')
+                _emit(manifest.model_dump(mode='json'), pretty=pretty)
+            except Exception as exc:
+                _emit({'status': 'error', 'error': str(exc)}, pretty=pretty)
+            return 0
+
+        if command == 'build-dataset':
+            positional, pretty, _trace, _strategy, _policy_name = _parse_flags(raw, allow_trace=False, allow_strategy=False)
+            if len(positional) < 1:
+                print('error: build-dataset requires run paths', file=sys.stderr)
+                print(_usage(), file=sys.stderr)
+                return 2
+            try:
+                replays = [load_orchestration_trace(p) for p in positional]
+                evals = [evaluate_replay(r) for r in replays]
+                dataset = build_replay_dataset(replays, evaluations=evals, dataset_id='dataset_cli')
+                _emit(dataset.model_dump(mode='json'), pretty=pretty)
+            except Exception as exc:
+                _emit({'status': 'error', 'error': str(exc)}, pretty=pretty)
+            return 0
+
+        if command == 'export-experiment':
+            positional, pretty, _trace, _strategy, _policy_name = _parse_flags(raw, allow_trace=False, allow_strategy=False)
+            if len(positional) < 3:
+                print('error: export-experiment requires run paths plus output path', file=sys.stderr)
+                print(_usage(), file=sys.stderr)
+                return 2
+            try:
+                output_path = positional[-1]
+                run_paths = positional[:-1]
+                replays = [load_orchestration_trace(p) for p in run_paths]
+                evals = [evaluate_replay(r) for r in replays]
+                manifest = track_replays(replays, evaluations=evals, experiment_id='experiment_cli')
+                if output_path.lower().endswith('.md'):
+                    written = export_manifest_markdown(manifest, output_path)
+                else:
+                    written = export_manifest_json(manifest, output_path)
+                _emit({'status': 'success', 'path': written}, pretty=pretty)
             except Exception as exc:
                 _emit({'status': 'error', 'error': str(exc)}, pretty=pretty)
             return 0

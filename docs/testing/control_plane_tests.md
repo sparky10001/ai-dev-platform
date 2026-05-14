@@ -26,6 +26,8 @@ Stage 4 tests are additive and currently isolated from the Phase 3E validation g
   - `scripts/tests/control_plane_replay_tests.sh`
 - Stage 4L orchestration evaluation + comparison:
   - `scripts/tests/control_plane_eval_tests.sh`
+- Stage 4M orchestration datasets + experiment tracking:
+  - `scripts/tests/control_plane_experiment_tests.sh`
 
 ## Convenience Command
 
