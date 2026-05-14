@@ -1,15 +1,17 @@
-````markdown
 # 🤖 AI Dev Platform
 
 > Stop managing AI tools. Start managing AI outcomes.
 
-**A portable, provider-agnostic AI development environment for developers who build serious things.**
+**A portable, provider-agnostic AI runtime and orchestration platform for developers building serious AI systems.**
 
-One stable interface. Any AI agent. Any compute. Anywhere.
+One stable interface.
+Any AI agent.
+Any compute.
+Anywhere.
 
 ---
 
-## 🧠 Core Principle
+# 🧠 Core Principle
 
 > **Only one thing is stable: the AI interface.**
 > Everything else can change, will change, should be replaceable.
@@ -18,7 +20,7 @@ One stable interface. Any AI agent. Any compute. Anywhere.
 Developer
     │
     ▼
-./ai run "your task"          ← Stable CLI — never changes
+./ai run "your task"          ← Stable CLI
     │
     ▼
 scripts/runtime.sh            ← Runtime entrypoint
@@ -27,71 +29,81 @@ scripts/runtime.sh            ← Runtime entrypoint
 runtime/engine.py             ← Deterministic execution engine
     │
     ▼
+control-plane/                ← DAG orchestration layer
+    │
+    ▼
 scripts/router.py             ← Intent classification → model tier
     │
     ▼
-scripts/adapters/agent.sh     ← Active adapter (agent | goose | mock)
+scripts/adapters/agent.sh     ← Active adapter
     │
     ▼
-scripts/agent.py              ← LiteLLM agent loop + tool execution
+scripts/agent.py              ← LiteLLM tool-using agent
     │
     ▼
-runtime/events.py             ← Canonical NDJSON event persistence
+runtime/events.py             ← Canonical NDJSON persistence
     │
     ▼
 runtime/contracts.py          ← Schema compatibility guarantees
     │
     ▼
-LiteLLM (http://litellm:4000) ← Universal router
+LiteLLM                        ← Universal provider router
     │
     ▼
-Ollama │ OpenAI │ Claude │ NVIDIA NIM   ← Replaceable compute
-````
+Ollama │ OpenAI │ Claude │ NVIDIA NIM
+```
 
-Swap the adapter. Swap the model. Swap the compute.
+Swap the adapter.
+Swap the model.
+Swap the compute.
+
 **Your workflow never changes.**
 
 ---
 
-## ✨ Features
+# ✨ Features
 
-* **Provider Agnostic** — LiteLLM routes to Ollama, OpenAI, Anthropic/Claude, NVIDIA NIM, or fully offline mock
-* **Intent-Based Routing** — command type maps automatically to the right model tier (fast / balanced / heavy)
-* **Tool-Using Agent** — native OpenAI function-calling loop with built-in tools
-* **Deterministic Runtime** — schema-versioned NDJSON traces with replay-safe lifecycle persistence
-* **Replay + Evaluation Engine** — reconstruct runs, score outcomes, compare executions
-* **Dataset Export Layer** — export traces/evals as deterministic NDJSON corpora
-* **Contract-Stabilized Architecture** — backward-compatible runtime schemas with validation guarantees
-* **Simulation-Driven CI** — scenario specs, trace evaluation, and automated scoring
-* **Portable** — unified Docker stack, works on any machine or on a plane
-* **Project Aware** — inject context for agent-sim, arb-agent-system, private-ai-stack
-* **Extensively Validated** — runtime validation ladder covering replay, contracts, datasets, evals, isolation, NDJSON integrity, and lifecycle ordering
-* **Offline Mode** — mock adapter works without internet
+- **Provider Agnostic** — LiteLLM routes to Ollama, OpenAI, Claude, NVIDIA NIM, or offline mock providers
+- **Deterministic Runtime** — replay-safe NDJSON traces with schema-versioned contracts
+- **Control-Plane DAG Orchestration** — additive orchestration layer with deterministic execution
+- **Replay + Evaluation Engine** — reconstruct, score, compare, and export executions
+- **Tool-Using Agent Runtime** — native OpenAI function-calling loop with dynamic tool execution
+- **Dataset Export Layer** — deterministic NDJSON corpora generation
+- **Schema Compatibility Contracts** — backward-compatible runtime guarantees
+- **Scenario-Driven CI** — trace-based evaluation and scoring pipelines
+- **Portable** — Docker-first architecture that works locally or in the cloud
+- **Offline Mode** — mock adapter + mock OpenAI server support
+- **Extensively Validated** — runtime + control-plane validation ladders
 
 ---
 
-## 🚀 Quick Start
+# 🚀 Quick Start
 
-### Option 1 — Dev Container (Recommended)
+## Option 1 — Dev Container (Recommended)
 
 ```bash
 git clone https://github.com/sparky10001/ai-dev-platform.git
 cd ai-dev-platform
 ```
 
-Open in VS Code → **Reopen in Container**
+Open in VS Code:
 
-The unified Docker stack builds automatically — Ollama pulls tinyllama, LiteLLM starts, environment configures itself.
+```text
+Reopen in Container
+```
+
+Then:
 
 ```bash
-make status
 make health
+make validate
+
 ./ai run "hello"
 ```
 
 ---
 
-### Option 2 — Local Setup
+## Option 2 — Local Setup
 
 ```bash
 git clone https://github.com/sparky10001/ai-dev-platform.git
@@ -105,68 +117,49 @@ make litellm-fast
 
 ---
 
-## 📋 Requirements
-
-| Tool               | Required      | Notes                    |
-| ------------------ | ------------- | ------------------------ |
-| Docker             | ✅ Yes         | Unified dev stack        |
-| VS Code            | ✅ Recommended | Dev Containers extension |
-| OpenAI API Key     | Optional      | GPT models               |
-| Anthropic API Key  | Optional      | Claude models            |
-| NVIDIA NIM API Key | Optional      | Free reasoning models    |
-| Goose CLI          | Optional      | Goose adapter support    |
-
----
-
-## ⚡ The `ai` Command
+# ⚡ Stable CLI
 
 Everything flows through one stable interface:
 
 ```bash
-ai run      "analyze the protocol layer"
-ai fix      "ImportError in runtime engine"
+ai run      "analyze the runtime"
+ai fix      "repair trace ordering"
 ai explain  "how replay reconstruction works"
-ai refactor "simplify the dataset exporter"
+ai refactor "simplify the registry layer"
 ai query    "what should I build next"
 ```
 
-Flags:
+Examples:
 
 ```bash
 ./ai run "task" --trace
 ./ai run "task" --model=heavy
-./ai --adapter=mock run "task"
+./ai --adapter=mock run "offline test"
 ```
 
 ---
 
-## 🧠 Model Tiers
+# 🧠 Model Tiers
 
-Commands map automatically to model tiers.
-
-| Tier       | Command                  | Primary          | Fallback  | Use When        |
-| ---------- | ------------------------ | ---------------- | --------- | --------------- |
-| `fast`     | `query`                  | tinyllama        | —         | quick responses |
-| `balanced` | `explain`                | NVIDIA NIM       | tinyllama | reasoning       |
-| `heavy`    | `run`, `fix`, `refactor` | GPT-4.1 / Claude | tinyllama | complex tasks   |
+| Tier | Purpose | Example |
+|---|---|---|
+| `fast` | low latency | tinyllama |
+| `balanced` | reasoning | NVIDIA NIM |
+| `heavy` | complex execution | GPT-4.1 / Claude |
 
 Override manually:
 
 ```bash
-./ai run "task" --model=fast
 ./ai run "task" --model=heavy
-ACTIVE_MODEL=balanced ./ai run "task"
 ```
 
 ---
 
-## 🔄 Switching Providers
+# 🔄 Switching Providers
 
 ```bash
 make litellm-fast
 make litellm-balanced
-make litellm-code
-make litellm-claude
 make litellm-heavy
 
 make mock
@@ -177,19 +170,19 @@ make colab
 
 ---
 
-## 🧱 Deterministic Runtime Architecture
+# 🧱 Deterministic Runtime Architecture
 
 The runtime is built as a replay-safe,
 schema-versioned execution system.
 
 Core guarantees:
 
-* deterministic NDJSON traces
-* append-only persistence
-* replay-safe lifecycle reconstruction
-* backward-compatible contracts
-* schema-first validation
-* crash-safe event durability
+- deterministic NDJSON traces
+- append-only persistence
+- replay-safe lifecycle reconstruction
+- crash-safe event durability
+- schema-first validation
+- backward compatibility
 
 Runtime lifecycle:
 
@@ -205,73 +198,149 @@ Core runtime modules:
 
 ```text
 runtime/
-├── engine.py       ← orchestration engine
-├── events.py       ← canonical event writer
-├── replay.py       ← deterministic replay loader
-├── evals.py        ← execution scoring + comparisons
-├── registry.py     ← run indexing/query layer
-├── datasets.py     ← NDJSON export pipelines
-├── contracts.py    ← schema compatibility guarantees
-├── validator.py    ← validation boundary
-├── loader.py       ← runtime artifact loading
-├── run.py          ← canonical run management
-├── runner.py       ← adapter execution layer
-└── schemas.py      ← typed runtime models
+├── engine.py
+├── events.py
+├── replay.py
+├── evals.py
+├── registry.py
+├── datasets.py
+├── contracts.py
+├── validator.py
+├── loader.py
+├── run.py
+├── runner.py
+└── schemas.py
 ```
 
 ---
 
-## 🧠 Runtime Philosophy
+# 🧩 Control-Plane Architecture
 
-The runtime is treated as deterministic infrastructure,
-not merely an agent wrapper.
+Stage 4 introduces an additive orchestration layer
+built on top of the deterministic runtime.
+
+The control-plane is intentionally separate from
+the runtime execution substrate.
+
+```text
+Phase 3E runtime
+    = execution + persistence substrate
+
+Stage 4 control-plane
+    = orchestration + DAG planning substrate
+```
+
+Control-plane components:
+
+```text
+control-plane/
+├── core/
+│   ├── dag/
+│   │   ├── models.py
+│   │   ├── validator.py
+│   │   ├── executor.py
+│   │   └── observability/
+│   │       └── trace.py
+│   └── ...
+├── tools/
+│   ├── contracts.py
+│   └── registry.py
+├── dags/
+│   ├── schemas/
+│   └── examples/
+└── tests/
+```
+
+---
+
+# 🔄 Control-Plane Execution Flow
+
+```text
+DAG
+  ↓
+validator
+  ↓
+tool registry validation
+  ↓
+deterministic executor
+  ↓
+runtime trace bridge
+  ↓
+Phase 3E replay/eval compatibility
+```
+
+The control-plane currently supports:
+
+- deterministic DAG validation
+- tool registry integration
+- deterministic single-threaded DAG execution
+- replayable DAG traces
+- runtime-compatible execution artifacts
+
+---
+
+# 🧠 Runtime Philosophy
+
+The runtime is treated as:
+
+```text
+deterministic infrastructure
+```
+
+—not merely an agent wrapper.
 
 This enables:
 
-* replayable executions
-* trace-driven evaluation
-* reproducible debugging
-* dataset generation
-* contract-safe evolution
-* execution introspection
+- replayable executions
+- reproducible debugging
+- trace-driven evaluation
+- deterministic dataset generation
+- execution introspection
+- contract-safe evolution
 
 All runtime artifacts are schema-versioned and replay-safe by default.
 
 ---
 
-## 🌍 Environment Scenarios
+# 🌍 Environment Scenarios
 
-### 🏠 Private Local AI
+## 🏠 Local AI
 
 ```bash
 make litellm-fast
 ./ai run "review the convergence issue"
 ```
 
-### ☁️ Cloud Intelligence
+---
+
+## ☁️ Cloud Intelligence
 
 ```bash
 make litellm-heavy
-./ai run "refactor the risk service"
-```
-
-### ✈️ Offline
-
-```bash
-make mock
-./ai run "plan the next sprint"
-```
-
-### 🖥️ GPU Compute
-
-```bash
-make colab
-./ai run "train Q-agent for 10000 episodes"
+./ai run "refactor the runtime engine"
 ```
 
 ---
 
-## 📁 Project Structure
+## ✈️ Offline Mode
+
+```bash
+make mock
+./ai run "plan next sprint"
+```
+
+---
+
+## 🖥️ GPU Compute
+
+```bash
+make colab
+./ai run "train policy agent"
+```
+
+---
+
+# 📁 Project Structure
 
 ```text
 ai-dev-platform/
@@ -290,21 +359,25 @@ ai-dev-platform/
 │   ├── run.py
 │   ├── runner.py
 │   └── schemas.py
+├── control-plane/
+│   ├── core/
+│   │   ├── dag/
+│   │   └── observability/
+│   ├── tools/
+│   ├── dags/
+│   └── tests/
 ├── scripts/
 │   ├── runtime.sh
 │   ├── router.py
 │   ├── agent.py
 │   ├── tool_executor.py
-│   ├── run_scenario.sh
-│   ├── health-check.sh
-│   ├── switch-model.sh
 │   ├── adapters/
 │   ├── tools/
-│   ├── mock-server/
-│   └── tests/
+│   ├── tests/
+│   └── mock-server/
 ├── scenarios/
-├── evals/
 ├── runs/
+├── evals/
 ├── docs/
 ├── skills/
 ├── Makefile
@@ -313,29 +386,29 @@ ai-dev-platform/
 
 ---
 
-## 🧰 Tool System
+# 🧰 Tool System
 
-The agent supports runtime-discovered tools.
+The platform supports runtime-discovered tools.
 
-| Tool              | Description             |
-| ----------------- | ----------------------- |
-| `read_file`       | Read workspace files    |
-| `write_file`      | Write files safely      |
-| `list_files`      | Enumerate directories   |
-| `run_bash`        | Execute shell commands  |
-| `http_get`        | HTTP GET requests       |
-| `read_trace`      | Parse runtime traces    |
-| `run_scenario`    | Execute scenario specs  |
-| `evaluate_trace`  | Score runtime traces    |
-| `compare_results` | Compare evaluation runs |
+| Tool | Purpose |
+|---|---|
+| `read_file` | read workspace files |
+| `write_file` | write files safely |
+| `list_files` | enumerate directories |
+| `run_bash` | execute shell commands |
+| `http_get` | HTTP GET requests |
+| `read_trace` | replay trace inspection |
+| `run_scenario` | scenario execution |
+| `evaluate_trace` | runtime evaluation |
+| `compare_results` | compare evaluation runs |
 
 Tools are exported automatically as OpenAI-compatible function schemas.
 
 ---
 
-## 🧪 Scenario-Driven Evaluation
+# 🧪 Scenario-Driven Evaluation
 
-Run tasks against structured success criteria:
+Run structured evaluations:
 
 ```bash
 ./scripts/run_scenario.sh \
@@ -343,7 +416,7 @@ Run tasks against structured success criteria:
   --model=balanced
 ```
 
-Example output:
+Example:
 
 ```text
 🔍 Tools called: write_file, list_files
@@ -351,50 +424,17 @@ Example output:
 ✅ Scenario passed
 ```
 
-Scenario format:
-
-```json
-{
-  "scenario_id": "my_scenario",
-  "task": "Create a file and list directory",
-  "success_criteria": [
-    {"type": "tool_used", "tool": "write_file"},
-    {"type": "tool_used", "tool": "list_files"},
-    {"type": "no_errors"}
-  ]
-}
-```
-
-Supported criteria:
-
-* `tool_used`
-* `no_errors`
-* `output_contains`
-
 ---
 
-## 🧪 Runtime Validation Ladder
+# 🧪 Runtime Validation Ladder
 
-The runtime includes deterministic validation suites for:
-
-* runtime contracts
-* replay compatibility
-* NDJSON integrity
-* lifecycle ordering
-* crash recovery
-* parallel isolation
-* dataset exports
-* evaluation pipelines
-* registry/query correctness
-* backward compatibility
-
-Run full validation:
+Phase 3E runtime validation:
 
 ```bash
 make validate
 ```
 
-Core suites:
+Core runtime suites:
 
 ```bash
 ./scripts/tests/runtime_tests.sh
@@ -410,7 +450,35 @@ Core suites:
 
 ---
 
-## 🔌 Adding Your Own Adapter
+# 🧪 Control-Plane Validation Ladder
+
+Stage 4 additive validation:
+
+```bash
+make control-plane-tests
+```
+
+Control-plane suites:
+
+```bash
+make control-plane-dag-tests
+make control-plane-tool-tests
+make control-plane-executor-tests
+make control-plane-trace-tests
+```
+
+Important:
+
+```text
+Stage 4 tests are additive and intentionally
+NOT part of make validate yet.
+```
+
+This keeps the deterministic runtime substrate stable while the orchestration layer evolves independently.
+
+---
+
+# 🔌 Adding Your Own Adapter
 
 ```bash
 #!/bin/bash
@@ -440,48 +508,66 @@ Enable:
 
 ```bash
 chmod +x scripts/adapters/my-agent.sh
+
 AI_ADAPTER=my-agent ./ai run "test"
 ```
 
 ---
 
-## 🗺️ Roadmap
+# 🗺️ Roadmap
 
-* [x] Stable `ai` CLI
-* [x] Deterministic runtime architecture
-* [x] Replay-safe NDJSON persistence
-* [x] Runtime evaluation engine
-* [x] Runtime registry/query layer
-* [x] Dataset export pipelines
-* [x] Schema compatibility contracts
-* [x] Runtime validation ladder
-* [x] LiteLLM tier routing
-* [x] Native tool-calling agent loop
-* [x] Scenario-driven evaluation
-* [x] Unified Docker stack
-* [x] Mock offline adapter
-* [ ] Persistent sessions
-* [ ] Multi-project registry
-* [ ] Web UI
-* [ ] CI/CD integration guide
-* [ ] Direct NVIDIA NIM adapter
+## Phase 3E Runtime
+
+- [x] Stable CLI
+- [x] Deterministic runtime architecture
+- [x] Replay-safe NDJSON persistence
+- [x] Runtime replay engine
+- [x] Runtime evaluation engine
+- [x] Registry/query layer
+- [x] Dataset export pipelines
+- [x] Schema compatibility contracts
+- [x] Runtime validation ladder
+
+## Stage 4 Control-Plane
+
+- [x] DAG schema + validator
+- [x] Tool registry bridge
+- [x] Deterministic DAG executor
+- [x] Replayable DAG traces
+- [x] Control-plane validation ladder
+- [ ] DAG planner
+- [ ] Policy engine
+- [ ] Parallel DAG execution
+- [ ] Orchestration API
+- [ ] Web UI
+
+## Platform
+
+- [x] LiteLLM routing
+- [x] Native tool-calling agent loop
+- [x] Scenario-driven evaluation
+- [x] Unified Docker stack
+- [x] Offline mock adapter
+- [ ] Persistent sessions
+- [ ] Multi-project registry
+- [ ] CI/CD integration guide
 
 ---
 
-## 🙏 Acknowledgments
+# 🙏 Acknowledgments
 
-* LiteLLM
-* Ollama
-* Goose
-* NVIDIA NIM
-* OpenAI
-* Anthropic
-* agent-sim
-* private-ai-stack
+- LiteLLM
+- Ollama
+- Goose
+- NVIDIA NIM
+- OpenAI
+- Anthropic
+- agent-sim
+- private-ai-stack
 
 ---
 
-## 📄 License
+# 📄 License
 
 MIT License — see `LICENSE`.
 
@@ -491,4 +577,3 @@ MIT License — see `LICENSE`.
 Built with ❤️ by James R. Glines<br>
 The interface is stable. Everything else is replaceable.
 </p>
-```

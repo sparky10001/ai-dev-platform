@@ -367,6 +367,39 @@ class TraceDatasetRecord(RuntimeSchema):
 
     event: dict[str, Any]
 
+
+
+# ================================================================
+# 🧭 Control-Plane DAG Events
+# ================================================================
+
+class DagStartEvent(RuntimeEvent):
+
+    event: Literal['dag_start']
+
+    data: dict[str, Any] = Field(default_factory=dict)
+
+
+class DagNodeStartEvent(RuntimeEvent):
+
+    event: Literal['dag_node_start']
+
+    data: dict[str, Any] = Field(default_factory=dict)
+
+
+class DagNodeResultEvent(RuntimeEvent):
+
+    event: Literal['dag_node_result']
+
+    data: dict[str, Any] = Field(default_factory=dict)
+
+
+class DagResultEvent(RuntimeEvent):
+
+    event: Literal['dag_result']
+
+    data: dict[str, Any] = Field(default_factory=dict)
+
 # ================================================================
 # 🔁 Replay/Event Union
 # ================================================================
@@ -377,6 +410,10 @@ TraceEvent = Union[
     ToolResultEvent,
     AgentOutputEvent,
     SessionEndEvent,
+    DagStartEvent,
+    DagNodeStartEvent,
+    DagNodeResultEvent,
+    DagResultEvent,
 ]
 
 # ================================================================
@@ -389,4 +426,8 @@ EVENT_MODELS = {
     "tool_result": ToolResultEvent,
     "agent_output": AgentOutputEvent,
     "session_end": SessionEndEvent,
+    "dag_start": DagStartEvent,
+    "dag_node_start": DagNodeStartEvent,
+    "dag_node_result": DagNodeResultEvent,
+    "dag_result": DagResultEvent,
 }

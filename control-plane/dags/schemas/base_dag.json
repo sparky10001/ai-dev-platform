@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "BaseDAG",
+  "type": "object",
+  "required": ["dag_id", "version", "entry", "nodes"],
+  "properties": {
+    "dag_id": {"type": "string"},
+    "version": {"type": "string"},
+    "entry": {"type": "string"},
+    "nodes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "type"],
+        "properties": {
+          "id": {"type": "string"},
+          "type": {"type": "string", "enum": ["tool", "llm", "noop"]},
+          "depends_on": {
+            "type": "array",
+            "items": {"type": "string"},
+            "default": []
+          },
+          "tool": {"type": "string"},
+          "args": {"type": "object", "default": {}},
+          "prompt": {"type": "string"},
+          "metadata": {"type": "object", "default": {}}
+        },
+        "additionalProperties": true,
+        "allOf": [
+          {
+            "if": {"properties": {"type": {"const": "tool"}}},
+            "then": {"required": ["tool"]}
+          },
+          {
+            "if": {"properties": {"type": {"const": "llm"}}},
+            "then": {"required": ["prompt"]}
+          }
+        ]
+      }
+    }
+  },
+  "additionalProperties": true
+}

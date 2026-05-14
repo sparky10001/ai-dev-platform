@@ -1,0 +1,26 @@
+{
+  "dag_id": "file_write_flow",
+  "version": "1.0.0",
+  "entry": "write",
+  "nodes": [
+    {
+      "id": "write",
+      "type": "tool",
+      "tool": "write_file",
+      "args": {
+        "path": "hello.txt",
+        "content": "hi",
+        "overwrite": true
+      }
+    },
+    {
+      "id": "list",
+      "type": "tool",
+      "depends_on": ["write"],
+      "tool": "list_files",
+      "args": {
+        "path": "."
+      }
+    }
+  ]
+}

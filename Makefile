@@ -19,6 +19,7 @@
         litellm-fast litellm-code litellm-claude \
         health status validate \
         runtime-tests runtime-test-core runtime-test-phase3 runtime-test-all \
+        control-plane-dag-tests control-plane-tool-tests control-plane-executor-tests control-plane-trace-tests control-plane-tests \
         ai-run ai-fix ai-explain ai-refactor ai-query \
         ctx-agent-sim ctx-arb ctx-ai-stack \
         help _set-env
@@ -245,6 +246,28 @@ runtime-test-phase3:
 runtime-tests runtime-test-all: runtime-test-core runtime-test-phase3
 	@echo ""
 	@echo "🎉 Full runtime test ladder passed"
+
+###################################################################
+# Control-Plane Test Ladder (Stage 4, isolated)
+###################################################################
+
+control-plane-dag-tests:
+	@./scripts/tests/control_plane_dag_tests.sh
+
+control-plane-tool-tests:
+	@./scripts/tests/control_plane_tool_registry_tests.sh
+
+control-plane-executor-tests:
+	@./scripts/tests/control_plane_dag_executor_tests.sh
+
+control-plane-trace-tests:
+	@./scripts/tests/control_plane_trace_bridge_tests.sh
+
+control-plane-tests:
+	@$(MAKE) control-plane-dag-tests --no-print-directory
+	@$(MAKE) control-plane-tool-tests --no-print-directory
+	@$(MAKE) control-plane-executor-tests --no-print-directory
+	@$(MAKE) control-plane-trace-tests --no-print-directory
 
 ###################################################################
 # Validation Ladder (HARDENED)
