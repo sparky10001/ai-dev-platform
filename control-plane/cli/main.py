@@ -32,6 +32,10 @@ from core.experiments.tracker import track_replays
 from core.experiments.datasets import build_replay_dataset
 from core.experiments.exporter import export_manifest_json
 from core.experiments.exporter import export_manifest_markdown
+from core.benchmarks.matrices import build_benchmark_matrix
+from core.benchmarks.runner import run_benchmark_matrix
+from core.benchmarks.exporter import export_benchmark_suite_json
+from core.benchmarks.exporter import export_benchmark_suite_markdown
 
 
 def _to_jsonable(obj: Any) -> Any:
@@ -71,7 +75,10 @@ def _usage() -> str:
         '  ai-orchestrate track-run <run_path> [--pretty]\n'
         '  ai-orchestrate track-experiment <run_path...> [--pretty]\n'
         '  ai-orchestrate build-dataset <run_path...> [--pretty]\n'
-        '  ai-orchestrate export-experiment <run_path...> <output.(md|json)> [--pretty]'
+        '  ai-orchestrate export-experiment <run_path...> <output.(md|json)> [--pretty]\n'
+        '  ai-orchestrate benchmark-suite <scenario_dir> [--pretty]\n'
+        '  ai-orchestrate benchmark-matrix <scenario_dir> [--planner=...] [--policy=...] [--pretty]\n'
+        '  ai-orchestrate export-benchmark-suite <scenario_dir> <output.(md|json)> [--pretty]'
     )
 
 
@@ -282,6 +289,77 @@ def main(argv: list[str] | None = None) -> int:
                 right = load_orchestration_trace(positional[1])
                 cmp = compare_replays(left, right)
                 _emit(cmp.model_dump(mode='json'), pretty=pretty)
+            except Exception as exc:
+                _emit({'status': 'error', 'error': str(exc)}, pretty=pretty)
+            return 0
+
+        if command == 'benchmark-suite':
+            positional, pretty, _trace, _strategy, _policy_name = _parse_flags(raw, allow_trace=False, allow_strategy=False)
+            if len(positional) < 1:
+                print('error: benchmark-suite requires scenario directory', file=sys.stderr)
+                print(_usage(), file=sys.stderr)
+                return 2
+            try:
+                scenario_dir = positional[0]
+                scenarios = sorted([p.name for p in __import__('pathlib').Path(scenario_dir).glob('*.json')])
+                matrix = build_benchmark_matrix(
+                    scenarios=scenarios,
+                    planner_strategies=['deterministic', 'noop'],
+                    policies=['default', 'safe-readonly'],
+                    matrix_id='benchmark_suite_cli',
+                )
+                suite = run_benchmark_matrix(matrix, scenario_dir)
+                _emit(suite.model_dump(mode='json'), pretty=pretty)
+            except Exception as exc:
+                _emit({'status': 'error', 'error': str(exc)}, pretty=pretty)
+            return 0
+
+        if command == 'benchmark-matrix':
+            pretty = '--pretty' in raw
+            planners = [arg.split('=', 1)[1] for arg in raw if arg.startswith('--planner=')]
+            policies = [arg.split('=', 1)[1] for arg in raw if arg.startswith('--policy=')]
+            positional = [arg for arg in raw if not arg.startswith('--')]
+            if len(positional) < 1:
+                print('error: benchmark-matrix requires scenario directory', file=sys.stderr)
+                print(_usage(), file=sys.stderr)
+                return 2
+            scenario_dir = positional[0]
+            try:
+                scenarios = sorted([p.name for p in __import__('pathlib').Path(scenario_dir).glob('*.json')])
+                matrix = build_benchmark_matrix(
+                    scenarios=scenarios,
+                    planner_strategies=(planners or ['deterministic']),
+                    policies=(policies or ['default']),
+                    matrix_id='benchmark_matrix_cli',
+                )
+                suite = run_benchmark_matrix(matrix, scenario_dir)
+                _emit(suite.model_dump(mode='json'), pretty=pretty)
+            except Exception as exc:
+                _emit({'status': 'error', 'error': str(exc)}, pretty=pretty)
+            return 0
+
+        if command == 'export-benchmark-suite':
+            positional, pretty, _trace, _strategy, _policy_name = _parse_flags(raw, allow_trace=False, allow_strategy=False)
+            if len(positional) < 2:
+                print('error: export-benchmark-suite requires scenario_dir and output path', file=sys.stderr)
+                print(_usage(), file=sys.stderr)
+                return 2
+            scenario_dir = positional[0]
+            output_path = positional[1]
+            try:
+                scenarios = sorted([p.name for p in __import__('pathlib').Path(scenario_dir).glob('*.json')])
+                matrix = build_benchmark_matrix(
+                    scenarios=scenarios,
+                    planner_strategies=['deterministic', 'noop'],
+                    policies=['default', 'safe-readonly'],
+                    matrix_id='benchmark_suite_cli',
+                )
+                suite = run_benchmark_matrix(matrix, scenario_dir)
+                if output_path.lower().endswith('.md'):
+                    written = export_benchmark_suite_markdown(suite, output_path)
+                else:
+                    written = export_benchmark_suite_json(suite, output_path)
+                _emit({'status': 'success', 'path': written}, pretty=pretty)
             except Exception as exc:
                 _emit({'status': 'error', 'error': str(exc)}, pretty=pretty)
             return 0

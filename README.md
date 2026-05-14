@@ -73,6 +73,7 @@ Swap the compute.
 - **Replay + Introspection Layer** — deterministic orchestration reconstruction, lineage, and export tooling
 - **Evaluation + Comparison Layer** — deterministic orchestration scoring, benchmarking, and replay comparison
 - **Experiment Tracking + Datasets** — deterministic replay-backed experiment manifests, datasets, and benchmark corpora
+- **Benchmark Suites** — deterministic planner/policy scenario-matrix benchmarking
 - **Tool-Using Agent Runtime** — native OpenAI function-calling loop with dynamic tool execution
 - **Dataset Export Layer** — deterministic NDJSON corpora generation
 - **Schema Compatibility Contracts** — backward-compatible runtime guarantees
@@ -321,11 +322,17 @@ control-plane/
 │   │   ├── comparator.py
 │   │   ├── benchmarks.py
 │   │   └── exporter.py
-│   └── experiments/
+│   ├── experiments/
+│   │   ├── models.py
+│   │   ├── manifests.py
+│   │   ├── tracker.py
+│   │   ├── datasets.py
+│   │   └── exporter.py
+│   └── benchmarks/
 │       ├── models.py
-│       ├── manifests.py
-│       ├── tracker.py
-│       ├── datasets.py
+│       ├── matrices.py
+│       ├── runner.py
+│       ├── evaluator.py
 │       └── exporter.py
 ├── tools/
 │   ├── contracts.py
@@ -367,6 +374,8 @@ replay + introspection
 evaluation + comparison
   ↓
 experiment tracking + datasets
+  ↓
+benchmark suites + matrices
 ```
 
 The control-plane currently supports:
@@ -389,6 +398,10 @@ The control-plane currently supports:
 - replay-backed dataset generation
 - orchestration benchmark corpora
 - deterministic experiment exports
+- planner strategy benchmark suites
+- policy benchmark suites
+- orchestration scenario matrices
+- deterministic benchmark aggregation
 
 ---
 
@@ -645,6 +658,63 @@ Experiment validation is included in:
 make control-plane-tests
 ```
 
+# 🧮 Benchmark Suites
+
+Stage 4N introduces deterministic planner and policy benchmark suites.
+
+Benchmark suites execute orchestration scenario matrices across planner strategies and policy configurations.
+
+Benchmark capabilities:
+
+- planner strategy benchmarking
+- policy benchmarking
+- orchestration scenario matrices
+- deterministic benchmark manifests
+- benchmark corpus generation
+- orchestration experiment matrices
+- replay-safe benchmark exports
+
+Benchmark flow:
+
+```text
+scenario matrix
+→ orchestration execution
+→ replay/evaluation
+→ benchmark aggregation
+→ deterministic exports
+```
+
+Supported benchmark CLI commands:
+
+```bash
+./ai-orchestrate benchmark-suite \
+  control-plane/scenarios/tests
+
+./ai-orchestrate benchmark-matrix \
+  control-plane/scenarios/tests \
+  --planner=deterministic \
+  --policy=default
+
+./ai-orchestrate export-benchmark-suite \
+  control-plane/scenarios/tests \
+  report.md
+```
+
+Benchmark features:
+
+- deterministic scenario matrix execution
+- planner strategy comparison
+- policy comparison
+- benchmark suite aggregation
+- markdown benchmark reports
+- replay-safe benchmark exports
+
+Benchmark validation is included in:
+
+```bash
+make control-plane-tests
+```
+
 ---
 
 # 🧠 Runtime Philosophy
@@ -738,7 +808,9 @@ ai-dev-platform/
 │   │   ├── observability/
 │   │   ├── scenarios/
 │   │   ├── replay/
-│   │   └── evals/
+│   │   ├── evals/
+│   │   ├── experiments/
+│   │   └── benchmarks/
 │   ├── tools/
 │   ├── dags/
 │   ├── scenarios/
@@ -850,6 +922,7 @@ make control-plane-scenario-tests
 make control-plane-replay-tests
 make control-plane-eval-tests
 make control-plane-experiment-tests
+make control-plane-benchmark-tests
 ```
 
 Important:
@@ -928,7 +1001,9 @@ AI_ADAPTER=my-agent ./ai run "test"
 - [x] Orchestration replay/introspection
 - [x] Orchestration evaluation/comparison
 - [x] Orchestration datasets/experiment tracking
-- [ ] Policy/planner benchmark suites
+- [x] Policy/planner benchmark suites
+- [ ] Multi-strategy orchestration experiments
+- [ ] Adaptive orchestration heuristics
 - [ ] Parallel DAG execution
 - [ ] Orchestration API
 - [ ] Web UI
