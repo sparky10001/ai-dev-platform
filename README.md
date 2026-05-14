@@ -71,6 +71,7 @@ Swap the compute.
 - **Deterministic Policy Layer** — governance and execution constraints before DAG execution
 - **Control-Plane Scenario Testing** — deterministic orchestration scenario validation
 - **Replay + Introspection Layer** — deterministic orchestration reconstruction, lineage, and export tooling
+- **Evaluation + Comparison Layer** — deterministic orchestration scoring, benchmarking, and replay comparison
 - **Tool-Using Agent Runtime** — native OpenAI function-calling loop with dynamic tool execution
 - **Dataset Export Layer** — deterministic NDJSON corpora generation
 - **Schema Compatibility Contracts** — backward-compatible runtime guarantees
@@ -308,10 +309,16 @@ control-plane/
 │   │   ├── models.py
 │   │   ├── runner.py
 │   │   └── evaluator.py
-│   └── replay/
+│   ├── replay/
+│   │   ├── models.py
+│   │   ├── loader.py
+│   │   ├── introspection.py
+│   │   └── exporter.py
+│   └── evals/
 │       ├── models.py
-│       ├── loader.py
-│       ├── introspection.py
+│       ├── evaluator.py
+│       ├── comparator.py
+│       ├── benchmarks.py
 │       └── exporter.py
 ├── tools/
 │   ├── contracts.py
@@ -349,6 +356,8 @@ replay/eval-compatible artifacts
 scenario evaluation
   ↓
 replay + introspection
+  ↓
+evaluation + comparison
 ```
 
 The control-plane currently supports:
@@ -364,6 +373,9 @@ The control-plane currently supports:
 - orchestration replay reconstruction
 - orchestration lineage + export tooling
 - orchestration scenario validation
+- orchestration replay comparison
+- orchestration benchmarking
+- deterministic orchestration scoring
 
 ---
 
@@ -514,6 +526,58 @@ Replay validation is included in:
 make control-plane-tests
 ```
 
+# 📊 Evaluation + Comparison Layer
+
+Stage 4L introduces deterministic orchestration evaluation, benchmarking, and replay comparison.
+
+The evaluation layer operates entirely on replay-safe orchestration artifacts.
+
+Evaluation capabilities:
+
+- orchestration scoring
+- replay comparison
+- DAG diffing
+- orchestration benchmarking
+- execution quality analysis
+- execution completeness metrics
+- replay-safe benchmark exports
+
+Evaluation flow:
+
+```text
+ReplayDag
+→ evaluation engine
+→ comparison engine
+→ benchmark aggregation
+→ deterministic exports
+```
+
+Supported evaluation CLI commands:
+
+```bash
+./ai-orchestrate evaluate-run runs/<run_id>
+
+./ai-orchestrate compare-runs runs/<run_a> runs/<run_b>
+
+./ai-orchestrate benchmark-runs runs/a runs/b runs/c
+```
+
+Evaluation features:
+
+- deterministic orchestration scoring
+- replay-safe comparison
+- execution-order diffing
+- tool usage comparison
+- benchmark aggregation
+- markdown benchmark exports
+- JSON evaluation exports
+
+Evaluation validation is included in:
+
+```bash
+make control-plane-tests
+```
+
 ---
 
 # 🧠 Runtime Philosophy
@@ -606,7 +670,8 @@ ai-dev-platform/
 │   │   ├── orchestrator/
 │   │   ├── observability/
 │   │   ├── scenarios/
-│   │   └── replay/
+│   │   ├── replay/
+│   │   └── evals/
 │   ├── tools/
 │   ├── dags/
 │   ├── scenarios/
@@ -716,6 +781,7 @@ make control-plane-cli-tests
 make control-plane-policy-tests
 make control-plane-scenario-tests
 make control-plane-replay-tests
+make control-plane-eval-tests
 ```
 
 Important:
@@ -792,7 +858,8 @@ AI_ADAPTER=my-agent ./ai run "test"
 - [x] Planner policy layer
 - [x] Control-plane scenario testing
 - [x] Orchestration replay/introspection
-- [ ] Orchestration evaluation/comparison
+- [x] Orchestration evaluation/comparison
+- [ ] Orchestration datasets/experiment tracking
 - [ ] Parallel DAG execution
 - [ ] Orchestration API
 - [ ] Web UI

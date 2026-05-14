@@ -24,6 +24,9 @@ from core.replay.loader import load_orchestration_trace
 from core.replay.introspection import summarize_replay
 from core.replay.exporter import export_replay_markdown
 from core.replay.exporter import export_replay_summary_json
+from core.evals.evaluator import evaluate_replay
+from core.evals.comparator import compare_replays
+from core.evals.benchmarks import benchmark_replays
 
 
 def _to_jsonable(obj: Any) -> Any:
@@ -56,7 +59,10 @@ def _usage() -> str:
         '  ai-orchestrate execute-dag <path> [--trace] [--pretty]\n'
         '  ai-orchestrate replay <run_path> [--pretty]\n'
         '  ai-orchestrate summarize-run <run_path> [--pretty]\n'
-        '  ai-orchestrate export-run <run_path> <output.(md|json)> [--pretty]'
+        '  ai-orchestrate export-run <run_path> <output.(md|json)> [--pretty]\n'
+        '  ai-orchestrate evaluate-run <run_path> [--pretty]\n'
+        '  ai-orchestrate compare-runs <run_path_a> <run_path_b> [--pretty]\n'
+        '  ai-orchestrate benchmark-runs <run_path...> [--pretty]'
     )
 
 
@@ -172,6 +178,49 @@ def main(argv: list[str] | None = None) -> int:
                 replay = load_orchestration_trace(positional[0])
                 summary = summarize_replay(replay)
                 _emit(summary.model_dump(mode='json'), pretty=pretty)
+            except Exception as exc:
+                _emit({'status': 'error', 'error': str(exc)}, pretty=pretty)
+            return 0
+
+        if command == 'evaluate-run':
+            positional, pretty, _trace, _strategy, _policy_name = _parse_flags(raw, allow_trace=False, allow_strategy=False)
+            if not positional:
+                print('error: missing run_path for evaluate-run', file=sys.stderr)
+                print(_usage(), file=sys.stderr)
+                return 2
+            try:
+                replay = load_orchestration_trace(positional[0])
+                ev = evaluate_replay(replay)
+                _emit(ev.model_dump(mode='json'), pretty=pretty)
+            except Exception as exc:
+                _emit({'status': 'error', 'error': str(exc)}, pretty=pretty)
+            return 0
+
+        if command == 'compare-runs':
+            positional, pretty, _trace, _strategy, _policy_name = _parse_flags(raw, allow_trace=False, allow_strategy=False)
+            if len(positional) < 2:
+                print('error: compare-runs requires two run paths', file=sys.stderr)
+                print(_usage(), file=sys.stderr)
+                return 2
+            try:
+                left = load_orchestration_trace(positional[0])
+                right = load_orchestration_trace(positional[1])
+                cmp = compare_replays(left, right)
+                _emit(cmp.model_dump(mode='json'), pretty=pretty)
+            except Exception as exc:
+                _emit({'status': 'error', 'error': str(exc)}, pretty=pretty)
+            return 0
+
+        if command == 'benchmark-runs':
+            positional, pretty, _trace, _strategy, _policy_name = _parse_flags(raw, allow_trace=False, allow_strategy=False)
+            if len(positional) < 1:
+                print('error: benchmark-runs requires at least one run path', file=sys.stderr)
+                print(_usage(), file=sys.stderr)
+                return 2
+            try:
+                replays = [load_orchestration_trace(p) for p in positional]
+                bench = benchmark_replays(replays, benchmark_id='benchmark_cli')
+                _emit(bench.model_dump(mode='json'), pretty=pretty)
             except Exception as exc:
                 _emit({'status': 'error', 'error': str(exc)}, pretty=pretty)
             return 0
