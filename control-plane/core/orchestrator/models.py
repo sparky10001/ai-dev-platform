@@ -8,6 +8,8 @@ from pydantic import ConfigDict
 from pydantic import Field
 from pydantic import field_validator
 
+from core.policy.models import PolicySpec
+
 
 class OrchestrationRequest(BaseModel):
 
@@ -19,6 +21,7 @@ class OrchestrationRequest(BaseModel):
     task: str
     planner_strategy: Literal['deterministic', 'noop'] = 'deterministic'
     trace: bool = False
+    policy: PolicySpec | dict | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
 
     @field_validator('task')

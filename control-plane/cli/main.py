@@ -18,6 +18,8 @@ from core.dag.validator import dag_to_execution_order
 from core.dag.validator import load_dag
 from core.orchestrator.orchestrator import orchestrate_task
 from core.planner.planner import plan_task
+from core.policy.defaults import DEFAULT_POLICY
+from core.policy.defaults import SAFE_READONLY_POLICY
 
 
 def _to_jsonable(obj: Any) -> Any:
@@ -44,18 +46,27 @@ def _emit(payload: dict[str, Any], pretty: bool = False) -> None:
 def _usage() -> str:
     return (
         'Usage:\n'
-        '  ai-orchestrate run <task> [--trace] [--strategy=deterministic|noop] [--pretty]\n'
+        '  ai-orchestrate run <task> [--trace] [--strategy=deterministic|noop] [--policy=default|safe-readonly] [--pretty]\n'
         '  ai-orchestrate plan <task> [--strategy=deterministic|noop] [--pretty]\n'
         '  ai-orchestrate validate-dag <path> [--pretty]\n'
         '  ai-orchestrate execute-dag <path> [--trace] [--pretty]'
     )
 
 
-def _parse_flags(args: list[str], *, allow_trace: bool, allow_strategy: bool) -> tuple[list[str], bool, bool, str]:
+def _resolve_policy(name: str) -> dict[str, Any]:
+    if name == 'default':
+        return DEFAULT_POLICY.model_dump(mode='json')
+    if name == 'safe-readonly':
+        return SAFE_READONLY_POLICY.model_dump(mode='json')
+    raise ValueError(f'unsupported policy: {name}')
+
+
+def _parse_flags(args: list[str], *, allow_trace: bool, allow_strategy: bool) -> tuple[list[str], bool, bool, str, str | None]:
     positional: list[str] = []
     pretty = False
     trace = False
     strategy = 'deterministic'
+    policy_name: str | None = None
 
     for arg in args:
         if arg == '--pretty':
@@ -64,6 +75,8 @@ def _parse_flags(args: list[str], *, allow_trace: bool, allow_strategy: bool) ->
             if not allow_trace:
                 raise ValueError('--trace is not supported for this command')
             trace = True
+        elif arg.startswith('--policy='):
+            policy_name = arg.split('=', 1)[1]
         elif arg.startswith('--strategy='):
             if not allow_strategy:
                 raise ValueError('--strategy is not supported for this command')
@@ -73,7 +86,7 @@ def _parse_flags(args: list[str], *, allow_trace: bool, allow_strategy: bool) ->
         else:
             positional.append(arg)
 
-    return positional, pretty, trace, strategy
+    return positional, pretty, trace, strategy, policy_name
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -88,18 +101,19 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         if command == 'run':
-            positional, pretty, trace, strategy = _parse_flags(raw, allow_trace=True, allow_strategy=True)
+            positional, pretty, trace, strategy, policy_name = _parse_flags(raw, allow_trace=True, allow_strategy=True)
             if not positional:
                 print('error: missing task for run', file=sys.stderr)
                 print(_usage(), file=sys.stderr)
                 return 2
             task = ' '.join(positional)
-            result = orchestrate_task({'task': task, 'planner_strategy': strategy, 'trace': trace})
+            policy_payload = _resolve_policy(policy_name) if policy_name else None
+            result = orchestrate_task({'task': task, 'planner_strategy': strategy, 'trace': trace, 'policy': policy_payload})
             _emit(result.model_dump(mode='json'), pretty=pretty)
             return 0
 
         if command == 'plan':
-            positional, pretty, _trace, strategy = _parse_flags(raw, allow_trace=False, allow_strategy=True)
+            positional, pretty, _trace, strategy, _policy_name = _parse_flags(raw, allow_trace=False, allow_strategy=True)
             if not positional:
                 print('error: missing task for plan', file=sys.stderr)
                 print(_usage(), file=sys.stderr)
@@ -110,7 +124,7 @@ def main(argv: list[str] | None = None) -> int:
             return 0
 
         if command == 'validate-dag':
-            positional, pretty, _trace, _strategy = _parse_flags(raw, allow_trace=False, allow_strategy=False)
+            positional, pretty, _trace, _strategy, _policy_name = _parse_flags(raw, allow_trace=False, allow_strategy=False)
             if not positional:
                 print('error: missing path for validate-dag', file=sys.stderr)
                 print(_usage(), file=sys.stderr)
@@ -129,7 +143,7 @@ def main(argv: list[str] | None = None) -> int:
             return 0
 
         if command == 'execute-dag':
-            positional, pretty, trace, _strategy = _parse_flags(raw, allow_trace=True, allow_strategy=False)
+            positional, pretty, trace, _strategy, _policy_name = _parse_flags(raw, allow_trace=True, allow_strategy=False)
             if not positional:
                 print('error: missing path for execute-dag', file=sys.stderr)
                 print(_usage(), file=sys.stderr)

@@ -5,6 +5,7 @@ from core.dag.executor import execute_dag
 from core.orchestrator.models import OrchestrationRequest
 from core.orchestrator.models import OrchestrationResult
 from core.planner.planner import plan_task
+from core.policy.validator import validate_dag_against_policy
 
 
 def orchestrate_task(request: OrchestrationRequest | dict | str) -> OrchestrationResult:
@@ -59,6 +60,23 @@ def orchestrate_task(request: OrchestrationRequest | dict | str) -> Orchestratio
             execution_status='skipped',
             planner_error='planner returned no dag',
             metadata=req.metadata,
+        )
+
+    policy_result = validate_dag_against_policy(plan.dag, req.policy)
+    if policy_result.status != 'success':
+        merged_meta = dict(req.metadata)
+        merged_meta['policy'] = policy_result.model_dump(mode='json')
+        return OrchestrationResult(
+            status='error',
+            task=req.task,
+            planner_status='success',
+            execution_status='skipped',
+            dag_id=plan.dag.dag_id,
+            planner_error=None,
+            execution_error='policy validation failed',
+            execution_order=[],
+            node_results={},
+            metadata=merged_meta,
         )
 
     execution = execute_dag(plan.dag, trace=req.trace)

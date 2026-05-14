@@ -68,6 +68,7 @@ Swap the compute.
 - **Deterministic Runtime** — replay-safe NDJSON traces with schema-versioned contracts
 - **Control-Plane DAG Orchestration** — additive orchestration layer with deterministic execution
 - **Replay + Evaluation Engine** — reconstruct, score, compare, and export executions
+- **Deterministic Policy Layer** — governance and execution constraints before DAG execution
 - **Tool-Using Agent Runtime** — native OpenAI function-calling loop with dynamic tool execution
 - **Dataset Export Layer** — deterministic NDJSON corpora generation
 - **Schema Compatibility Contracts** — backward-compatible runtime guarantees
@@ -163,9 +164,17 @@ Supported commands:
 ./ai-orchestrate execute-dag path/to/dag.json
 ```
 
+Policy-aware orchestration:
+
+```bash
+./ai-orchestrate run "list files" \
+  --policy=safe-readonly
+```
+
 Features:
 
 - deterministic planner
+- deterministic policy validation
 - validated DAG generation
 - deterministic executor
 - replayable DAG traces
@@ -290,6 +299,10 @@ control-plane/
 │   ├── planner/
 │   │   ├── planner.py
 │   │   └── prompts.py
+│   ├── policy/
+│   │   ├── models.py
+│   │   ├── defaults.py
+│   │   └── validator.py
 │   └── orchestrator/
 │       └── orchestrator.py
 ├── tools/
@@ -310,6 +323,8 @@ task
   ↓
 planner
   ↓
+policy validation
+  ↓
 validated DAG
   ↓
 tool registry validation
@@ -324,12 +339,53 @@ Phase 3E replay/eval compatibility
 The control-plane currently supports:
 
 - deterministic DAG validation
-- tool registry integration
 - deterministic planner scaffolding
+- deterministic policy/governance validation
+- tool registry integration
 - deterministic single-threaded DAG execution
 - replayable DAG traces
 - runtime-compatible execution artifacts
 - orchestration request/result pipelines
+
+---
+
+# 🛡️ Policy Layer
+
+Stage 4I introduces deterministic governance rules before execution.
+
+Policies validate DAGs and orchestration requests before execution begins.
+
+Current policy capabilities:
+
+- tool allowlists
+- tool denylists
+- max DAG node limits
+- dependency fanout limits
+- LLM node restrictions
+- workspace path boundaries
+- traversal protection
+
+Example:
+
+```text
+planner
+→ policy validation
+→ executor
+```
+
+Included policies:
+
+| Policy | Purpose |
+|---|---|
+| `default` | permissive deterministic policy |
+| `safe-readonly` | read-only orchestration policy |
+
+Example:
+
+```bash
+./ai-orchestrate run "list files" \
+  --policy=safe-readonly
+```
 
 ---
 
@@ -402,37 +458,18 @@ ai-dev-platform/
 ├── ai-orchestrate
 ├── ai-eval
 ├── runtime/
-│   ├── engine.py
-│   ├── events.py
-│   ├── replay.py
-│   ├── evals.py
-│   ├── registry.py
-│   ├── datasets.py
-│   ├── contracts.py
-│   ├── validator.py
-│   ├── loader.py
-│   ├── run.py
-│   ├── runner.py
-│   └── schemas.py
 ├── control-plane/
 │   ├── cli/
 │   ├── core/
 │   │   ├── dag/
 │   │   ├── planner/
+│   │   ├── policy/
 │   │   ├── orchestrator/
 │   │   └── observability/
 │   ├── tools/
 │   ├── dags/
 │   └── tests/
 ├── scripts/
-│   ├── runtime.sh
-│   ├── router.py
-│   ├── agent.py
-│   ├── tool_executor.py
-│   ├── adapters/
-│   ├── tools/
-│   ├── tests/
-│   └── mock-server/
 ├── scenarios/
 ├── runs/
 ├── evals/
@@ -526,6 +563,7 @@ make control-plane-trace-tests
 make control-plane-planner-tests
 make control-plane-orchestrator-tests
 make control-plane-cli-tests
+make control-plane-policy-tests
 ```
 
 Important:
@@ -599,7 +637,7 @@ AI_ADAPTER=my-agent ./ai run "test"
 - [x] Deterministic DAG planner
 - [x] Planner/executor orchestration pipeline
 - [x] Control-plane CLI
-- [ ] Planner policy layer
+- [x] Planner policy layer
 - [ ] Parallel DAG execution
 - [ ] Orchestration API
 - [ ] Web UI
