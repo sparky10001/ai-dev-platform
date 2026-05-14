@@ -1,0 +1,160 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import json
+import sys
+from pathlib import Path
+from typing import Any
+
+CONTROL_PLANE_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = CONTROL_PLANE_ROOT.parent
+if str(CONTROL_PLANE_ROOT) not in sys.path:
+    sys.path.insert(0, str(CONTROL_PLANE_ROOT))
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from core.dag.executor import execute_dag
+from core.dag.validator import dag_to_execution_order
+from core.dag.validator import load_dag
+from core.orchestrator.orchestrator import orchestrate_task
+from core.planner.planner import plan_task
+
+
+def _to_jsonable(obj: Any) -> Any:
+    if hasattr(obj, 'model_dump'):
+        return obj.model_dump(mode='json')
+    if isinstance(obj, Path):
+        return str(obj)
+    if isinstance(obj, dict):
+        return {str(k): _to_jsonable(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_to_jsonable(v) for v in obj]
+    if isinstance(obj, tuple):
+        return [_to_jsonable(v) for v in obj]
+    return obj
+
+
+def _emit(payload: dict[str, Any], pretty: bool = False) -> None:
+    kwargs: dict[str, Any] = {'sort_keys': True}
+    if pretty:
+        kwargs['indent'] = 2
+    print(json.dumps(_to_jsonable(payload), **kwargs))
+
+
+def _usage() -> str:
+    return (
+        'Usage:\n'
+        '  ai-orchestrate run <task> [--trace] [--strategy=deterministic|noop] [--pretty]\n'
+        '  ai-orchestrate plan <task> [--strategy=deterministic|noop] [--pretty]\n'
+        '  ai-orchestrate validate-dag <path> [--pretty]\n'
+        '  ai-orchestrate execute-dag <path> [--trace] [--pretty]'
+    )
+
+
+def _parse_flags(args: list[str], *, allow_trace: bool, allow_strategy: bool) -> tuple[list[str], bool, bool, str]:
+    positional: list[str] = []
+    pretty = False
+    trace = False
+    strategy = 'deterministic'
+
+    for arg in args:
+        if arg == '--pretty':
+            pretty = True
+        elif arg == '--trace':
+            if not allow_trace:
+                raise ValueError('--trace is not supported for this command')
+            trace = True
+        elif arg.startswith('--strategy='):
+            if not allow_strategy:
+                raise ValueError('--strategy is not supported for this command')
+            strategy = arg.split('=', 1)[1]
+        elif arg.startswith('--'):
+            raise ValueError(f'unknown flag: {arg}')
+        else:
+            positional.append(arg)
+
+    return positional, pretty, trace, strategy
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = list(sys.argv[1:] if argv is None else argv)
+
+    if not args:
+        print(_usage(), file=sys.stderr)
+        return 2
+
+    command = args[0]
+    raw = args[1:]
+
+    try:
+        if command == 'run':
+            positional, pretty, trace, strategy = _parse_flags(raw, allow_trace=True, allow_strategy=True)
+            if not positional:
+                print('error: missing task for run', file=sys.stderr)
+                print(_usage(), file=sys.stderr)
+                return 2
+            task = ' '.join(positional)
+            result = orchestrate_task({'task': task, 'planner_strategy': strategy, 'trace': trace})
+            _emit(result.model_dump(mode='json'), pretty=pretty)
+            return 0
+
+        if command == 'plan':
+            positional, pretty, _trace, strategy = _parse_flags(raw, allow_trace=False, allow_strategy=True)
+            if not positional:
+                print('error: missing task for plan', file=sys.stderr)
+                print(_usage(), file=sys.stderr)
+                return 2
+            task = ' '.join(positional)
+            result = plan_task({'task': task, 'strategy': strategy})
+            _emit(result.model_dump(mode='json'), pretty=pretty)
+            return 0
+
+        if command == 'validate-dag':
+            positional, pretty, _trace, _strategy = _parse_flags(raw, allow_trace=False, allow_strategy=False)
+            if not positional:
+                print('error: missing path for validate-dag', file=sys.stderr)
+                print(_usage(), file=sys.stderr)
+                return 2
+            path = positional[0]
+            try:
+                dag = load_dag(path)
+                payload = {
+                    'status': 'success',
+                    'dag_id': dag.dag_id,
+                    'execution_order': dag_to_execution_order(dag),
+                }
+            except Exception as exc:
+                payload = {'status': 'error', 'error': str(exc)}
+            _emit(payload, pretty=pretty)
+            return 0
+
+        if command == 'execute-dag':
+            positional, pretty, trace, _strategy = _parse_flags(raw, allow_trace=True, allow_strategy=False)
+            if not positional:
+                print('error: missing path for execute-dag', file=sys.stderr)
+                print(_usage(), file=sys.stderr)
+                return 2
+            path = positional[0]
+            try:
+                result = execute_dag(path, trace=trace)
+                payload = result.model_dump(mode='json')
+            except Exception as exc:
+                payload = {'status': 'error', 'error': str(exc)}
+            _emit(payload, pretty=pretty)
+            return 0
+
+        print(f'error: unknown command: {command}', file=sys.stderr)
+        print(_usage(), file=sys.stderr)
+        return 2
+
+    except ValueError as exc:
+        print(f'error: {exc}', file=sys.stderr)
+        print(_usage(), file=sys.stderr)
+        return 2
+    except Exception as exc:
+        print(f'bootstrap error: {exc}', file=sys.stderr)
+        return 2
+
+
+if __name__ == '__main__':
+    raise SystemExit(main())

@@ -20,34 +20,35 @@ Anywhere.
 Developer
     │
     ▼
-./ai run "your task"          ← Stable CLI
+./ai run "your task"              ← Stable runtime CLI
+./ai-orchestrate run "task"       ← Deterministic orchestration CLI
     │
     ▼
-scripts/runtime.sh            ← Runtime entrypoint
+scripts/runtime.sh                ← Runtime entrypoint
     │
     ▼
-runtime/engine.py             ← Deterministic execution engine
+runtime/engine.py                 ← Deterministic execution engine
     │
     ▼
-control-plane/                ← DAG orchestration layer
+control-plane/                    ← DAG orchestration layer
     │
     ▼
-scripts/router.py             ← Intent classification → model tier
+scripts/router.py                 ← Intent classification → model tier
     │
     ▼
-scripts/adapters/agent.sh     ← Active adapter
+scripts/adapters/agent.sh         ← Active adapter
     │
     ▼
-scripts/agent.py              ← LiteLLM tool-using agent
+scripts/agent.py                  ← LiteLLM tool-using agent
     │
     ▼
-runtime/events.py             ← Canonical NDJSON persistence
+runtime/events.py                 ← Canonical NDJSON persistence
     │
     ▼
-runtime/contracts.py          ← Schema compatibility guarantees
+runtime/contracts.py              ← Schema compatibility guarantees
     │
     ▼
-LiteLLM                        ← Universal provider router
+LiteLLM                            ← Universal provider router
     │
     ▼
 Ollama │ OpenAI │ Claude │ NVIDIA NIM
@@ -117,9 +118,9 @@ make litellm-fast
 
 ---
 
-# ⚡ Stable CLI
+# ⚡ Stable Runtime CLI
 
-Everything flows through one stable interface:
+Everything flows through one stable runtime interface:
 
 ```bash
 ai run      "analyze the runtime"
@@ -135,6 +136,50 @@ Examples:
 ./ai run "task" --trace
 ./ai run "task" --model=heavy
 ./ai --adapter=mock run "offline test"
+```
+
+---
+
+# 🕹️ Control-Plane CLI
+
+The control-plane CLI exposes deterministic orchestration behavior:
+
+```bash
+./ai-orchestrate plan "list files"
+
+./ai-orchestrate run "list files"
+
+./ai-orchestrate run \
+  "Create a file called hello.txt with content 'hi' and then list files" \
+  --trace
+```
+
+Supported commands:
+
+```bash
+./ai-orchestrate plan "task"
+./ai-orchestrate run "task"
+./ai-orchestrate validate-dag path/to/dag.json
+./ai-orchestrate execute-dag path/to/dag.json
+```
+
+Features:
+
+- deterministic planner
+- validated DAG generation
+- deterministic executor
+- replayable DAG traces
+- JSON-only command output
+- isolated orchestration pipeline
+
+The orchestration CLI is intentionally separate from the existing runtime CLI:
+
+```text
+./ai
+  = runtime execution path
+
+./ai-orchestrate
+  = deterministic orchestration path
 ```
 
 ---
@@ -234,6 +279,7 @@ Control-plane components:
 
 ```text
 control-plane/
+├── cli/
 ├── core/
 │   ├── dag/
 │   │   ├── models.py
@@ -241,7 +287,11 @@ control-plane/
 │   │   ├── executor.py
 │   │   └── observability/
 │   │       └── trace.py
-│   └── ...
+│   ├── planner/
+│   │   ├── planner.py
+│   │   └── prompts.py
+│   └── orchestrator/
+│       └── orchestrator.py
 ├── tools/
 │   ├── contracts.py
 │   └── registry.py
@@ -256,9 +306,11 @@ control-plane/
 # 🔄 Control-Plane Execution Flow
 
 ```text
-DAG
+task
   ↓
-validator
+planner
+  ↓
+validated DAG
   ↓
 tool registry validation
   ↓
@@ -273,9 +325,11 @@ The control-plane currently supports:
 
 - deterministic DAG validation
 - tool registry integration
+- deterministic planner scaffolding
 - deterministic single-threaded DAG execution
 - replayable DAG traces
 - runtime-compatible execution artifacts
+- orchestration request/result pipelines
 
 ---
 
@@ -345,6 +399,7 @@ make colab
 ```text
 ai-dev-platform/
 ├── ai
+├── ai-orchestrate
 ├── ai-eval
 ├── runtime/
 │   ├── engine.py
@@ -360,8 +415,11 @@ ai-dev-platform/
 │   ├── runner.py
 │   └── schemas.py
 ├── control-plane/
+│   ├── cli/
 │   ├── core/
 │   │   ├── dag/
+│   │   ├── planner/
+│   │   ├── orchestrator/
 │   │   └── observability/
 │   ├── tools/
 │   ├── dags/
@@ -465,6 +523,9 @@ make control-plane-dag-tests
 make control-plane-tool-tests
 make control-plane-executor-tests
 make control-plane-trace-tests
+make control-plane-planner-tests
+make control-plane-orchestrator-tests
+make control-plane-cli-tests
 ```
 
 Important:
@@ -535,11 +596,14 @@ AI_ADAPTER=my-agent ./ai run "test"
 - [x] Deterministic DAG executor
 - [x] Replayable DAG traces
 - [x] Control-plane validation ladder
-- [ ] DAG planner
-- [ ] Policy engine
+- [x] Deterministic DAG planner
+- [x] Planner/executor orchestration pipeline
+- [x] Control-plane CLI
+- [ ] Planner policy layer
 - [ ] Parallel DAG execution
 - [ ] Orchestration API
 - [ ] Web UI
+- [ ] LLM-assisted planner
 
 ## Platform
 
