@@ -1,0 +1,244 @@
+#!/usr/bin/env python3
+###################################################################
+# runtime/registry.py
+#
+# Phase 3C Runtime Registry + Query Layer
+#
+# Responsibilities:
+# - filesystem-backed run enumeration
+# - deterministic run metadata queries
+# - replay/eval-backed aggregate summaries
+# - no database or extra persistence
+#
+###################################################################
+
+from __future__ import annotations
+
+import json
+from typing import Any
+
+from runtime.evals import evaluate_run
+from runtime.loader import list_runs as list_run_ids
+from runtime.loader import load_run
+from runtime.schemas import RunQueryResult
+from runtime.schemas import RunSummary
+
+
+# ================================================================
+# Run Enumeration
+# ================================================================
+
+def list_runs() -> list[str]:
+
+    return list_run_ids()
+
+
+# ================================================================
+# Run Lookup
+# ================================================================
+
+def get_run(run_id: str) -> dict[str, Any]:
+
+    return load_run(run_id)
+
+
+def get_latest_run() -> dict[str, Any] | None:
+
+    result = query_runs(
+        sort_by="created_at",
+        descending=True,
+        limit=1,
+    )
+
+    if not result.runs:
+        return None
+
+    return result.runs[0]
+
+
+# ================================================================
+# Helpers
+# ================================================================
+
+def _safe_load_run(run_id: str) -> dict[str, Any] | None:
+
+    try:
+        return load_run(run_id)
+    except (FileNotFoundError, json.JSONDecodeError, TypeError, ValueError):
+        return None
+
+
+def _is_completed(run: dict[str, Any]) -> bool:
+
+    return (
+        run.get("completed_at") is not None
+        or run.get("status") in {"done", "error"}
+    )
+
+
+def _matches(
+    run: dict[str, Any],
+    *,
+    status: str | None,
+    command: str | None,
+    model: str | None,
+    completed: bool | None,
+) -> bool:
+
+    if status is not None and run.get("status") != status:
+        return False
+
+    if command is not None and run.get("command") != command:
+        return False
+
+    if model is not None and run.get("model") != model:
+        return False
+
+    if completed is not None and _is_completed(run) != completed:
+        return False
+
+    return True
+
+
+def _sort_key(run: dict[str, Any], sort_by: str):
+
+    value = run.get(sort_by)
+
+    if isinstance(value, (int, float, str)):
+        return (0, value, run.get("id", ""))
+
+    return (1, "", run.get("id", ""))
+
+
+# ================================================================
+# Query Runs
+# ================================================================
+
+def query_runs(
+    *,
+    status: str | None = None,
+    command: str | None = None,
+    model: str | None = None,
+    completed: bool | None = None,
+    sort_by: str = "created_at",
+    descending: bool = False,
+    limit: int | None = None,
+) -> RunQueryResult:
+
+    filters = {
+        key: value
+        for key, value in {
+            "status": status,
+            "command": command,
+            "model": model,
+            "completed": completed,
+        }.items()
+        if value is not None
+    }
+
+    runs = []
+
+    for run_id in list_runs():
+
+        run = _safe_load_run(run_id)
+
+        if run is None:
+            continue
+
+        if _matches(
+            run,
+            status=status,
+            command=command,
+            model=model,
+            completed=completed,
+        ):
+            runs.append(run)
+
+    runs = sorted(
+        runs,
+        key=lambda run: _sort_key(run, sort_by),
+        reverse=descending,
+    )
+
+    if limit is not None:
+        runs = runs[:max(0, limit)]
+
+    return RunQueryResult(
+        runs=runs,
+        total=len(runs),
+        filters=filters,
+        sort_by=sort_by,
+        descending=descending,
+        limit=limit,
+    )
+
+
+# ================================================================
+# Summarize Runs
+# ================================================================
+
+def summarize_runs(
+    *,
+    status: str | None = None,
+    command: str | None = None,
+    model: str | None = None,
+    completed: bool | None = None,
+    sort_by: str = "created_at",
+    descending: bool = False,
+    limit: int | None = None,
+) -> RunSummary:
+
+    query = query_runs(
+        status=status,
+        command=command,
+        model=model,
+        completed=completed,
+        sort_by=sort_by,
+        descending=descending,
+        limit=limit,
+    )
+
+    evals = []
+
+    for run in query.runs:
+
+        run_id = run.get("id")
+
+        if not isinstance(run_id, str):
+            continue
+
+        try:
+            evals.append(evaluate_run(run_id))
+        except (FileNotFoundError, RuntimeError, json.JSONDecodeError, TypeError, ValueError):
+            continue
+
+    total_runs = len(evals)
+    completed_runs = sum(1 for item in evals if item.completed)
+    successful_runs = sum(1 for item in evals if item.status == "done")
+    runtimes = [
+        item.runtime_seconds
+        for item in evals
+        if item.runtime_seconds is not None
+    ]
+
+    average_runtime = (
+        sum(runtimes) / len(runtimes)
+        if runtimes
+        else None
+    )
+
+    success_rate = (
+        successful_runs / total_runs
+        if total_runs
+        else 0.0
+    )
+
+    return RunSummary(
+        total_runs=total_runs,
+        completed_runs=completed_runs,
+        success_rate=success_rate,
+        average_runtime=average_runtime,
+        total_tool_calls=sum(item.tool_calls for item in evals),
+        replay_valid_runs=sum(1 for item in evals if item.replay_valid),
+        schema_valid_runs=sum(1 for item in evals if item.schema_valid),
+    )

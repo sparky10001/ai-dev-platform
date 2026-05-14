@@ -1,14 +1,17 @@
 #!/usr/bin/env python3
 ###################################################################
-# agent.py — Agent Runtime (v8.6 PRODUCTION STABLE)
+# agent.py — Agent Runtime (v9.1 PHASE 3E STABLE)
 #
-# ✅ Preserves v8.4 evaluator compatibility
-# ✅ Restores runs/
-# ✅ Restores logs/traces/
-# ✅ Restores logs/evals/
-# ✅ Compatible with new trace_logger.py
-# ✅ Returns evaluator score = 1.0
-# ✅ Emits legacy-compatible trace schema
+# ✅ Preserves external JSON contract
+# ✅ Preserves evaluator compatibility
+# ✅ Preserves legacy trace schema
+# ✅ Uses Pydantic v2 response validation
+# ✅ Uses NDJSON runtime event persistence
+# ✅ Avoids nested schema_version drift
+# ✅ Keeps schema_version ownership at envelope/event layers
+# ✅ Compatible with runtime/replay.py
+# ✅ Compatible with runtime/validator.py
+# ✅ Compatible with runtime/events.py
 ###################################################################
 
 import os
@@ -16,21 +19,29 @@ import sys
 import json
 import time
 import subprocess
+
 from pathlib import Path
 
 from router import route
 from lib.trace_logger import TraceLogger
 
+from runtime.validator import validate_response
+from runtime.events import log_event
+
 # ================================================================
 # ⚙️ CONFIG
 # ================================================================
+
+SCHEMA_VERSION = 1
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 ROOT_DIR = SCRIPT_DIR.parent
 
 TOOL_EXECUTOR = SCRIPT_DIR / "tool_executor.py"
 
-MAX_STEPS = int(os.getenv("AI_MAX_STEPS", "6"))
+MAX_STEPS = int(
+    os.getenv("AI_MAX_STEPS", "6")
+)
 
 # ================================================================
 # 📁 LOGGING DIRECTORIES
@@ -71,7 +82,18 @@ RUN_PATH = RUNS_DIR / RUN_ID
 RUN_PATH.mkdir(parents=True, exist_ok=True)
 
 TRACE_JSON_PATH = RUN_PATH / "trace.json"
+TRACE_NDJSON_PATH = RUN_PATH / "trace.jsonl"
 RESULT_JSON_PATH = RUN_PATH / "result.json"
+
+# ================================================================
+# 🧠 RUNTIME RUN OBJECT
+# ================================================================
+
+RUN = {
+    "id": RUN_ID,
+    "path": str(RUN_PATH),
+    "trace_path": str(TRACE_NDJSON_PATH),
+}
 
 # ================================================================
 # 🔍 TRACE LOGGER
@@ -149,13 +171,21 @@ def eval_condition(expr, memory, last):
 # 🧾 RESPONSE HELPERS
 # ================================================================
 
-# ================================================================
-# 🧾 RESPONSE HELPERS
-# ================================================================
+def runtime_meta(extra=None):
+
+    return {
+        "adapter": "agent.py",
+        "run_id": RUN_ID,
+        "run_path": str(RUN_PATH),
+        "error": False,
+        **(extra or {})
+    }
+
 
 def respond(status, output, meta=None):
 
     return {
+        "schema_version": SCHEMA_VERSION,
         "status": status,
         "output": output,
         "meta": runtime_meta(meta)
@@ -163,10 +193,16 @@ def respond(status, output, meta=None):
 
 
 def done(output, meta=None):
-    return respond("done", output, meta)
+
+    return respond(
+        "done",
+        output,
+        meta
+    )
 
 
 def error(msg):
+
     return respond(
         "error",
         msg,
@@ -176,13 +212,13 @@ def error(msg):
     )
 
 
-def runtime_meta(extra=None):
-    return {
-        "adapter": "agent.py",
-        "run_id": RUN_ID,
-        "run_path": str(RUN_PATH),
-        **(extra or {})
-    }
+def with_trace(meta, trace_events):
+
+    meta = meta or {}
+
+    meta["trace"] = trace_events
+
+    return meta
 
 # ================================================================
 # 🧰 TOOL DISCOVERY
@@ -206,7 +242,16 @@ def load_tools():
         if proc.returncode != 0:
             return None
 
-        data = json.loads(proc.stdout)
+        raw = (proc.stdout or "").strip()
+
+        start = raw.find("{")
+
+        if start == -1:
+            return None
+
+        raw = raw[start:]
+
+        data = json.loads(raw)
 
         tools = data.get("tools")
 
@@ -215,7 +260,13 @@ def load_tools():
 
         return tools
 
-    except Exception:
+    except Exception as e:
+
+        print(
+            f"load_tools failed: {e}",
+            file=sys.stderr
+        )
+
         return None
 
 # ================================================================
@@ -266,23 +317,29 @@ def write_run_logs(final_result, trace_events):
 
     try:
 
-        # --------------------------------------------------------
-        # runs/<run_id>/trace.json
-        # --------------------------------------------------------
+        with open(
+            TRACE_JSON_PATH,
+            "w",
+            encoding="utf-8"
+        ) as f:
 
-        with open(TRACE_JSON_PATH, "w", encoding="utf-8") as f:
-            json.dump(trace_events, f, indent=2)
+            json.dump(
+                trace_events,
+                f,
+                indent=2
+            )
 
-        # --------------------------------------------------------
-        # runs/<run_id>/result.json
-        # --------------------------------------------------------
+        with open(
+            RESULT_JSON_PATH,
+            "w",
+            encoding="utf-8"
+        ) as f:
 
-        with open(RESULT_JSON_PATH, "w", encoding="utf-8") as f:
-            json.dump(final_result, f, indent=2)
-
-        # --------------------------------------------------------
-        # logs/evals/eval.<run_id>.json
-        # --------------------------------------------------------
+            json.dump(
+                final_result,
+                f,
+                indent=2
+            )
 
         eval_record = {
             "run_id": RUN_ID,
@@ -296,10 +353,22 @@ def write_run_logs(final_result, trace_events):
             )
         }
 
-        eval_path = EVAL_DIR / f"eval.{RUN_ID}.json"
+        eval_path = (
+            EVAL_DIR /
+            f"eval.{RUN_ID}.json"
+        )
 
-        with open(eval_path, "w", encoding="utf-8") as f:
-            json.dump(eval_record, f, indent=2)
+        with open(
+            eval_path,
+            "w",
+            encoding="utf-8"
+        ) as f:
+
+            json.dump(
+                eval_record,
+                f,
+                indent=2
+            )
 
     except Exception as e:
 
@@ -314,6 +383,22 @@ def write_run_logs(final_result, trace_events):
 
 def run_agent(command, user_input, model=None):
 
+    trace_events = []
+
+    # ============================================================
+    # SESSION START
+    # ============================================================
+
+    log_event(
+        RUN,
+        "session_start",
+        {
+            "command": command,
+            "input": user_input,
+            "model": model,
+        }
+    )
+
     # ------------------------------------------------------------
     # Tool Discovery
     # ------------------------------------------------------------
@@ -321,7 +406,24 @@ def run_agent(command, user_input, model=None):
     tools = load_tools()
 
     if not tools:
-        return error("No tools available")
+
+        result = error("No tools available")
+
+        log_event(
+            RUN,
+            "agent_output",
+            result
+        )
+
+        log_event(
+            RUN,
+            "session_end",
+            {
+                "status": "error"
+            }
+        )
+
+        return result
 
     # ------------------------------------------------------------
     # Routing
@@ -329,23 +431,78 @@ def run_agent(command, user_input, model=None):
 
     routing = route(user_input)
 
-    if routing is not None and not routing.get("plan"):
-        return done(
+    # ------------------------------------------------------------
+    # Healthcheck
+    # ------------------------------------------------------------
+
+    if (
+        routing and
+        routing.get("mode") == "healthcheck"
+    ):
+
+        result = done(
             "pong",
+            with_trace(
+                {
+                    "mode": "healthcheck",
+                    "steps": 0
+                },
+                trace_events
+            )
+        )
+
+        log_event(
+            RUN,
+            "agent_output",
+            result
+        )
+
+        log_event(
+            RUN,
+            "session_end",
             {
-                "mode": routing.get("mode", "healthcheck"),
-                "steps": 0
+                "status": "done"
             }
         )
 
+        return result
+
+    # ------------------------------------------------------------
+    # No route
+    # ------------------------------------------------------------
+
     if not routing:
-        return error("No deterministic plan available")
+
+        result = respond(
+            "error",
+            "No deterministic plan available",
+            with_trace(
+                {
+                    "error": True
+                },
+                trace_events
+            )
+        )
+
+        log_event(
+            RUN,
+            "agent_output",
+            result
+        )
+
+        log_event(
+            RUN,
+            "session_end",
+            {
+                "status": "error"
+            }
+        )
+
+        return result
 
     # ------------------------------------------------------------
     # Runtime State
     # ------------------------------------------------------------
-
-    trace_events = []
 
     memory = {}
 
@@ -366,11 +523,17 @@ def run_agent(command, user_input, model=None):
         tool_name = step["tool"]
 
         if tool_name == last_tool:
-            return error(f"Tool loop detected: {tool_name}")
+            return error(
+                f"Tool loop detected: {tool_name}"
+            )
 
         cond = step.get("when")
 
-        if not eval_condition(cond, memory, last_result):
+        if not eval_condition(
+            cond,
+            memory,
+            last_result
+        ):
             continue
 
         args = resolve_args(
@@ -382,9 +545,7 @@ def run_agent(command, user_input, model=None):
         step_counter += 1
 
         # ========================================================
-        # LEGACY COMPATIBLE TRACE EVENT
-        # IMPORTANT:
-        # Keep exact v8.4 schema for evaluator compatibility
+        # LEGACY TRACE EVENT
         # ========================================================
 
         tool_call_event = {
@@ -397,6 +558,20 @@ def run_agent(command, user_input, model=None):
         }
 
         trace_events.append(tool_call_event)
+
+        # ========================================================
+        # NDJSON EVENT
+        # ========================================================
+
+        log_event(
+            RUN,
+            "tool_call",
+            tool_name,
+            step=step_counter,
+            meta={
+                "input": args
+            }
+        )
 
         trace_logger.emit(
             "tool_call",
@@ -412,7 +587,10 @@ def run_agent(command, user_input, model=None):
         # Run Tool
         # --------------------------------------------------------
 
-        result = run_tool(tool_name, args)
+        result = run_tool(
+            tool_name,
+            args
+        )
 
         tool_result_event = {
             "event": "tool_result",
@@ -423,7 +601,23 @@ def run_agent(command, user_input, model=None):
             }
         }
 
-        trace_events.append(tool_result_event)
+        trace_events.append(
+            tool_result_event
+        )
+
+        # ========================================================
+        # NDJSON EVENT
+        # ========================================================
+
+        log_event(
+            RUN,
+            "tool_result",
+            tool_name,
+            step=step_counter,
+            meta={
+                "result": result
+            }
+        )
 
         trace_logger.emit(
             "tool_result",
@@ -441,7 +635,10 @@ def run_agent(command, user_input, model=None):
 
         save_as = step.get("save_as")
 
-        if save_as and result.get("status") == "success":
+        if (
+            save_as and
+            result.get("status") == "success"
+        ):
             memory[save_as] = result
 
         last_result = result
@@ -453,25 +650,54 @@ def run_agent(command, user_input, model=None):
 
     final_result = done(
         "completed_with_tools",
-        {
-            "mode": "deterministic",
-            "steps": step_counter,
-            "memory": memory,
-
-            # restored production metadata
-            "run_id": RUN_ID,
-            "run_path": str(RUN_PATH),
-
-            # evaluator-compatible trace
-            "trace": trace_events
-        }
+        with_trace(
+            {
+                "mode": "deterministic",
+                "steps": step_counter,
+                "memory": memory,
+                "run_id": RUN_ID,
+                "run_path": str(RUN_PATH)
+            },
+            trace_events
+        )
     )
+
+    # ============================================================
+    # VALIDATE RESPONSE
+    # ============================================================
+
+    validated = validate_response(
+        final_result
+    )
+
+    final_result = validated.model_dump()
 
     # ============================================================
     # WRITE LOGS
     # ============================================================
 
-    write_run_logs(final_result, trace_events)
+    write_run_logs(
+        final_result,
+        trace_events
+    )
+
+    # ============================================================
+    # PERSIST OUTPUT EVENT
+    # ============================================================
+
+    log_event(
+        RUN,
+        "agent_output",
+        final_result
+    )
+
+    log_event(
+        RUN,
+        "session_end",
+        {
+            "status": final_result["status"]
+        }
+    )
 
     trace_logger.emit(
         "agent_complete",
@@ -493,12 +719,24 @@ def main():
     args = sys.argv[1:]
 
     if not args:
-        print(json.dumps(error("Missing command")))
+
+        result = error("Missing command")
+
+        validated = validate_response(result)
+
+        print(
+            validated.model_dump_json()
+        )
+
         return
 
     command = args[0]
 
-    user_input = args[1] if len(args) > 1 else ""
+    user_input = (
+        args[1]
+        if len(args) > 1
+        else ""
+    )
 
     model = None
 
@@ -507,9 +745,19 @@ def main():
         if a.startswith("--model="):
             model = a.split("=", 1)[1]
 
-    result = run_agent(command, user_input, model)
+    result = run_agent(
+        command,
+        user_input,
+        model
+    )
 
-    print(json.dumps(result))
+    validated = validate_response(
+        result
+    )
+
+    print(
+        validated.model_dump_json()
+    )
 
 # ================================================================
 # 🏁 MAIN

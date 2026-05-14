@@ -17,7 +17,61 @@ set -euo pipefail
 ADAPTER_NAME="mock"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "${SCRIPT_DIR}/_base.sh"
+
+build_response() {
+  local status="$1"
+  local output="$2"
+  local error_type="${3:-}"
+  local extra_meta="${4:-null}"
+
+  if ! echo "$extra_meta" | jq empty >/dev/null 2>&1; then
+    extra_meta="null"
+  fi
+
+  jq -n \
+    --argjson schema_version 1 \
+    --arg status "$status" \
+    --arg output "$output" \
+    --arg adapter "$ADAPTER_NAME" \
+    --arg run_id "${AI_RUN_ID:-adapter_run}" \
+    --arg run_path "${AI_RUN_PATH:-}" \
+    --arg error_type "$error_type" \
+    --argjson extra "$extra_meta" \
+    '{
+      schema_version: $schema_version,
+      status: $status,
+      output: $output,
+      meta: (
+        {
+          adapter: $adapter,
+          run_id: $run_id,
+          run_path: $run_path,
+          error: ($status == "error"),
+          error_type: (if $error_type == "" then null else $error_type end)
+        }
+        + (if $extra == null then {} else $extra end)
+      )
+    }'
+}
+
+build_tool_trace_meta() {
+  local tool_name="$1"
+  local tool_input="$2"
+  jq -n \
+    --arg run_id "${AI_RUN_ID:-adapter_run}" \
+    --arg tool "$tool_name" \
+    --argjson input "$tool_input" \
+    '{
+      trace: [
+        {schema_version: 1, timestamp: now, run_id: $run_id, event: "tool_call", data: $tool, step: 1, meta: {input: $input}},
+        {schema_version: 1, timestamp: now, run_id: $run_id, event: "tool_result", data: $tool, step: 1, meta: {result: {status: "mocked"}}}
+      ]
+    }'
+}
+
+adapter_exit() {
+  exit 0
+}
 
 # ================================================================
 # 🔐 REQUIREMENTS
@@ -138,19 +192,28 @@ run)
 
     if [[ "$LOWER_INPUT" =~ (^|[[:space:]])read([[:space:]]|$) ]] && \
        [[ "$LOWER_INPUT" =~ (^|[[:space:]])readme([[:space:]]|$) ]]; then
-      build_tool_call "read_file" '{"path":"README.md"}' "Mock reading README"
+      META=$(build_tool_trace_meta "read_file" '{"path":"README.md"}')
+      build_response "done" "Mock reading README" "" "$META"
       adapter_exit
     fi
 
     if [[ "$LOWER_INPUT" =~ (^|[[:space:]])list([[:space:]]|$) ]]; then
-      build_tool_call "list_files" '{"path":""}' "Mock listing files"
+      META=$(build_tool_trace_meta "list_files" '{"path":""}')
+      build_response "done" "Mock listing files" "" "$META"
       adapter_exit
     fi
 
     if [[ "$LOWER_INPUT" =~ (^|[[:space:]])loop([[:space:]]|$) ]]; then
-      build_response "continue" "[MOCK] Looping..." "" '{"mode":"loop"}'
+      build_response "error" "[MOCK] Looping is not a final runtime status" "invalid_request" '{"mode":"loop"}'
       adapter_exit
     fi
+  fi
+
+  if [ "$IS_FALLBACK" != "true" ] && [ "$IS_JSON_INPUT" != "true" ] && \
+     [[ "$LOWER_INPUT" =~ create ]] && [[ "$LOWER_INPUT" =~ file ]]; then
+    META=$(build_tool_trace_meta "write_file" '{"path":"mock.txt","content":"hi"}')
+    build_response "done" "Mock wrote file" "" "$META"
+    adapter_exit
   fi
 
   # ------------------------------------------------------------

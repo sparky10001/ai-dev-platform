@@ -14,8 +14,10 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+export PYTHONPATH="${ROOT_DIR}:${PYTHONPATH:-}"
+export AI_ADAPTER="${AI_ADAPTER:-agent}"
 EXECUTOR="${ROOT_DIR}/scripts/tool_executor.py"
-AGENT="${ROOT_DIR}/scripts/agent.py"
+AGENT="${ROOT_DIR}/scripts/adapters/agent.sh"
 RUNTIME="${ROOT_DIR}/scripts/runtime.sh"
 
 PASS_COUNT=0
@@ -197,7 +199,7 @@ test_openai_schema_shape() {
 # Requires LiteLLM — skipped if not reachable
 # ---------------------------------------------------------------
 test_agent_basic() {
-  output=$(python3 "$AGENT" query "Say hello")
+  output=$("$AGENT" query "Say hello")
   echo "$output" | jq -e '.status == "done"' >/dev/null
 }
 
@@ -206,7 +208,7 @@ test_agent_basic() {
 # Requires LiteLLM — skipped if not reachable
 # ---------------------------------------------------------------
 test_agent_tool_use() {
-  output=$(python3 "$AGENT" query "List files in current directory")
+  output=$("$AGENT" query "List files in current directory")
   echo "$output" | jq -e '.status == "done"' >/dev/null
 }
 

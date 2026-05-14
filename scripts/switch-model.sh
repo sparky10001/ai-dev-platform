@@ -1,6 +1,9 @@
 #!/bin/bash
 ###################################################################
-# switch-model.sh — v7.0 (Manual Testing + LiteLLM-first)
+# switch-model.sh — v7.1 (Phase 3E runtime-adapter aligned)
+#
+# Provider switching changes MODEL_PROVIDER / MODEL_ENDPOINT.
+# Runtime adapter remains agent.
 ###################################################################
 
 set -euo pipefail
@@ -136,9 +139,9 @@ goose)
   BASE="${CUSTOM_ENDPOINT:-${LITELLM_BASE_URL:-http://litellm:4000/v1}}"
   MODEL="${CUSTOM_MODEL:-${GOOSE_MODEL:-fast}}"
 
-  update_env "MODEL_PROVIDER" "litellm"
+  update_env "MODEL_PROVIDER" "goose"
   update_env "MODEL_ENDPOINT" "$BASE"
-  update_env "AI_ADAPTER" "goose"
+  update_env "AI_ADAPTER" "agent"
   update_env "GOOSE_PROVIDER" "litellm"
   update_env "GOOSE_MODEL" "$MODEL"
   update_env "FALLBACK_CHAIN" "litellm,mock"
@@ -174,7 +177,7 @@ colab)
 mock)
   update_env "MODEL_PROVIDER" "mock"
   update_env "MODEL_ENDPOINT" "none"
-  update_env "AI_ADAPTER" "mock"
+  update_env "AI_ADAPTER" "agent"
   update_env "FALLBACK_CHAIN" "mock"
 
   echo "🧪 Mock (offline)"

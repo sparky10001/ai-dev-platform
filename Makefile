@@ -1,5 +1,5 @@
 ###################################################################
-# AI Dev Platform — Makefile (v9.0 LiteLLM-first, switch-model aligned)
+# AI Dev Platform — Makefile (v9.1 LiteLLM-first, Phase 3E runtime aligned)
 #
 # Key Improvements:
 # - Fully aligned with switch-model.sh v6.0
@@ -8,15 +8,17 @@
 # - Removed invalid/legacy providers (local/http-agent/etc.)
 # - Hardened validation + mock lifecycle
 # - Backwards-compatible env handling
+# - Added Phase 3E runtime validation ladder
 ###################################################################
 
 .PHONY: setup install-goose \
         litellm goose colab mock mock-local \
-        mock-server mock-server-bg mock-server-stop \
+        mock-server mock-server-bg mock-server-stop mock-server-test \
         fallback-dev fallback-prod \
         profile-fast profile-agent profile-offline profile-local profile \
         litellm-fast litellm-code litellm-claude \
         health status validate \
+        runtime-tests runtime-test-core runtime-test-phase3 runtime-test-all \
         ai-run ai-fix ai-explain ai-refactor ai-query \
         ctx-agent-sim ctx-arb ctx-ai-stack \
         help _set-env
@@ -36,6 +38,7 @@ setup:
 	@chmod +x ai-eval 2>/dev/null || true
 	@chmod +x scripts/*.sh
 	@chmod +x scripts/adapters/*.sh 2>/dev/null || true
+	@chmod +x scripts/tests/*.sh 2>/dev/null || true
 	@pip install -r scripts/mock-server/requirements.txt -q 2>/dev/null || true
 	@echo "✅ Setup complete"
 
@@ -68,7 +71,6 @@ mock:
 
 mock-local:
 	@./scripts/switch-model.sh mock-local
-	@echo "   Start server first: make mock-server-bg"
 
 ###################################################################
 # Mock Server (HARDENED)
@@ -100,8 +102,6 @@ mock-server-stop:
 	else \
 		echo "⚠️  No PID file"; \
 	fi
-
-	@# Fallback: kill anything on port
 	@lsof -ti :$(MOCK_PORT) | xargs -r kill -9 2>/dev/null || true
 
 # ---------------------------------------------------------------
@@ -119,14 +119,11 @@ mock-server:
 mock-server-bg:
 	@$(MAKE) mock-server-stop --no-print-directory
 	@echo "🧪 Starting mock server (background)..."
-
 	@cd scripts/mock-server && \
 		uvicorn mock_openai:app --host 0.0.0.0 --port $(MOCK_PORT) \
 		> $(MOCK_LOG_FILE) 2>&1 & \
 		echo $$! > $(MOCK_PID_FILE)
-
 	@echo "⏳ Waiting for server..."
-
 	@bash -c '\
 	for i in 1 2 3 4 5; do \
 		if curl -sf http://localhost:$(MOCK_PORT)/health >/dev/null; then \
@@ -222,6 +219,34 @@ status:
 	@echo ""
 
 ###################################################################
+# Runtime Test Ladder
+###################################################################
+
+runtime-test-core:
+	@echo "🧪 Runtime core tests"
+	@AI_ADAPTER=agent ./scripts/tests/runtime_tests.sh
+	@AI_ADAPTER=agent ./scripts/tests/failure_tests.sh
+	@AI_ADAPTER=agent ./scripts/tests/ndjson_integrity_tests.sh
+	@AI_ADAPTER=agent ./scripts/tests/event_ordering_tests.sh
+	@AI_ADAPTER=agent ./scripts/tests/replayability_smoke_test.sh
+	@AI_ADAPTER=agent ./scripts/tests/run_structure_test.sh
+	@AI_ADAPTER=agent ./scripts/tests/trace_schema_consistency_test.sh
+	@AI_ADAPTER=agent ./scripts/tests/parallel_run_isolation_test.sh
+	@AI_ADAPTER=agent ./scripts/tests/resume_from_trace_tests.sh
+
+runtime-test-phase3:
+	@echo "🧪 Runtime Phase 3 tests"
+	@AI_ADAPTER=agent ./scripts/tests/loader_replay_tests.sh
+	@AI_ADAPTER=agent ./scripts/tests/runtime_eval_tests.sh
+	@AI_ADAPTER=agent ./scripts/tests/runtime_registry_tests.sh
+	@AI_ADAPTER=agent ./scripts/tests/runtime_dataset_tests.sh
+	@AI_ADAPTER=agent ./scripts/tests/runtime_contract_tests.sh
+
+runtime-tests runtime-test-all: runtime-test-core runtime-test-phase3
+	@echo ""
+	@echo "🎉 Full runtime test ladder passed"
+
+###################################################################
 # Validation Ladder (HARDENED)
 ###################################################################
 
@@ -231,20 +256,28 @@ validate:
 
 	@echo "Step 1 — Mock (offline)"
 	@$(MAKE) mock --no-print-directory
-	@./ai run "ping" | jq -e '.status == "done"' >/dev/null && echo "✅ Runtime OK" || (echo "❌ Runtime failed"; exit 1)
+	@AI_ADAPTER=agent ./scripts/runtime.sh run "ping" | jq -e '.status == "done"' >/dev/null && echo "✅ Runtime OK" || (echo "❌ Runtime failed"; exit 1)
+
+	@echo ""
+	@echo "Step 1b — Runtime test ladder"
+	@$(MAKE) runtime-tests --no-print-directory
 
 	@echo ""
 	@echo "Step 2 — Mock server (OpenAI-compatible)"
 	@$(MAKE) mock-server-bg --no-print-directory
 	@$(MAKE) mock-local --no-print-directory
-	@./ai run "ping" && echo "✅ Mock API OK" || (echo "❌ Mock API failed"; exit 1)
+	@AI_ADAPTER=agent ./scripts/runtime.sh run "ping" && echo "✅ Mock API OK" || (echo "❌ Mock API failed"; exit 1)
 	@$(MAKE) mock-server-stop --no-print-directory
 
 	@echo ""
 	@echo "Step 3 — LiteLLM"
 	@$(MAKE) litellm --no-print-directory
-	@./ai run "hello" && echo "✅ LiteLLM OK" || echo "⚠️ LiteLLM unavailable"
-
+	@curl -s \
+	  -H "Authorization: Bearer $${LITELLM_MASTER_KEY:-ai-dev-platform}" \
+	  http://litellm:4000/v1/models \
+	  | jq -e '.data | length > 0' >/dev/null \
+	  && echo "✅ LiteLLM OK" \
+	  || echo "⚠️ LiteLLM unavailable"
 	@echo ""
 	@echo "🎉 Validation complete"
 
@@ -309,6 +342,7 @@ help:
 	@echo "  make litellm-claude"
 	@echo ""
 	@echo "Dev:"
-	@echo "  make validate"
+	@echo "  make validate         # Run provider + runtime validation ladder"
+	@echo "  make runtime-tests    # Run full runtime test ladder"
 	@echo "  make status"
 	@echo ""

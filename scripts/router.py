@@ -71,19 +71,35 @@ def match_read_file(text):
 
 def match_say(text):
 
+    normalized = text.strip()
+
+    # explicit "say ..."
     m = re.search(
-        r"say (.+)",
-        text,
+        r"^say\s+(.+)$",
+        normalized,
         re.IGNORECASE
     )
 
-    if not m:
+    if m:
+
+        phrase = m.group(1)
+
+    # conversational greeting fallback
+    elif re.match(
+        r"^(hello|hi|hey|hello there)$",
+        normalized,
+        re.IGNORECASE
+    ):
+
+        phrase = normalized
+
+    else:
         return None
 
     return {
         "tool": "run_bash",
         "args": {
-            "command": f"echo {json.dumps(m.group(1))}"
+            "command": f"echo {json.dumps(phrase)}"
         },
         "save_as": "response"
     }

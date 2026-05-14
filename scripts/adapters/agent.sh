@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 ###################################################################
-# agent.sh — Production Shim for agent.py (v9 FIXED PATHS)
+# agent.sh — Production Shim for agent.py (v10 PHASE 3E PATH SAFE)
 ###################################################################
 
 set -euo pipefail
@@ -14,6 +14,11 @@ ROOT_DIR="$(cd "${SCRIPTS_DIR}/.." && pwd)"
 
 PY_AGENT="${SCRIPTS_DIR}/agent.py"
 TOOL_EXECUTOR="${SCRIPTS_DIR}/tool_executor.py"
+
+# ---------------------------------------------------------------
+# 🐍 Python import path
+# ---------------------------------------------------------------
+export PYTHONPATH="${ROOT_DIR}:${PYTHONPATH:-}"
 
 COMMAND="${1:-}"
 INPUT="${2:-}"
@@ -55,12 +60,16 @@ fi
 # ---------------------------------------------------------------
 TMP_ERR=$(mktemp)
 
+set +e
+
 OUTPUT=$(python3 "$PY_AGENT" \
   "$COMMAND" \
   "$INPUT" \
   "$@" 2>"$TMP_ERR")
 
 EXIT_CODE=$?
+
+set -e
 
 if [ $EXIT_CODE -ne 0 ]; then
   ERR_MSG=$(tail -n 20 "$TMP_ERR" | tr '\n' ' ')

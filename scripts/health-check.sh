@@ -56,11 +56,17 @@ if [[ "${MODEL_PROVIDER}" == "litellm" || "${AI_ADAPTER}" == "litellm" ]]; then
     BASE_NO_V1=$(echo "$BASE" | sed 's|/v1$||')
 
     # Try /health first
-    if curl -sf "${BASE_NO_V1}/health" -H "Authorization: Bearer ai-dev-platform" --max-time 45 > /dev/null 2>&1; then
+    if curl -sf "${BASE_NO_V1}/health" \
+        -H "Authorization: Bearer ${LITELLM_MASTER_KEY:-ai-dev-platform}" \
+        --max-time 60 \
+        > /dev/null 2>&1; then
         pass "LiteLLM healthy (/health)"
     
     # Fallback: OpenAI-compatible probe
-    elif curl -sf "${BASE}/models" --max-time 3 > /dev/null 2>&1; then
+    elif curl -sf "${BASE}/models" \
+        -H "Authorization: Bearer ${LITELLM_MASTER_KEY:-ai-dev-platform}" \
+        --max-time 10 \
+        > /dev/null 2>&1; then
         pass "LiteLLM reachable (/v1/models fallback)"
     
     else
