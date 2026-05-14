@@ -12,6 +12,7 @@ Now with deterministic orchestration experimentation,
 replay-safe evaluation,
 and adaptive strategy benchmarking.
 Plus deterministic replay-backed orchestration recommendations.
+And deterministic orchestration memory + historical recall.
 
 ---
 
@@ -80,6 +81,7 @@ Swap the compute.
 - **Benchmark Suites** — deterministic planner/policy scenario-matrix benchmarking
 - **Multi-Strategy Experiments** — deterministic orchestration branching and A/B strategy comparison
 - **Adaptive Heuristics** — deterministic replay-backed orchestration ranking and recommendation
+- **Orchestration Memory** — deterministic replay-backed historical context and orchestration recall
 - **Tool-Using Agent Runtime** — native OpenAI function-calling loop with dynamic tool execution
 - **Dataset Export Layer** — deterministic NDJSON corpora generation
 - **Schema Compatibility Contracts** — backward-compatible runtime guarantees
@@ -346,10 +348,17 @@ control-plane/
 │   │   ├── branching.py
 │   │   ├── evaluator.py
 │   │   └── exporter.py
-│   └── heuristics/
+│   ├── heuristics/
+│   │   ├── models.py
+│   │   ├── ranking.py
+│   │   ├── recommender.py
+│   │   ├── corpora.py
+│   │   └── exporter.py
+│   └── memory/
 │       ├── models.py
-│       ├── ranking.py
-│       ├── recommender.py
+│       ├── history.py
+│       ├── retrieval.py
+│       ├── timelines.py
 │       ├── corpora.py
 │       └── exporter.py
 ├── tools/
@@ -398,6 +407,8 @@ benchmark suites + matrices
 multi-strategy experiments
   ↓
 adaptive heuristics
+  ↓
+orchestration memory
 ```
 
 The control-plane currently supports:
@@ -438,6 +449,12 @@ The control-plane currently supports:
 - adaptive policy recommendation
 - replay-safe heuristic corpora
 - orchestration recommendation engine
+- orchestration historical memory
+- replay-backed orchestration recall
+- deterministic orchestration timelines
+- orchestration memory corpora
+- orchestration historical retrieval
+- orchestration evolution tracking
 
 ---
 
@@ -884,6 +901,74 @@ Heuristic validation is included in:
 make control-plane-tests
 ```
 
+# 🗂️ Orchestration Memory
+
+Stage 4Q introduces deterministic orchestration memory and replay-backed historical context reconstruction.
+
+The memory layer enables replay-safe orchestration recall and deterministic timeline reconstruction.
+
+Important:
+
+```text
+This is NOT vector search.
+This is NOT embeddings.
+This is NOT autonomous memory.
+This is deterministic orchestration history.
+```
+
+Memory capabilities:
+
+- orchestration historical memory
+- deterministic orchestration timelines
+- replay-backed orchestration recall
+- orchestration historical retrieval
+- orchestration evolution tracking
+- orchestration memory corpora
+- replay-safe historical context reconstruction
+
+Memory flow:
+
+```text
+replay artifacts
+→ memory records
+→ timeline reconstruction
+→ deterministic retrieval
+→ orchestration recall
+→ historical context exports
+```
+
+Supported memory CLI commands:
+
+```bash
+./ai-orchestrate memory-timeline runs/
+
+./ai-orchestrate retrieve-memory \
+  runs/ \
+  "write file"
+
+./ai-orchestrate build-memory-corpus runs/
+
+./ai-orchestrate export-memory-timeline \
+  runs/ \
+  timeline.md
+```
+
+Memory features:
+
+- deterministic orchestration recall
+- replay-safe historical retrieval
+- orchestration timeline reconstruction
+- orchestration session lineage
+- deterministic retrieval ordering
+- markdown memory reports
+- JSON memory exports
+
+Memory validation is included in:
+
+```bash
+make control-plane-tests
+```
+
 ---
 
 # 🧠 Runtime Philosophy
@@ -907,6 +992,9 @@ This enables:
 - adaptive orchestration guidance
 - replay-backed strategy recommendation
 - deterministic orchestration heuristics
+- orchestration historical reconstruction
+- replay-backed orchestration recall
+- deterministic orchestration memory
 
 All runtime artifacts are schema-versioned and replay-safe by default.
 
@@ -984,7 +1072,8 @@ ai-dev-platform/
 │   │   ├── experiments/
 │   │   ├── benchmarks/
 │   │   ├── strategies/
-│   │   └── heuristics/
+│   │   ├── heuristics/
+│   │   └── memory/
 │   ├── tools/
 │   ├── dags/
 │   ├── scenarios/
@@ -1099,6 +1188,7 @@ make control-plane-experiment-tests
 make control-plane-benchmark-tests
 make control-plane-strategy-tests
 make control-plane-heuristic-tests
+make control-plane-memory-tests
 ```
 
 Important:
@@ -1180,7 +1270,8 @@ AI_ADAPTER=my-agent ./ai run "test"
 - [x] Policy/planner benchmark suites
 - [x] Multi-strategy orchestration experiments
 - [x] Adaptive orchestration heuristics
-- [ ] Orchestration memory + historical context
+- [x] Orchestration memory + historical context
+- [ ] Orchestration knowledge graph + lineage relationships
 - [ ] Parallel DAG execution
 - [ ] Orchestration API
 - [ ] Web UI

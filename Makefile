@@ -19,7 +19,7 @@
         litellm-fast litellm-code litellm-claude \
         health status validate \
         runtime-tests runtime-test-core runtime-test-phase3 runtime-test-all \
-        control-plane-dag-tests control-plane-tool-tests control-plane-executor-tests control-plane-trace-tests control-plane-planner-tests control-plane-orchestrator-tests control-plane-cli-tests control-plane-policy-tests control-plane-scenario-tests control-plane-replay-tests control-plane-eval-tests control-plane-experiment-tests control-plane-benchmark-tests control-plane-strategy-tests control-plane-heuristic-tests control-plane-tests \
+        control-plane-dag-tests control-plane-tool-tests control-plane-executor-tests control-plane-trace-tests control-plane-planner-tests control-plane-orchestrator-tests control-plane-cli-tests control-plane-policy-tests control-plane-scenario-tests control-plane-replay-tests control-plane-eval-tests control-plane-experiment-tests control-plane-benchmark-tests control-plane-strategy-tests control-plane-heuristic-tests control-plane-memory-tests control-plane-tests \
         ai-run ai-fix ai-explain ai-refactor ai-query \
         ctx-agent-sim ctx-arb ctx-ai-stack \
         help _set-env
@@ -296,6 +296,9 @@ control-plane-strategy-tests:
 control-plane-heuristic-tests:
 	@./scripts/tests/control_plane_heuristic_tests.sh
 
+control-plane-memory-tests:
+	@./scripts/tests/control_plane_memory_tests.sh
+
 control-plane-tests:
 	@$(MAKE) control-plane-dag-tests --no-print-directory
 	@$(MAKE) control-plane-tool-tests --no-print-directory
@@ -312,7 +315,9 @@ control-plane-tests:
 	@$(MAKE) control-plane-benchmark-tests --no-print-directory
 	@$(MAKE) control-plane-strategy-tests --no-print-directory
 	@$(MAKE) control-plane-heuristic-tests --no-print-directory
+	@$(MAKE) control-plane-memory-tests --no-print-directory
 	@$(MAKE) control-plane-heuristic-tests --no-print-directory
+	@$(MAKE) control-plane-memory-tests --no-print-directory
 
 ###################################################################
 # Validation Ladder (HARDENED)

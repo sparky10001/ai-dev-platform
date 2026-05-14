@@ -47,6 +47,13 @@ from core.heuristics.corpora import build_heuristic_corpus
 from core.heuristics.exporter import export_ranking_json
 from core.heuristics.exporter import export_recommendation_json
 from core.heuristics.exporter import export_corpus_markdown
+from core.memory.history import replay_to_memory_record
+from core.memory.history import build_memory_timeline
+from core.memory.retrieval import retrieve_memory_records
+from core.memory.corpora import build_memory_corpus
+from core.memory.exporter import export_memory_timeline_json
+from core.memory.exporter import export_memory_timeline_markdown
+from core.memory.exporter import export_memory_corpus_json
 
 
 def _to_jsonable(obj: Any) -> Any:
@@ -96,7 +103,11 @@ def _usage() -> str:
         '  ai-orchestrate recommend-strategy <task> [--pretty]\n'
         '  ai-orchestrate rank-strategies <task> [--planner=...] [--policy=...] [--pretty]\n'
         '  ai-orchestrate build-heuristic-corpus <task> [--planner=...] [--policy=...] [--pretty]\n'
-        '  ai-orchestrate export-heuristic-corpus <task> <output.(md|json)> [--planner=...] [--policy=...] [--pretty]'
+        '  ai-orchestrate export-heuristic-corpus <task> <output.(md|json)> [--planner=...] [--policy=...] [--pretty]\n'
+        '  ai-orchestrate memory-timeline <runs_dir> [--pretty]\n'
+        '  ai-orchestrate retrieve-memory <runs_dir> <query> [--pretty]\n'
+        '  ai-orchestrate build-memory-corpus <runs_dir> [--pretty]\n'
+        '  ai-orchestrate export-memory-timeline <runs_dir> <output.(md|json)> [--pretty]'
     )
 
 
@@ -212,6 +223,110 @@ def main(argv: list[str] | None = None) -> int:
                 replay = load_orchestration_trace(positional[0])
                 summary = summarize_replay(replay)
                 _emit(summary.model_dump(mode='json'), pretty=pretty)
+            except Exception as exc:
+                _emit({'status': 'error', 'error': str(exc)}, pretty=pretty)
+            return 0
+
+        if command == 'memory-timeline':
+            pretty = '--pretty' in raw
+            positional = [arg for arg in raw if not arg.startswith('--')]
+            if len(positional) < 1:
+                print('error: memory-timeline requires runs directory', file=sys.stderr)
+                print(_usage(), file=sys.stderr)
+                return 2
+            runs_dir = positional[0]
+            try:
+                run_paths = sorted([p for p in __import__('pathlib').Path(runs_dir).glob('run_*') if p.is_dir()])
+                records = []
+                for rp in run_paths:
+                    try:
+                        replay = load_orchestration_trace(rp)
+                        ev = evaluate_replay(replay)
+                        records.append(replay_to_memory_record(replay, ev))
+                    except Exception:
+                        continue
+                timeline = build_memory_timeline(records, timeline_id='timeline_cli')
+                _emit(timeline.model_dump(mode='json'), pretty=pretty)
+            except Exception as exc:
+                _emit({'status': 'error', 'error': str(exc)}, pretty=pretty)
+            return 0
+
+        if command == 'retrieve-memory':
+            pretty = '--pretty' in raw
+            positional = [arg for arg in raw if not arg.startswith('--')]
+            if len(positional) < 2:
+                print('error: retrieve-memory requires runs directory and query', file=sys.stderr)
+                print(_usage(), file=sys.stderr)
+                return 2
+            runs_dir = positional[0]
+            query = ' '.join(positional[1:])
+            try:
+                run_paths = sorted([p for p in __import__('pathlib').Path(runs_dir).glob('run_*') if p.is_dir()])
+                records = []
+                for rp in run_paths:
+                    try:
+                        replay = load_orchestration_trace(rp)
+                        ev = evaluate_replay(replay)
+                        records.append(replay_to_memory_record(replay, ev))
+                    except Exception:
+                        continue
+                result = retrieve_memory_records(records, query)
+                _emit(result.model_dump(mode='json'), pretty=pretty)
+            except Exception as exc:
+                _emit({'status': 'error', 'error': str(exc)}, pretty=pretty)
+            return 0
+
+        if command == 'build-memory-corpus':
+            pretty = '--pretty' in raw
+            positional = [arg for arg in raw if not arg.startswith('--')]
+            if len(positional) < 1:
+                print('error: build-memory-corpus requires runs directory', file=sys.stderr)
+                print(_usage(), file=sys.stderr)
+                return 2
+            runs_dir = positional[0]
+            try:
+                run_paths = sorted([p for p in __import__('pathlib').Path(runs_dir).glob('run_*') if p.is_dir()])
+                records = []
+                for rp in run_paths:
+                    try:
+                        replay = load_orchestration_trace(rp)
+                        ev = evaluate_replay(replay)
+                        records.append(replay_to_memory_record(replay, ev))
+                    except Exception:
+                        continue
+                corpus = build_memory_corpus(records, corpus_id='memory_corpus_cli')
+                _emit(corpus.model_dump(mode='json'), pretty=pretty)
+            except Exception as exc:
+                _emit({'status': 'error', 'error': str(exc)}, pretty=pretty)
+            return 0
+
+        if command == 'export-memory-timeline':
+            pretty = '--pretty' in raw
+            positional = [arg for arg in raw if not arg.startswith('--')]
+            if len(positional) < 2:
+                print('error: export-memory-timeline requires runs directory and output path', file=sys.stderr)
+                print(_usage(), file=sys.stderr)
+                return 2
+            runs_dir = positional[0]
+            output_path = positional[1]
+            try:
+                run_paths = sorted([p for p in __import__('pathlib').Path(runs_dir).glob('run_*') if p.is_dir()])
+                records = []
+                for rp in run_paths:
+                    try:
+                        replay = load_orchestration_trace(rp)
+                        ev = evaluate_replay(replay)
+                        records.append(replay_to_memory_record(replay, ev))
+                    except Exception:
+                        continue
+                timeline = build_memory_timeline(records, timeline_id='timeline_cli')
+                if output_path.lower().endswith('.md'):
+                    written = export_memory_timeline_markdown(timeline, output_path)
+                elif output_path.lower().endswith('.json'):
+                    written = export_memory_timeline_json(timeline, output_path)
+                else:
+                    written = export_memory_timeline_markdown(timeline, output_path)
+                _emit({'status': 'success', 'path': written}, pretty=pretty)
             except Exception as exc:
                 _emit({'status': 'error', 'error': str(exc)}, pretty=pretty)
             return 0

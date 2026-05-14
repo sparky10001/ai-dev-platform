@@ -34,6 +34,8 @@ Stage 4 tests are additive and currently isolated from the Phase 3E validation g
   - `scripts/tests/control_plane_strategy_tests.sh`
 - Stage 4P adaptive orchestration heuristics:
   - `scripts/tests/control_plane_heuristic_tests.sh`
+- Stage 4Q orchestration memory + historical context:
+  - `scripts/tests/control_plane_memory_tests.sh`
 
 ## Convenience Command
 
