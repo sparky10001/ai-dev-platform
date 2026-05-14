@@ -1,0 +1,17 @@
+{
+  "expect": {
+    "output_contains": [
+      "run_id",
+      "run_path"
+    ],
+    "requires_run_artifact": true,
+    "status": "success",
+    "tools_used": [
+      "write_file",
+      "list_files"
+    ]
+  },
+  "scenario_id": "traced_write_then_list",
+  "task": "Create a file called hello.txt with content 'hi' and then list files",
+  "trace": true
+}

@@ -1,0 +1,20 @@
+{
+  "expect": {
+    "dag_id": "plan_write_list",
+    "execution_status": "success",
+    "nodes_executed": [
+      "write",
+      "list"
+    ],
+    "output_contains": [
+      "hello.txt"
+    ],
+    "status": "success",
+    "tools_used": [
+      "write_file",
+      "list_files"
+    ]
+  },
+  "scenario_id": "write_then_list",
+  "task": "Create a file called hello.txt with content 'hi' and then list files"
+}

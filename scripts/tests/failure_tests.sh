@@ -24,7 +24,10 @@ ADAPTER_DIR="${ROOT_DIR}/scripts/adapters"
 PASS_COUNT=0
 FAIL_COUNT=0
 
-TEST_TMP_DIR="${ROOT_DIR}/tmp/tests/failure"
+TEST_TMP_DIR="$(
+  mktemp -d "${ROOT_DIR}/tmp/tests/failure.XXXXXX"
+)"
+
 mkdir -p "$TEST_TMP_DIR"
 
 cleanup() {
@@ -181,6 +184,8 @@ echo '{"status":"bad"}'
 EOF
 
   chmod +x "$BAD_ADAPTER"
+
+  mkdir -p "$TEST_TMP_DIR"
 
   STDERR_FILE="${TEST_TMP_DIR}/stderr.log"
 

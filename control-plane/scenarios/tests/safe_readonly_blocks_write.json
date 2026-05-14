@@ -1,0 +1,15 @@
+{
+  "expect": {
+    "dag_id": "plan_write_list",
+    "execution_status": "skipped",
+    "nodes_executed": [],
+    "policy_violation_codes": [
+      "tool_denied"
+    ],
+    "status": "error",
+    "tools_used": []
+  },
+  "policy": "safe-readonly",
+  "scenario_id": "safe_readonly_blocks_write",
+  "task": "Create a file called hello.txt with content 'hi' and then list files"
+}

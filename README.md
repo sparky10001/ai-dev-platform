@@ -4,16 +4,16 @@
 
 **A portable, provider-agnostic AI runtime and orchestration platform for developers building serious AI systems.**
 
-One stable interface.
-Any AI agent.
-Any compute.
+One stable interface.  
+Any AI agent.  
+Any compute.  
 Anywhere.
 
 ---
 
 # 🧠 Core Principle
 
-> **Only one thing is stable: the AI interface.**
+> **Only one thing is stable: the AI interface.**  
 > Everything else can change, will change, should be replaceable.
 
 ```text
@@ -48,14 +48,14 @@ runtime/events.py                 ← Canonical NDJSON persistence
 runtime/contracts.py              ← Schema compatibility guarantees
     │
     ▼
-LiteLLM                            ← Universal provider router
+LiteLLM                           ← Universal provider router
     │
     ▼
 Ollama │ OpenAI │ Claude │ NVIDIA NIM
 ```
 
-Swap the adapter.
-Swap the model.
+Swap the adapter.  
+Swap the model.  
 Swap the compute.
 
 **Your workflow never changes.**
@@ -69,6 +69,7 @@ Swap the compute.
 - **Control-Plane DAG Orchestration** — additive orchestration layer with deterministic execution
 - **Replay + Evaluation Engine** — reconstruct, score, compare, and export executions
 - **Deterministic Policy Layer** — governance and execution constraints before DAG execution
+- **Control-Plane Scenario Testing** — deterministic orchestration scenario validation
 - **Tool-Using Agent Runtime** — native OpenAI function-calling loop with dynamic tool execution
 - **Dataset Export Layer** — deterministic NDJSON corpora generation
 - **Schema Compatibility Contracts** — backward-compatible runtime guarantees
@@ -226,8 +227,7 @@ make colab
 
 # 🧱 Deterministic Runtime Architecture
 
-The runtime is built as a replay-safe,
-schema-versioned execution system.
+The runtime is built as a replay-safe, schema-versioned execution system.
 
 Core guarantees:
 
@@ -270,11 +270,9 @@ runtime/
 
 # 🧩 Control-Plane Architecture
 
-Stage 4 introduces an additive orchestration layer
-built on top of the deterministic runtime.
+Stage 4 introduces an additive orchestration layer built on top of the deterministic runtime.
 
-The control-plane is intentionally separate from
-the runtime execution substrate.
+The control-plane is intentionally separate from the runtime execution substrate.
 
 ```text
 Phase 3E runtime
@@ -303,14 +301,21 @@ control-plane/
 │   │   ├── models.py
 │   │   ├── defaults.py
 │   │   └── validator.py
-│   └── orchestrator/
-│       └── orchestrator.py
+│   ├── orchestrator/
+│   │   └── orchestrator.py
+│   └── scenarios/
+│       ├── models.py
+│       ├── runner.py
+│       └── evaluator.py
 ├── tools/
 │   ├── contracts.py
 │   └── registry.py
 ├── dags/
 │   ├── schemas/
 │   └── examples/
+├── scenarios/
+│   ├── tests/
+│   └── README.md
 └── tests/
 ```
 
@@ -333,7 +338,9 @@ deterministic executor
   ↓
 runtime trace bridge
   ↓
-Phase 3E replay/eval compatibility
+replay/eval-compatible artifacts
+  ↓
+scenario evaluation
 ```
 
 The control-plane currently supports:
@@ -346,6 +353,7 @@ The control-plane currently supports:
 - replayable DAG traces
 - runtime-compatible execution artifacts
 - orchestration request/result pipelines
+- orchestration scenario validation
 
 ---
 
@@ -365,7 +373,7 @@ Current policy capabilities:
 - workspace path boundaries
 - traversal protection
 
-Example:
+Execution flow:
 
 ```text
 planner
@@ -385,6 +393,64 @@ Example:
 ```bash
 ./ai-orchestrate run "list files" \
   --policy=safe-readonly
+```
+
+---
+
+# 🧪 Control-Plane Scenario Testing
+
+Stage 4J introduces deterministic orchestration scenario validation.
+
+Control-plane scenarios validate the complete orchestration path:
+
+```text
+task
+→ planner
+→ policy validation
+→ executor
+→ optional trace
+→ replay/eval-compatible result
+```
+
+Scenarios are JSON-defined and replay-safe.
+
+Scenario capabilities:
+
+- orchestration result validation
+- DAG validation
+- policy violation validation
+- trace artifact validation
+- replay compatibility checks
+- deterministic scoring
+- end-to-end orchestration evaluation
+
+Scenario files live in:
+
+```text
+control-plane/scenarios/tests/
+```
+
+Example:
+
+```bash
+python3 -m control-plane.core.scenarios.runner \
+  control-plane/scenarios/tests/write_then_list.json
+```
+
+Example scenario categories:
+
+| Scenario | Purpose |
+|---|---|
+| `list_files.json` | deterministic read workflow |
+| `write_then_list.json` | multi-node orchestration |
+| `safe_readonly_blocks_write.json` | policy enforcement |
+| `traced_write_then_list.json` | replayable orchestration |
+| `unsupported_task_noop.json` | noop fallback behavior |
+
+Scenario tests are included in:
+
+```bash
+make control-plane-tests
 ```
 
 ---
@@ -458,6 +524,18 @@ ai-dev-platform/
 ├── ai-orchestrate
 ├── ai-eval
 ├── runtime/
+│   ├── engine.py
+│   ├── events.py
+│   ├── replay.py
+│   ├── evals.py
+│   ├── registry.py
+│   ├── datasets.py
+│   ├── contracts.py
+│   ├── validator.py
+│   ├── loader.py
+│   ├── run.py
+│   ├── runner.py
+│   └── schemas.py
 ├── control-plane/
 │   ├── cli/
 │   ├── core/
@@ -465,11 +543,21 @@ ai-dev-platform/
 │   │   ├── planner/
 │   │   ├── policy/
 │   │   ├── orchestrator/
-│   │   └── observability/
+│   │   ├── observability/
+│   │   └── scenarios/
 │   ├── tools/
 │   ├── dags/
+│   ├── scenarios/
 │   └── tests/
 ├── scripts/
+│   ├── runtime.sh
+│   ├── router.py
+│   ├── agent.py
+│   ├── tool_executor.py
+│   ├── adapters/
+│   ├── tools/
+│   ├── tests/
+│   └── mock-server/
 ├── scenarios/
 ├── runs/
 ├── evals/
@@ -564,6 +652,7 @@ make control-plane-planner-tests
 make control-plane-orchestrator-tests
 make control-plane-cli-tests
 make control-plane-policy-tests
+make control-plane-scenario-tests
 ```
 
 Important:
@@ -638,6 +727,8 @@ AI_ADAPTER=my-agent ./ai run "test"
 - [x] Planner/executor orchestration pipeline
 - [x] Control-plane CLI
 - [x] Planner policy layer
+- [x] Control-plane scenario testing
+- [ ] Orchestration replay/introspection
 - [ ] Parallel DAG execution
 - [ ] Orchestration API
 - [ ] Web UI

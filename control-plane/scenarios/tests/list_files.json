@@ -1,0 +1,15 @@
+{
+  "expect": {
+    "dag_id": "plan_list_files",
+    "execution_status": "success",
+    "nodes_executed": [
+      "list"
+    ],
+    "status": "success",
+    "tools_used": [
+      "list_files"
+    ]
+  },
+  "scenario_id": "list_files",
+  "task": "list files"
+}

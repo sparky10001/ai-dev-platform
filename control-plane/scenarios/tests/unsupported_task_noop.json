@@ -1,0 +1,12 @@
+{
+  "expect": {
+    "dag_id": "plan_noop",
+    "execution_status": "success",
+    "nodes_executed": [
+      "noop"
+    ],
+    "status": "success"
+  },
+  "scenario_id": "unsupported_task_noop",
+  "task": "make the system self-aware"
+}
