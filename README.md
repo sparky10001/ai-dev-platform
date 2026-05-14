@@ -11,6 +11,7 @@ Anywhere.
 Now with deterministic orchestration experimentation,
 replay-safe evaluation,
 and adaptive strategy benchmarking.
+Plus deterministic replay-backed orchestration recommendations.
 
 ---
 
@@ -78,6 +79,7 @@ Swap the compute.
 - **Experiment Tracking + Datasets** — deterministic replay-backed experiment manifests, datasets, and benchmark corpora
 - **Benchmark Suites** — deterministic planner/policy scenario-matrix benchmarking
 - **Multi-Strategy Experiments** — deterministic orchestration branching and A/B strategy comparison
+- **Adaptive Heuristics** — deterministic replay-backed orchestration ranking and recommendation
 - **Tool-Using Agent Runtime** — native OpenAI function-calling loop with dynamic tool execution
 - **Dataset Export Layer** — deterministic NDJSON corpora generation
 - **Schema Compatibility Contracts** — backward-compatible runtime guarantees
@@ -338,11 +340,17 @@ control-plane/
 │   │   ├── runner.py
 │   │   ├── evaluator.py
 │   │   └── exporter.py
-│   └── strategies/
+│   ├── strategies/
+│   │   ├── models.py
+│   │   ├── planner_variants.py
+│   │   ├── branching.py
+│   │   ├── evaluator.py
+│   │   └── exporter.py
+│   └── heuristics/
 │       ├── models.py
-│       ├── planner_variants.py
-│       ├── branching.py
-│       ├── evaluator.py
+│       ├── ranking.py
+│       ├── recommender.py
+│       ├── corpora.py
 │       └── exporter.py
 ├── tools/
 │   ├── contracts.py
@@ -388,6 +396,8 @@ experiment tracking + datasets
 benchmark suites + matrices
   ↓
 multi-strategy experiments
+  ↓
+adaptive heuristics
 ```
 
 The control-plane currently supports:
@@ -422,6 +432,12 @@ The control-plane currently supports:
 - orchestration strategy corpora
 - replay-safe orchestration branching
 - deterministic orchestration strategy evaluation
+- deterministic orchestration heuristics
+- replay-backed strategy ranking
+- adaptive planner recommendation
+- adaptive policy recommendation
+- replay-safe heuristic corpora
+- orchestration recommendation engine
 
 ---
 
@@ -798,6 +814,76 @@ Strategy validation is included in:
 make control-plane-tests
 ```
 
+# 🧠 Adaptive Heuristics
+
+Stage 4P introduces deterministic orchestration heuristics and replay-backed recommendation systems.
+
+The heuristic layer aggregates historical orchestration outcomes into replay-safe recommendation signals.
+
+Important:
+
+```text
+This is NOT machine learning.
+This is NOT autonomous planning.
+This is deterministic orchestration guidance.
+```
+
+Heuristic capabilities:
+
+- deterministic strategy ranking
+- replay-backed heuristic aggregation
+- adaptive planner recommendation
+- adaptive policy recommendation
+- historical orchestration scoring
+- heuristic corpus generation
+- orchestration recommendation engine
+
+Heuristic flow:
+
+```text
+strategy experiments
+→ replay/evaluation
+→ heuristic signal generation
+→ deterministic ranking
+→ recommendation engine
+→ adaptive orchestration guidance
+```
+
+Supported heuristic CLI commands:
+
+```bash
+./ai-orchestrate recommend-strategy \
+  "Create a file and list files"
+
+./ai-orchestrate rank-strategies \
+  "Create a file and list files" \
+  --planner=deterministic \
+  --planner=baseline
+
+./ai-orchestrate build-heuristic-corpus \
+  "Create a file and list files"
+
+./ai-orchestrate export-heuristic-corpus \
+  "Create a file and list files" \
+  corpus.md
+```
+
+Heuristic features:
+
+- deterministic orchestration ranking
+- replay-safe recommendation generation
+- adaptive planner selection
+- adaptive policy selection
+- weighted historical scoring
+- markdown heuristic reports
+- JSON heuristic exports
+
+Heuristic validation is included in:
+
+```bash
+make control-plane-tests
+```
+
 ---
 
 # 🧠 Runtime Philosophy
@@ -818,6 +904,9 @@ This enables:
 - deterministic dataset generation
 - execution introspection
 - contract-safe evolution
+- adaptive orchestration guidance
+- replay-backed strategy recommendation
+- deterministic orchestration heuristics
 
 All runtime artifacts are schema-versioned and replay-safe by default.
 
@@ -894,7 +983,8 @@ ai-dev-platform/
 │   │   ├── evals/
 │   │   ├── experiments/
 │   │   ├── benchmarks/
-│   │   └── strategies/
+│   │   ├── strategies/
+│   │   └── heuristics/
 │   ├── tools/
 │   ├── dags/
 │   ├── scenarios/
@@ -1008,6 +1098,7 @@ make control-plane-eval-tests
 make control-plane-experiment-tests
 make control-plane-benchmark-tests
 make control-plane-strategy-tests
+make control-plane-heuristic-tests
 ```
 
 Important:
@@ -1088,7 +1179,8 @@ AI_ADAPTER=my-agent ./ai run "test"
 - [x] Orchestration datasets/experiment tracking
 - [x] Policy/planner benchmark suites
 - [x] Multi-strategy orchestration experiments
-- [ ] Adaptive orchestration heuristics
+- [x] Adaptive orchestration heuristics
+- [ ] Orchestration memory + historical context
 - [ ] Parallel DAG execution
 - [ ] Orchestration API
 - [ ] Web UI

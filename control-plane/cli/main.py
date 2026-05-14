@@ -40,6 +40,13 @@ from core.strategies.branching import execute_strategy_experiment
 from core.strategies.evaluator import compare_strategy_variants
 from core.strategies.exporter import export_strategy_experiment_json
 from core.strategies.exporter import export_strategy_experiment_markdown
+from core.heuristics.ranking import rank_strategy_variants
+from core.heuristics.ranking import generate_heuristic_signals
+from core.heuristics.recommender import recommend_strategy
+from core.heuristics.corpora import build_heuristic_corpus
+from core.heuristics.exporter import export_ranking_json
+from core.heuristics.exporter import export_recommendation_json
+from core.heuristics.exporter import export_corpus_markdown
 
 
 def _to_jsonable(obj: Any) -> Any:
@@ -85,7 +92,11 @@ def _usage() -> str:
         '  ai-orchestrate export-benchmark-suite <scenario_dir> <output.(md|json)> [--pretty]\n'
         '  ai-orchestrate strategy-experiment <task> [--planner=...] [--policy=...] [--pretty]\n'
         '  ai-orchestrate compare-strategies <task> [--planner=...] [--policy=...] [--pretty]\n'
-        '  ai-orchestrate export-strategy-experiment <task> <output.(md|json)> [--planner=...] [--policy=...] [--pretty]'
+        '  ai-orchestrate export-strategy-experiment <task> <output.(md|json)> [--planner=...] [--policy=...] [--pretty]\n'
+        '  ai-orchestrate recommend-strategy <task> [--pretty]\n'
+        '  ai-orchestrate rank-strategies <task> [--planner=...] [--policy=...] [--pretty]\n'
+        '  ai-orchestrate build-heuristic-corpus <task> [--planner=...] [--policy=...] [--pretty]\n'
+        '  ai-orchestrate export-heuristic-corpus <task> <output.(md|json)> [--planner=...] [--policy=...] [--pretty]'
     )
 
 
@@ -201,6 +212,107 @@ def main(argv: list[str] | None = None) -> int:
                 replay = load_orchestration_trace(positional[0])
                 summary = summarize_replay(replay)
                 _emit(summary.model_dump(mode='json'), pretty=pretty)
+            except Exception as exc:
+                _emit({'status': 'error', 'error': str(exc)}, pretty=pretty)
+            return 0
+
+        if command == 'recommend-strategy':
+            pretty = '--pretty' in raw
+            task = ' '.join([arg for arg in raw if not arg.startswith('--')])
+            if not task:
+                print('error: recommend-strategy requires task text', file=sys.stderr)
+                print(_usage(), file=sys.stderr)
+                return 2
+            try:
+                exp = execute_strategy_experiment(
+                    task=task,
+                    planner_strategies=['deterministic', 'noop'],
+                    policies=['default', 'safe-readonly'],
+                    trace=True,
+                )
+                signals = generate_heuristic_signals(exp.variants)
+                rec = recommend_strategy(task, signals)
+                _emit(rec.model_dump(mode='json'), pretty=pretty)
+            except Exception as exc:
+                _emit({'status': 'error', 'error': str(exc)}, pretty=pretty)
+            return 0
+
+        if command == 'rank-strategies':
+            pretty = '--pretty' in raw
+            planners = [arg.split('=', 1)[1] for arg in raw if arg.startswith('--planner=')]
+            policies = [arg.split('=', 1)[1] for arg in raw if arg.startswith('--policy=')]
+            task = ' '.join([arg for arg in raw if not arg.startswith('--')])
+            if not task:
+                print('error: rank-strategies requires task text', file=sys.stderr)
+                print(_usage(), file=sys.stderr)
+                return 2
+            try:
+                exp = execute_strategy_experiment(
+                    task=task,
+                    planner_strategies=(planners or ['deterministic', 'noop']),
+                    policies=(policies or ['default']),
+                    trace=True,
+                )
+                ranking = rank_strategy_variants(exp.variants, ranking_id='ranking_cli')
+                _emit(ranking.model_dump(mode='json'), pretty=pretty)
+            except Exception as exc:
+                _emit({'status': 'error', 'error': str(exc)}, pretty=pretty)
+            return 0
+
+        if command == 'build-heuristic-corpus':
+            pretty = '--pretty' in raw
+            task = ' '.join([arg for arg in raw if not arg.startswith('--')])
+            planners = [arg.split('=', 1)[1] for arg in raw if arg.startswith('--planner=')]
+            policies = [arg.split('=', 1)[1] for arg in raw if arg.startswith('--policy=')]
+            if not task:
+                print('error: build-heuristic-corpus requires task text', file=sys.stderr)
+                print(_usage(), file=sys.stderr)
+                return 2
+            try:
+                exp = execute_strategy_experiment(
+                    task=task,
+                    planner_strategies=(planners or ['deterministic', 'noop']),
+                    policies=(policies or ['default']),
+                    trace=True,
+                )
+                signals = generate_heuristic_signals(exp.variants)
+                corpus = build_heuristic_corpus(signals, corpus_id='corpus_cli')
+                _emit(corpus.model_dump(mode='json'), pretty=pretty)
+            except Exception as exc:
+                _emit({'status': 'error', 'error': str(exc)}, pretty=pretty)
+            return 0
+
+        if command == 'export-heuristic-corpus':
+            pretty = '--pretty' in raw
+            positional = [arg for arg in raw if not arg.startswith('--')]
+            planners = [arg.split('=', 1)[1] for arg in raw if arg.startswith('--planner=')]
+            policies = [arg.split('=', 1)[1] for arg in raw if arg.startswith('--policy=')]
+            if len(positional) < 2:
+                print('error: export-heuristic-corpus requires task text and output path', file=sys.stderr)
+                print(_usage(), file=sys.stderr)
+                return 2
+            output_path = positional[-1]
+            task = ' '.join(positional[:-1])
+            try:
+                exp = execute_strategy_experiment(
+                    task=task,
+                    planner_strategies=(planners or ['deterministic', 'noop']),
+                    policies=(policies or ['default']),
+                    trace=True,
+                )
+                signals = generate_heuristic_signals(exp.variants)
+                corpus = build_heuristic_corpus(signals, corpus_id='corpus_cli')
+                if output_path.lower().endswith('.md'):
+                    written = export_corpus_markdown(corpus, output_path)
+                elif output_path.lower().endswith('.json'):
+                    # reuse generic JSON exporter style by writing recommendation/ranking pattern
+                    written = export_recommendation_json(
+                        recommend_strategy(task, signals),
+                        output_path,
+                    )
+                else:
+                    written = export_corpus_markdown(corpus, output_path)
+                _emit({'status': 'success', 'path': written}, pretty=pretty)
             except Exception as exc:
                 _emit({'status': 'error', 'error': str(exc)}, pretty=pretty)
             return 0
