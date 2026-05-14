@@ -70,6 +70,7 @@ Swap the compute.
 - **Replay + Evaluation Engine** — reconstruct, score, compare, and export executions
 - **Deterministic Policy Layer** — governance and execution constraints before DAG execution
 - **Control-Plane Scenario Testing** — deterministic orchestration scenario validation
+- **Replay + Introspection Layer** — deterministic orchestration reconstruction, lineage, and export tooling
 - **Tool-Using Agent Runtime** — native OpenAI function-calling loop with dynamic tool execution
 - **Dataset Export Layer** — deterministic NDJSON corpora generation
 - **Schema Compatibility Contracts** — backward-compatible runtime guarantees
@@ -303,10 +304,15 @@ control-plane/
 │   │   └── validator.py
 │   ├── orchestrator/
 │   │   └── orchestrator.py
-│   └── scenarios/
+│   ├── scenarios/
+│   │   ├── models.py
+│   │   ├── runner.py
+│   │   └── evaluator.py
+│   └── replay/
 │       ├── models.py
-│       ├── runner.py
-│       └── evaluator.py
+│       ├── loader.py
+│       ├── introspection.py
+│       └── exporter.py
 ├── tools/
 │   ├── contracts.py
 │   └── registry.py
@@ -323,7 +329,7 @@ control-plane/
 
 # 🔄 Control-Plane Execution Flow
 
-```text
+```
 task
   ↓
 planner
@@ -341,6 +347,8 @@ runtime trace bridge
 replay/eval-compatible artifacts
   ↓
 scenario evaluation
+  ↓
+replay + introspection
 ```
 
 The control-plane currently supports:
@@ -353,6 +361,8 @@ The control-plane currently supports:
 - replayable DAG traces
 - runtime-compatible execution artifacts
 - orchestration request/result pipelines
+- orchestration replay reconstruction
+- orchestration lineage + export tooling
 - orchestration scenario validation
 
 ---
@@ -453,6 +463,57 @@ Scenario tests are included in:
 make control-plane-tests
 ```
 
+# 🔍 Replay + Introspection Layer
+
+Stage 4K introduces deterministic orchestration replay and introspection.
+
+Replay reconstructs orchestration DAG executions directly from replay-safe traces.
+
+Replay capabilities:
+
+- orchestration reconstruction
+- DAG replay summaries
+- execution lineage graphs
+- execution ordering reconstruction
+- failed/skipped node analysis
+- replay-safe orchestration exports
+- deterministic orchestration introspection
+
+Replay reconstruction flow:
+
+```text
+trace.jsonl
+→ orchestration replay loader
+→ DAG reconstruction
+→ introspection helpers
+→ export/report generation
+```
+
+Replay CLI commands:
+
+```bash
+./ai-orchestrate replay runs/<run_id>
+
+./ai-orchestrate summarize-run runs/<run_id>
+
+./ai-orchestrate export-run runs/<run_id> report.md
+
+./ai-orchestrate export-run runs/<run_id> report.json
+```
+
+Replay exports support:
+
+- JSON summaries
+- Markdown orchestration reports
+- deterministic lineage reconstruction
+- replay-safe orchestration inspection
+
+Replay validation is included in:
+
+```bash
+make control-plane-tests
+```
+
 ---
 
 # 🧠 Runtime Philosophy
@@ -544,7 +605,8 @@ ai-dev-platform/
 │   │   ├── policy/
 │   │   ├── orchestrator/
 │   │   ├── observability/
-│   │   └── scenarios/
+│   │   ├── scenarios/
+│   │   └── replay/
 │   ├── tools/
 │   ├── dags/
 │   ├── scenarios/
@@ -653,6 +715,7 @@ make control-plane-orchestrator-tests
 make control-plane-cli-tests
 make control-plane-policy-tests
 make control-plane-scenario-tests
+make control-plane-replay-tests
 ```
 
 Important:
@@ -728,7 +791,8 @@ AI_ADAPTER=my-agent ./ai run "test"
 - [x] Control-plane CLI
 - [x] Planner policy layer
 - [x] Control-plane scenario testing
-- [ ] Orchestration replay/introspection
+- [x] Orchestration replay/introspection
+- [ ] Orchestration evaluation/comparison
 - [ ] Parallel DAG execution
 - [ ] Orchestration API
 - [ ] Web UI

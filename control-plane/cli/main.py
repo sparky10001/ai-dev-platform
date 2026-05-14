@@ -20,6 +20,10 @@ from core.orchestrator.orchestrator import orchestrate_task
 from core.planner.planner import plan_task
 from core.policy.defaults import DEFAULT_POLICY
 from core.policy.defaults import SAFE_READONLY_POLICY
+from core.replay.loader import load_orchestration_trace
+from core.replay.introspection import summarize_replay
+from core.replay.exporter import export_replay_markdown
+from core.replay.exporter import export_replay_summary_json
 
 
 def _to_jsonable(obj: Any) -> Any:
@@ -49,7 +53,10 @@ def _usage() -> str:
         '  ai-orchestrate run <task> [--trace] [--strategy=deterministic|noop] [--policy=default|safe-readonly] [--pretty]\n'
         '  ai-orchestrate plan <task> [--strategy=deterministic|noop] [--pretty]\n'
         '  ai-orchestrate validate-dag <path> [--pretty]\n'
-        '  ai-orchestrate execute-dag <path> [--trace] [--pretty]'
+        '  ai-orchestrate execute-dag <path> [--trace] [--pretty]\n'
+        '  ai-orchestrate replay <run_path> [--pretty]\n'
+        '  ai-orchestrate summarize-run <run_path> [--pretty]\n'
+        '  ai-orchestrate export-run <run_path> <output.(md|json)> [--pretty]'
     )
 
 
@@ -140,6 +147,52 @@ def main(argv: list[str] | None = None) -> int:
             except Exception as exc:
                 payload = {'status': 'error', 'error': str(exc)}
             _emit(payload, pretty=pretty)
+            return 0
+
+        if command == 'replay':
+            positional, pretty, _trace, _strategy, _policy_name = _parse_flags(raw, allow_trace=False, allow_strategy=False)
+            if not positional:
+                print('error: missing run_path for replay', file=sys.stderr)
+                print(_usage(), file=sys.stderr)
+                return 2
+            try:
+                replay = load_orchestration_trace(positional[0])
+                _emit(replay.model_dump(mode='json'), pretty=pretty)
+            except Exception as exc:
+                _emit({'status': 'error', 'error': str(exc)}, pretty=pretty)
+            return 0
+
+        if command == 'summarize-run':
+            positional, pretty, _trace, _strategy, _policy_name = _parse_flags(raw, allow_trace=False, allow_strategy=False)
+            if not positional:
+                print('error: missing run_path for summarize-run', file=sys.stderr)
+                print(_usage(), file=sys.stderr)
+                return 2
+            try:
+                replay = load_orchestration_trace(positional[0])
+                summary = summarize_replay(replay)
+                _emit(summary.model_dump(mode='json'), pretty=pretty)
+            except Exception as exc:
+                _emit({'status': 'error', 'error': str(exc)}, pretty=pretty)
+            return 0
+
+        if command == 'export-run':
+            positional, pretty, _trace, _strategy, _policy_name = _parse_flags(raw, allow_trace=False, allow_strategy=False)
+            if len(positional) < 2:
+                print('error: export-run requires run_path and output path', file=sys.stderr)
+                print(_usage(), file=sys.stderr)
+                return 2
+            run_path = positional[0]
+            output_path = positional[1]
+            try:
+                replay = load_orchestration_trace(run_path)
+                if output_path.lower().endswith('.md'):
+                    written = export_replay_markdown(replay, output_path)
+                else:
+                    written = export_replay_summary_json(replay, output_path)
+                _emit({'status': 'success', 'path': written}, pretty=pretty)
+            except Exception as exc:
+                _emit({'status': 'error', 'error': str(exc)}, pretty=pretty)
             return 0
 
         if command == 'execute-dag':

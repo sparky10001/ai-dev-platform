@@ -20,6 +20,10 @@ Stage 4 tests are additive and currently isolated from the Phase 3E validation g
   - `scripts/tests/control_plane_cli_tests.sh`
 - Stage 4I deterministic policy layer:
   - `scripts/tests/control_plane_policy_tests.sh`
+- Stage 4J control-plane scenario tests:
+  - `scripts/tests/control_plane_scenario_tests.sh`
+- Stage 4K orchestration replay + introspection:
+  - `scripts/tests/control_plane_replay_tests.sh`
 
 ## Convenience Command
 
