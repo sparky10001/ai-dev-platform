@@ -43,6 +43,10 @@ class NodeExecutionResult(BaseModel):
 
     error: str | None = None
 
+    run_id: str | None = None
+
+    run_path: str | None = None
+
     started_at: float
 
     finished_at: float
@@ -76,6 +80,10 @@ class DagExecutionResult(BaseModel):
     duration_ms: float
 
     error: str | None = None
+
+    run_id: str | None = None
+
+    run_path: str | None = None
 
 
 def _repo_root() -> Path:
@@ -366,6 +374,8 @@ def execute_dag(dag: DagSpec | dict | str | Path, trace: bool = False) -> DagExe
         finished_at=finished_at,
         duration_ms=(finished_at - started_at) * 1000.0,
         error=final_error,
+        run_id=(run.get('id') if run is not None else None),
+        run_path=(run.get('run_path') if run is not None else None),
     )
 
     if run is not None:

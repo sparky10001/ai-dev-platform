@@ -19,7 +19,7 @@
         litellm-fast litellm-code litellm-claude \
         health status validate \
         runtime-tests runtime-test-core runtime-test-phase3 runtime-test-all \
-        control-plane-dag-tests control-plane-tool-tests control-plane-executor-tests control-plane-trace-tests control-plane-tests \
+        control-plane-dag-tests control-plane-tool-tests control-plane-executor-tests control-plane-trace-tests control-plane-planner-tests control-plane-orchestrator-tests control-plane-tests \
         ai-run ai-fix ai-explain ai-refactor ai-query \
         ctx-agent-sim ctx-arb ctx-ai-stack \
         help _set-env
@@ -263,11 +263,19 @@ control-plane-executor-tests:
 control-plane-trace-tests:
 	@./scripts/tests/control_plane_trace_bridge_tests.sh
 
+control-plane-planner-tests:
+	@./scripts/tests/control_plane_planner_tests.sh
+
+control-plane-orchestrator-tests:
+	@./scripts/tests/control_plane_orchestrator_tests.sh
+
 control-plane-tests:
 	@$(MAKE) control-plane-dag-tests --no-print-directory
 	@$(MAKE) control-plane-tool-tests --no-print-directory
 	@$(MAKE) control-plane-executor-tests --no-print-directory
 	@$(MAKE) control-plane-trace-tests --no-print-directory
+	@$(MAKE) control-plane-planner-tests --no-print-directory
+	@$(MAKE) control-plane-orchestrator-tests --no-print-directory
 
 ###################################################################
 # Validation Ladder (HARDENED)
