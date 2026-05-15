@@ -14,6 +14,7 @@ and adaptive strategy benchmarking.
 Plus deterministic replay-backed orchestration recommendations.
 And deterministic orchestration memory + historical recall.
 Plus deterministic orchestration lineage and relationship reconstruction.
+And deterministic replay-safe orchestration graph analytics.
 
 ---
 
@@ -84,6 +85,7 @@ Swap the compute.
 - **Adaptive Heuristics** — deterministic replay-backed orchestration ranking and recommendation
 - **Orchestration Memory** — deterministic replay-backed historical context and orchestration recall
 - **Knowledge Graph + Lineage** — deterministic orchestration relationship graphs and lineage reconstruction
+- **Graph Analytics** — deterministic orchestration graph metrics and lineage-depth analytics
 - **Tool-Using Agent Runtime** — native OpenAI function-calling loop with dynamic tool execution
 - **Dataset Export Layer** — deterministic NDJSON corpora generation
 - **Schema Compatibility Contracts** — backward-compatible runtime guarantees
@@ -363,12 +365,17 @@ control-plane/
 │   │   ├── timelines.py
 │   │   ├── corpora.py
 │   │   └── exporter.py
-│   └── knowledge/
+│   ├── knowledge/
+│   │   ├── models.py
+│   │   ├── lineage.py
+│   │   ├── relationships.py
+│   │   ├── traversal.py
+│   │   ├── corpora.py
+│   │   └── exporter.py
+│   └── graph_analytics/
 │       ├── models.py
-│       ├── lineage.py
-│       ├── relationships.py
-│       ├── traversal.py
-│       ├── corpora.py
+│       ├── metrics.py
+│       ├── analyzer.py
 │       └── exporter.py
 ├── tools/
 │   ├── contracts.py
@@ -420,6 +427,8 @@ adaptive heuristics
 orchestration memory
   ↓
 knowledge graph + lineage
+  ↓
+graph analytics
 ```
 
 The control-plane currently supports:
@@ -473,6 +482,13 @@ The control-plane currently supports:
 - replay-safe orchestration graph reconstruction
 - deterministic orchestration relationship traversal
 - orchestration relationship corpora
+- orchestration graph analytics
+- deterministic graph metrics
+- relationship frequency analysis
+- lineage depth analysis
+- isolated node detection
+- replay-safe graph summaries
+- orchestration dependency analytics
 
 ---
 
@@ -1060,6 +1076,82 @@ Knowledge graph validation is included in:
 make control-plane-tests
 ```
 
+# 📈 Graph Analytics
+
+Stage 4S introduces deterministic orchestration graph analytics built on top of replay-safe orchestration knowledge graphs.
+
+The analytics layer computes deterministic graph metrics, lineage depth analysis, and orchestration relationship summaries while preserving replay-safe execution semantics.
+
+Important:
+
+```text
+This is NOT graph AI.
+This is NOT graph machine learning.
+This is NOT autonomous reasoning.
+This is deterministic orchestration graph analytics.
+```
+
+Graph analytics capabilities:
+
+- orchestration graph metrics
+- deterministic node metrics
+- relationship frequency analysis
+- lineage depth analysis
+- isolated node detection
+- orchestration dependency analytics
+- replay-safe graph summaries
+
+Graph analytics flow:
+
+```text
+replay artifacts
+→ memory reconstruction
+→ knowledge graph reconstruction
+→ graph analytics engine
+→ deterministic graph metrics
+→ analytics exports
+```
+
+Supported graph analytics CLI commands:
+
+```bash
+./ai-orchestrate analyze-knowledge-graph runs/
+
+./ai-orchestrate export-graph-analytics \
+  runs/ \
+  report.md
+```
+
+Graph analytics features:
+
+- deterministic graph metric generation
+- replay-safe analytics reconstruction
+- deterministic node ranking
+- cycle-safe lineage analysis
+- markdown analytics reports
+- JSON analytics exports
+- bounded replay-safe graph analysis
+
+Large orchestration corpora are bounded deterministically:
+
+```text
+--max-records=<N>
+```
+
+Example:
+
+```bash
+./ai-orchestrate analyze-knowledge-graph \
+  runs/ \
+  --max-records=25
+```
+
+Graph analytics validation is included in:
+
+```bash
+make control-plane-tests
+```
+
 ---
 
 # 🧠 Runtime Philosophy
@@ -1088,7 +1180,9 @@ This enables:
 - deterministic orchestration memory
 - orchestration lineage reconstruction
 - replay-backed orchestration ancestry analysis
-- deterministic orchestration relationship graphs
+- deterministic orchestration relationship graphs- deterministic orchestration graph analytics
+- replay-safe orchestration dependency analysis
+- deterministic lineage-depth metrics
 
 All runtime artifacts are schema-versioned and replay-safe by default.
 
@@ -1168,7 +1262,8 @@ ai-dev-platform/
 │   │   ├── strategies/
 │   │   ├── heuristics/
 │   │   ├── memory/
-│   │   └── knowledge/
+│   │   ├── knowledge/
+│   │   └── graph_analytics/
 │   ├── tools/
 │   ├── dags/
 │   ├── scenarios/
@@ -1285,6 +1380,7 @@ make control-plane-strategy-tests
 make control-plane-heuristic-tests
 make control-plane-memory-tests
 make control-plane-knowledge-tests
+make control-plane-graph-analytics-tests
 ```
 
 Important:
@@ -1368,6 +1464,7 @@ AI_ADAPTER=my-agent ./ai run "test"
 - [x] Adaptive orchestration heuristics
 - [x] Orchestration memory + historical context
 - [x] Orchestration knowledge graph + lineage relationships
+- [x] Orchestration graph analytics
 - [ ] Parallel DAG execution
 - [ ] Orchestration API
 - [ ] Web UI

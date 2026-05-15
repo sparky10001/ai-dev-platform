@@ -58,6 +58,9 @@ from core.knowledge.lineage import build_knowledge_graph
 from core.knowledge.traversal import compute_lineage
 from core.knowledge.exporter import export_knowledge_graph_json
 from core.knowledge.exporter import export_knowledge_graph_markdown
+from core.graph_analytics.analyzer import analyze_knowledge_graph
+from core.graph_analytics.exporter import export_graph_analytics_json
+from core.graph_analytics.exporter import export_graph_analytics_markdown
 
 
 def _to_jsonable(obj: Any) -> Any:
@@ -111,10 +114,12 @@ def _usage() -> str:
         '  ai-orchestrate memory-timeline <runs_dir> [--pretty]\n'
         '  ai-orchestrate retrieve-memory <runs_dir> <query> [--pretty]\n'
         '  ai-orchestrate build-memory-corpus <runs_dir> [--pretty]\n'
-        '  ai-orchestrate export-memory-timeline <runs_dir> <output.(md|json)> [--pretty]'
-        '  ai-orchestrate build-knowledge-graph <runs_dir> [--pretty]\n'
-        '  ai-orchestrate compute-lineage <runs_dir> <node_id> [--pretty]\n'
-        '  ai-orchestrate export-knowledge-graph <runs_dir> <output.(md|json)> [--pretty]'
+        '  ai-orchestrate export-memory-timeline <runs_dir> <output.(md|json)> [--pretty]\n'
+        '  ai-orchestrate build-knowledge-graph <runs_dir> [--max-records=N] [--pretty]\n'
+        '  ai-orchestrate compute-lineage <runs_dir> <node_id> [--max-records=N] [--pretty]\n'
+        '  ai-orchestrate export-knowledge-graph <runs_dir> <output.(md|json)> [--max-records=N] [--pretty]\n'
+        '  ai-orchestrate analyze-knowledge-graph <runs_dir> [--max-records=N] [--pretty]\n'
+        '  ai-orchestrate export-graph-analytics <runs_dir> <output.(md|json)> [--max-records=N] [--pretty]'
     )
 
 
@@ -126,8 +131,8 @@ def _resolve_policy(name: str) -> dict[str, Any]:
     raise ValueError(f'unsupported policy: {name}')
 
 
-def _collect_memory_records_from_runs(runs_dir: str) -> list:
-    run_paths = sorted([p for p in Path(runs_dir).glob('run_*') if p.is_dir()])
+def _collect_memory_records_from_runs(runs_dir: str, max_records: int = 250) -> list:
+    run_paths = sorted([p for p in Path(runs_dir).glob('run_*') if p.is_dir()])[: max_records]
     records = []
     for rp in run_paths:
         try:
@@ -137,6 +142,21 @@ def _collect_memory_records_from_runs(runs_dir: str) -> list:
         except Exception:
             continue
     return records
+
+
+def _parse_max_records(args: list[str], default: int = 250) -> int:
+    max_records = default
+    for arg in args:
+        if arg.startswith('--max-records='):
+            raw = arg.split('=', 1)[1]
+            try:
+                value = int(raw)
+            except ValueError as exc:
+                raise ValueError('--max-records must be an integer') from exc
+            if value <= 0:
+                raise ValueError('--max-records must be > 0')
+            max_records = value
+    return max_records
 
 
 def _parse_flags(args: list[str], *, allow_trace: bool, allow_strategy: bool) -> tuple[list[str], bool, bool, str, str | None]:
@@ -360,7 +380,8 @@ def main(argv: list[str] | None = None) -> int:
                 return 2
             runs_dir = positional[0]
             try:
-                records = _collect_memory_records_from_runs(runs_dir)
+                max_records = _parse_max_records(raw)
+                records = _collect_memory_records_from_runs(runs_dir, max_records=max_records)
                 graph = build_knowledge_graph(records, graph_id='knowledge_graph_cli')
                 _emit(graph.model_dump(mode='json'), pretty=pretty)
             except Exception as exc:
@@ -377,7 +398,8 @@ def main(argv: list[str] | None = None) -> int:
             runs_dir = positional[0]
             node_id = positional[1]
             try:
-                records = _collect_memory_records_from_runs(runs_dir)
+                max_records = _parse_max_records(raw)
+                records = _collect_memory_records_from_runs(runs_dir, max_records=max_records)
                 graph = build_knowledge_graph(records, graph_id='knowledge_graph_cli')
                 lineage = compute_lineage(graph, node_id)
                 _emit(lineage.model_dump(mode='json'), pretty=pretty)
@@ -395,12 +417,54 @@ def main(argv: list[str] | None = None) -> int:
             runs_dir = positional[0]
             output_path = positional[1]
             try:
-                records = _collect_memory_records_from_runs(runs_dir)
+                max_records = _parse_max_records(raw)
+                records = _collect_memory_records_from_runs(runs_dir, max_records=max_records)
                 graph = build_knowledge_graph(records, graph_id='knowledge_graph_cli')
                 if output_path.lower().endswith('.json'):
                     written = export_knowledge_graph_json(graph, output_path)
                 else:
                     written = export_knowledge_graph_markdown(graph, output_path)
+                _emit({'status': 'success', 'path': written}, pretty=pretty)
+            except Exception as exc:
+                _emit({'status': 'error', 'error': str(exc)}, pretty=pretty)
+            return 0
+
+        if command == 'analyze-knowledge-graph':
+            pretty = '--pretty' in raw
+            positional = [arg for arg in raw if not arg.startswith('--')]
+            if len(positional) < 1:
+                print('error: analyze-knowledge-graph requires runs directory', file=sys.stderr)
+                print(_usage(), file=sys.stderr)
+                return 2
+            runs_dir = positional[0]
+            try:
+                max_records = _parse_max_records(raw)
+                records = _collect_memory_records_from_runs(runs_dir, max_records=max_records)
+                graph = build_knowledge_graph(records, graph_id='knowledge_graph_cli')
+                result = analyze_knowledge_graph(graph, analytics_id='graph_analytics_cli')
+                _emit(result.model_dump(mode='json'), pretty=pretty)
+            except Exception as exc:
+                _emit({'status': 'error', 'error': str(exc)}, pretty=pretty)
+            return 0
+
+        if command == 'export-graph-analytics':
+            pretty = '--pretty' in raw
+            positional = [arg for arg in raw if not arg.startswith('--')]
+            if len(positional) < 2:
+                print('error: export-graph-analytics requires runs directory and output path', file=sys.stderr)
+                print(_usage(), file=sys.stderr)
+                return 2
+            runs_dir = positional[0]
+            output_path = positional[1]
+            try:
+                max_records = _parse_max_records(raw)
+                records = _collect_memory_records_from_runs(runs_dir, max_records=max_records)
+                graph = build_knowledge_graph(records, graph_id='knowledge_graph_cli')
+                result = analyze_knowledge_graph(graph, analytics_id='graph_analytics_cli')
+                if output_path.lower().endswith('.json'):
+                    written = export_graph_analytics_json(result, output_path)
+                else:
+                    written = export_graph_analytics_markdown(result, output_path)
                 _emit({'status': 'success', 'path': written}, pretty=pretty)
             except Exception as exc:
                 _emit({'status': 'error', 'error': str(exc)}, pretty=pretty)

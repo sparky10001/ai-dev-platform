@@ -27,4 +27,4 @@ make control-plane-tests
 - Adaptive heuristics: `scripts/tests/control_plane_heuristic_tests.sh`
 - Memory/history: `scripts/tests/control_plane_memory_tests.sh`
 - Knowledge/lineage: `scripts/tests/control_plane_knowledge_tests.sh`
-
+- Orchestration Graph Analytics: `scripts/tests/control-plane-graph-analytics-tests` 
