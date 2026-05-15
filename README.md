@@ -13,6 +13,7 @@ replay-safe evaluation,
 and adaptive strategy benchmarking.
 Plus deterministic replay-backed orchestration recommendations.
 And deterministic orchestration memory + historical recall.
+Plus deterministic orchestration lineage and relationship reconstruction.
 
 ---
 
@@ -82,6 +83,7 @@ Swap the compute.
 - **Multi-Strategy Experiments** — deterministic orchestration branching and A/B strategy comparison
 - **Adaptive Heuristics** — deterministic replay-backed orchestration ranking and recommendation
 - **Orchestration Memory** — deterministic replay-backed historical context and orchestration recall
+- **Knowledge Graph + Lineage** — deterministic orchestration relationship graphs and lineage reconstruction
 - **Tool-Using Agent Runtime** — native OpenAI function-calling loop with dynamic tool execution
 - **Dataset Export Layer** — deterministic NDJSON corpora generation
 - **Schema Compatibility Contracts** — backward-compatible runtime guarantees
@@ -354,11 +356,18 @@ control-plane/
 │   │   ├── recommender.py
 │   │   ├── corpora.py
 │   │   └── exporter.py
-│   └── memory/
+│   ├── memory/
+│   │   ├── models.py
+│   │   ├── history.py
+│   │   ├── retrieval.py
+│   │   ├── timelines.py
+│   │   ├── corpora.py
+│   │   └── exporter.py
+│   └── knowledge/
 │       ├── models.py
-│       ├── history.py
-│       ├── retrieval.py
-│       ├── timelines.py
+│       ├── lineage.py
+│       ├── relationships.py
+│       ├── traversal.py
 │       ├── corpora.py
 │       └── exporter.py
 ├── tools/
@@ -409,6 +418,8 @@ multi-strategy experiments
 adaptive heuristics
   ↓
 orchestration memory
+  ↓
+knowledge graph + lineage
 ```
 
 The control-plane currently supports:
@@ -455,6 +466,13 @@ The control-plane currently supports:
 - orchestration memory corpora
 - orchestration historical retrieval
 - orchestration evolution tracking
+- orchestration lineage graphs
+- orchestration ancestry tracking
+- orchestration relationship indexing
+- orchestration dependency chains
+- replay-safe orchestration graph reconstruction
+- deterministic orchestration relationship traversal
+- orchestration relationship corpora
 
 ---
 
@@ -969,6 +987,79 @@ Memory validation is included in:
 make control-plane-tests
 ```
 
+# 🕸️ Knowledge Graph + Lineage
+
+Stage 4R introduces deterministic orchestration knowledge graphs and replay-backed lineage reconstruction.
+
+The knowledge layer models orchestration relationships, ancestry chains, and DAG evolution while preserving deterministic replay semantics.
+
+Important:
+
+```text
+This is NOT Neo4j.
+This is NOT graph AI.
+This is NOT autonomous reasoning.
+This is deterministic orchestration lineage reconstruction.
+```
+
+Knowledge graph capabilities:
+
+- orchestration lineage graphs
+- orchestration ancestry tracking
+- orchestration relationship indexing
+- orchestration dependency chains
+- DAG evolution tracking
+- orchestration relationship corpora
+- replay-safe orchestration graph reconstruction
+
+Relationship types:
+
+- `same_planner`
+- `same_policy`
+- `same_task`
+- `precedes`
+
+Knowledge graph flow:
+
+```text
+replay artifacts
+→ memory records
+→ knowledge graph reconstruction
+→ relationship indexing
+→ lineage traversal
+→ deterministic graph exports
+```
+
+Supported knowledge graph CLI commands:
+
+```bash
+./ai-orchestrate build-knowledge-graph runs/
+
+./ai-orchestrate compute-lineage \
+  runs/ \
+  <node_id>
+
+./ai-orchestrate export-knowledge-graph \
+  runs/ \
+  graph.md
+```
+
+Knowledge graph features:
+
+- deterministic graph reconstruction
+- replay-safe lineage traversal
+- orchestration relationship indexing
+- deterministic ancestry traversal
+- cycle-safe graph traversal
+- markdown graph reports
+- JSON graph exports
+
+Knowledge graph validation is included in:
+
+```bash
+make control-plane-tests
+```
+
 ---
 
 # 🧠 Runtime Philosophy
@@ -995,6 +1086,9 @@ This enables:
 - orchestration historical reconstruction
 - replay-backed orchestration recall
 - deterministic orchestration memory
+- orchestration lineage reconstruction
+- replay-backed orchestration ancestry analysis
+- deterministic orchestration relationship graphs
 
 All runtime artifacts are schema-versioned and replay-safe by default.
 
@@ -1073,7 +1167,8 @@ ai-dev-platform/
 │   │   ├── benchmarks/
 │   │   ├── strategies/
 │   │   ├── heuristics/
-│   │   └── memory/
+│   │   ├── memory/
+│   │   └── knowledge/
 │   ├── tools/
 │   ├── dags/
 │   ├── scenarios/
@@ -1189,6 +1284,7 @@ make control-plane-benchmark-tests
 make control-plane-strategy-tests
 make control-plane-heuristic-tests
 make control-plane-memory-tests
+make control-plane-knowledge-tests
 ```
 
 Important:
@@ -1271,7 +1367,7 @@ AI_ADAPTER=my-agent ./ai run "test"
 - [x] Multi-strategy orchestration experiments
 - [x] Adaptive orchestration heuristics
 - [x] Orchestration memory + historical context
-- [ ] Orchestration knowledge graph + lineage relationships
+- [x] Orchestration knowledge graph + lineage relationships
 - [ ] Parallel DAG execution
 - [ ] Orchestration API
 - [ ] Web UI

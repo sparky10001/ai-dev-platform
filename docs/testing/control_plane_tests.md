@@ -1,48 +1,30 @@
 # Control-Plane Tests (Stage 4)
 
-Stage 4 tests are additive and currently isolated from the Phase 3E validation gate.
+Stage 4 tests are additive and isolated from `make validate`.
 
-## Test Suites
-
-- Stage 4A DAG validation:
-  - `scripts/tests/control_plane_dag_tests.sh`
-- Stage 4B tool registry bridge:
-  - `scripts/tests/control_plane_tool_registry_tests.sh`
-- Stage 4C DAG executor scaffold:
-  - `scripts/tests/control_plane_dag_executor_tests.sh`
-- Stage 4D trace bridge:
-  - `scripts/tests/control_plane_trace_bridge_tests.sh`
-- Stage 4F deterministic planner scaffold:
-  - `scripts/tests/control_plane_planner_tests.sh`
-- Stage 4G planner/executor orchestration:
-  - `scripts/tests/control_plane_orchestrator_tests.sh`
-- Stage 4H control-plane CLI:
-  - `scripts/tests/control_plane_cli_tests.sh`
-- Stage 4I deterministic policy layer:
-  - `scripts/tests/control_plane_policy_tests.sh`
-- Stage 4J control-plane scenario tests:
-  - `scripts/tests/control_plane_scenario_tests.sh`
-- Stage 4K orchestration replay + introspection:
-  - `scripts/tests/control_plane_replay_tests.sh`
-- Stage 4L orchestration evaluation + comparison:
-  - `scripts/tests/control_plane_eval_tests.sh`
-- Stage 4M orchestration datasets + experiment tracking:
-  - `scripts/tests/control_plane_experiment_tests.sh`
-- Stage 4N policy/planner benchmark suites:
-  - `scripts/tests/control_plane_benchmark_tests.sh`
-- Stage 4O multi-strategy orchestration experiments:
-  - `scripts/tests/control_plane_strategy_tests.sh`
-- Stage 4P adaptive orchestration heuristics:
-  - `scripts/tests/control_plane_heuristic_tests.sh`
-- Stage 4Q orchestration memory + historical context:
-  - `scripts/tests/control_plane_memory_tests.sh`
-
-## Convenience Command
-
-Run all control-plane tests:
+## Command
 
 ```bash
 make control-plane-tests
 ```
 
-Note: these tests are intentionally not part of `make validate` yet.
+## Suites
+
+- DAG validation: `scripts/tests/control_plane_dag_tests.sh`
+- Tool registry: `scripts/tests/control_plane_tool_registry_tests.sh`
+- DAG executor: `scripts/tests/control_plane_dag_executor_tests.sh`
+- Trace bridge: `scripts/tests/control_plane_trace_bridge_tests.sh`
+- Planner: `scripts/tests/control_plane_planner_tests.sh`
+- Orchestrator: `scripts/tests/control_plane_orchestrator_tests.sh`
+- CLI: `scripts/tests/control_plane_cli_tests.sh`
+- Policy layer: `scripts/tests/control_plane_policy_tests.sh`
+- Scenario tests: `scripts/tests/control_plane_scenario_tests.sh`
+- Replay/introspection: `scripts/tests/control_plane_replay_tests.sh`
+- Eval/comparison: `scripts/tests/control_plane_eval_tests.sh`
+- Experiments/datasets: `scripts/tests/control_plane_experiment_tests.sh`
+- Benchmarks: `scripts/tests/control_plane_benchmark_tests.sh`
+- Multi-strategy: `scripts/tests/control_plane_strategy_tests.sh`
+- Adaptive heuristics: `scripts/tests/control_plane_heuristic_tests.sh`
+- Memory/history: `scripts/tests/control_plane_memory_tests.sh`
+- Knowledge/lineage: `scripts/tests/control_plane_knowledge_tests.sh`
+

@@ -54,6 +54,10 @@ from core.memory.corpora import build_memory_corpus
 from core.memory.exporter import export_memory_timeline_json
 from core.memory.exporter import export_memory_timeline_markdown
 from core.memory.exporter import export_memory_corpus_json
+from core.knowledge.lineage import build_knowledge_graph
+from core.knowledge.traversal import compute_lineage
+from core.knowledge.exporter import export_knowledge_graph_json
+from core.knowledge.exporter import export_knowledge_graph_markdown
 
 
 def _to_jsonable(obj: Any) -> Any:
@@ -108,6 +112,9 @@ def _usage() -> str:
         '  ai-orchestrate retrieve-memory <runs_dir> <query> [--pretty]\n'
         '  ai-orchestrate build-memory-corpus <runs_dir> [--pretty]\n'
         '  ai-orchestrate export-memory-timeline <runs_dir> <output.(md|json)> [--pretty]'
+        '  ai-orchestrate build-knowledge-graph <runs_dir> [--pretty]\n'
+        '  ai-orchestrate compute-lineage <runs_dir> <node_id> [--pretty]\n'
+        '  ai-orchestrate export-knowledge-graph <runs_dir> <output.(md|json)> [--pretty]'
     )
 
 
@@ -117,6 +124,19 @@ def _resolve_policy(name: str) -> dict[str, Any]:
     if name == 'safe-readonly':
         return SAFE_READONLY_POLICY.model_dump(mode='json')
     raise ValueError(f'unsupported policy: {name}')
+
+
+def _collect_memory_records_from_runs(runs_dir: str) -> list:
+    run_paths = sorted([p for p in Path(runs_dir).glob('run_*') if p.is_dir()])
+    records = []
+    for rp in run_paths:
+        try:
+            replay = load_orchestration_trace(rp)
+            ev = evaluate_replay(replay)
+            records.append(replay_to_memory_record(replay, ev))
+        except Exception:
+            continue
+    return records
 
 
 def _parse_flags(args: list[str], *, allow_trace: bool, allow_strategy: bool) -> tuple[list[str], bool, bool, str, str | None]:
@@ -326,6 +346,61 @@ def main(argv: list[str] | None = None) -> int:
                     written = export_memory_timeline_json(timeline, output_path)
                 else:
                     written = export_memory_timeline_markdown(timeline, output_path)
+                _emit({'status': 'success', 'path': written}, pretty=pretty)
+            except Exception as exc:
+                _emit({'status': 'error', 'error': str(exc)}, pretty=pretty)
+            return 0
+
+        if command == 'build-knowledge-graph':
+            pretty = '--pretty' in raw
+            positional = [arg for arg in raw if not arg.startswith('--')]
+            if len(positional) < 1:
+                print('error: build-knowledge-graph requires runs directory', file=sys.stderr)
+                print(_usage(), file=sys.stderr)
+                return 2
+            runs_dir = positional[0]
+            try:
+                records = _collect_memory_records_from_runs(runs_dir)
+                graph = build_knowledge_graph(records, graph_id='knowledge_graph_cli')
+                _emit(graph.model_dump(mode='json'), pretty=pretty)
+            except Exception as exc:
+                _emit({'status': 'error', 'error': str(exc)}, pretty=pretty)
+            return 0
+
+        if command == 'compute-lineage':
+            pretty = '--pretty' in raw
+            positional = [arg for arg in raw if not arg.startswith('--')]
+            if len(positional) < 2:
+                print('error: compute-lineage requires runs directory and node_id', file=sys.stderr)
+                print(_usage(), file=sys.stderr)
+                return 2
+            runs_dir = positional[0]
+            node_id = positional[1]
+            try:
+                records = _collect_memory_records_from_runs(runs_dir)
+                graph = build_knowledge_graph(records, graph_id='knowledge_graph_cli')
+                lineage = compute_lineage(graph, node_id)
+                _emit(lineage.model_dump(mode='json'), pretty=pretty)
+            except Exception as exc:
+                _emit({'status': 'error', 'error': str(exc)}, pretty=pretty)
+            return 0
+
+        if command == 'export-knowledge-graph':
+            pretty = '--pretty' in raw
+            positional = [arg for arg in raw if not arg.startswith('--')]
+            if len(positional) < 2:
+                print('error: export-knowledge-graph requires runs directory and output path', file=sys.stderr)
+                print(_usage(), file=sys.stderr)
+                return 2
+            runs_dir = positional[0]
+            output_path = positional[1]
+            try:
+                records = _collect_memory_records_from_runs(runs_dir)
+                graph = build_knowledge_graph(records, graph_id='knowledge_graph_cli')
+                if output_path.lower().endswith('.json'):
+                    written = export_knowledge_graph_json(graph, output_path)
+                else:
+                    written = export_knowledge_graph_markdown(graph, output_path)
                 _emit({'status': 'success', 'path': written}, pretty=pretty)
             except Exception as exc:
                 _emit({'status': 'error', 'error': str(exc)}, pretty=pretty)

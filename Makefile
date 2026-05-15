@@ -299,6 +299,9 @@ control-plane-heuristic-tests:
 control-plane-memory-tests:
 	@./scripts/tests/control_plane_memory_tests.sh
 
+control-plane-knowledge-tests:
+	@./scripts/tests/control_plane_knowledge_tests.sh
+
 control-plane-tests:
 	@$(MAKE) control-plane-dag-tests --no-print-directory
 	@$(MAKE) control-plane-tool-tests --no-print-directory
@@ -316,9 +319,8 @@ control-plane-tests:
 	@$(MAKE) control-plane-strategy-tests --no-print-directory
 	@$(MAKE) control-plane-heuristic-tests --no-print-directory
 	@$(MAKE) control-plane-memory-tests --no-print-directory
-	@$(MAKE) control-plane-heuristic-tests --no-print-directory
-	@$(MAKE) control-plane-memory-tests --no-print-directory
-
+	@$(MAKE) control-plane-knowledge-tests --no-print-directory
+	
 ###################################################################
 # Validation Ladder (HARDENED)
 ###################################################################
