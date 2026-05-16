@@ -400,6 +400,36 @@ It serves as a regression guard for:
 
 ---
 
+## runtime_run_lifecycle_tests.sh
+
+Validates:
+
+* lifecycle initialization delegation
+* session_start lifecycle transition orchestration
+* agent_output lifecycle event orchestration
+* terminal session_end sequencing
+* failure lifecycle handling
+* deterministic response envelope construction
+* lifecycle contract stability
+
+Expected result:
+
+```text
+6 passed / 0 failed
+```
+
+This suite validates the Phase 3.5 Step 2 lifecycle extraction boundary.
+
+It serves as a regression guard for:
+
+* lifecycle transition sequencing
+* session_start/session_end ordering
+* failure lifecycle behavior
+* response envelope construction
+* lifecycle orchestration refactors
+
+---
+
 # Running Tests
 
 Run all runtime suites individually:
@@ -421,6 +451,7 @@ Run all runtime suites individually:
 ./scripts/tests/runtime_contract_tests.sh
 ./scripts/tests/runtime_snapshot_tests.sh
 ./scripts/tests/runtime_adapter_gateway_tests.sh
+./scripts/tests/runtime_run_lifecycle_tests.sh
 ```
 
 Run the full runtime ladder:
@@ -439,22 +470,23 @@ make validate
 
 # Validation Coverage Matrix
 
-| Capability                 | Covered By                       |
-| -------------------------- | -------------------------------- |
-| response contracts         | runtime_tests.sh                 |
-| replay safety              | replayability_smoke_test.sh      |
-| lifecycle ordering         | event_ordering_tests.sh          |
-| crash durability           | failure_tests.sh                 |
-| NDJSON integrity           | ndjson_integrity_tests.sh        |
-| replay reconstruction      | resume_from_trace_tests.sh       |
-| loader correctness         | loader_replay_tests.sh           |
-| evaluation correctness     | runtime_eval_tests.sh            |
-| registry correctness       | runtime_registry_tests.sh        |
-| dataset determinism        | runtime_dataset_tests.sh         |
-| contract enforcement       | runtime_contract_tests.sh        |
-| isolation guarantees       | parallel_run_isolation_test.sh   |
-| runtime snapshot stability | runtime_snapshot_tests.sh        |
-| adapter gateway boundary   | runtime_adapter_gateway_tests.sh |
+| Capability                       | Covered By                       |
+| -------------------------------- | -------------------------------- |
+| response contracts               | runtime_tests.sh                 |
+| replay safety                    | replayability_smoke_test.sh      |
+| lifecycle ordering               | event_ordering_tests.sh          |
+| crash durability                 | failure_tests.sh                 |
+| NDJSON integrity                 | ndjson_integrity_tests.sh        |
+| replay reconstruction            | resume_from_trace_tests.sh       |
+| loader correctness               | loader_replay_tests.sh           |
+| evaluation correctness           | runtime_eval_tests.sh            |
+| registry correctness             | runtime_registry_tests.sh        |
+| dataset determinism              | runtime_dataset_tests.sh         |
+| contract enforcement             | runtime_contract_tests.sh        |
+| isolation guarantees             | parallel_run_isolation_test.sh   |
+| runtime snapshot stability       | runtime_snapshot_tests.sh        |
+| adapter gateway boundary         | runtime_adapter_gateway_tests.sh |
+| lifecycle orchestration boundary | runtime_run_lifecycle_tests.sh   |
 
 ---
 
@@ -478,6 +510,7 @@ No schema-breaking changes should be merged without:
 * contract compatibility validation
 * snapshot regression validation
 * adapter gateway validation
+* lifecycle orchestration validation
 
 ---
 
@@ -494,6 +527,7 @@ The runtime guarantees:
 * filesystem-native querying
 * deterministic adapter response normalization
 * snapshot-stable runtime structure
+* deterministic lifecycle transition orchestration
 
 Tests are designed to continuously validate these guarantees.
 
@@ -516,6 +550,7 @@ Preferred categories:
 * replay-derived evaluation correctness
 * snapshot regression stability
 * adapter gateway boundary behavior
+* lifecycle orchestration boundary behavior
 
 Avoid:
 
@@ -658,6 +693,18 @@ Likely causes:
 
 ---
 
+## Lifecycle orchestration failure
+
+Likely causes:
+
+* lifecycle ordering drift
+* missing session_start/session_end
+* response envelope regression
+* failure transition regression
+* lifecycle extraction drift
+
+---
+
 # Verification Requirements
 
 Before completing runtime changes:
@@ -673,6 +720,7 @@ Before completing runtime changes:
 * verify contract compatibility
 * verify snapshot stability
 * verify adapter gateway behavior
+* verify lifecycle orchestration behavior
 
 No runtime refactor should bypass the validation layer.
 
@@ -689,6 +737,7 @@ The runtime prioritizes:
 * contract stability
 * crash survivability
 * adapter boundary correctness
+* lifecycle transition correctness
 * snapshot-stable behavior
 
 over simple output assertions.

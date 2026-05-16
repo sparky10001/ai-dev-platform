@@ -22,8 +22,14 @@ import sys
 
 from pathlib import Path
 
-from runtime.run import create_run
-from runtime.run import finalize_run
+from runtime.run_lifecycle import (
+    build_response,
+    initialize_run,
+    start_run,
+    record_agent_output,
+    finalize_run as finalize_lifecycle_run,
+    fail_run as lifecycle_fail_run,
+)
 
 from runtime.events import log_event
 
@@ -71,16 +77,14 @@ def build_error(
     run_path: str | None = None,
 ) -> ResponseModel:
 
-    return validate_response({
-        "status": "error",
-        "output": message,
-        "meta": {
-            "adapter": "engine.py",
-            "error": True,
-            "run_id": run_id or "no_run",
-            "run_path": run_path or "",
-        }
-    })
+    return build_response(
+        message,
+        status="error",
+        run_id=run_id,
+        run_path=run_path,
+        adapter="engine.py",
+        error=True,
+    )
 
 # ================================================================
 # 🏁 Failure Handling
@@ -92,41 +96,7 @@ def fail_run(
     exit_code: int = 1,
 ):
 
-    result = build_error(
-        message,
-        run_id=run["id"],
-        run_path=run["run_path"],
-    )
-
-    try:
-
-        log_event(
-            run,
-            "agent_output",
-            {
-                "status": "error",
-                "output": message,
-            }
-        )
-
-        log_event(
-            run,
-            "session_end",
-            {
-                "status": "error",
-            }
-        )
-
-    except Exception:
-        pass
-
-    try:
-        finalize_run(
-            run,
-            result.model_dump(mode="json")
-        )
-    except Exception:
-        pass
+    result = lifecycle_fail_run(run, message)
 
     print(
         result.model_dump_json(),
@@ -187,7 +157,7 @@ def main():
     # 🧾 Create Run
     # ============================================================
 
-    run = create_run(
+    run = initialize_run(
         task=user_input,
         command=command,
         model=model,
@@ -213,14 +183,11 @@ def main():
     # 📡 Session Start
     # ============================================================
 
-    log_event(
-        run,
-        "session_start",
-        {
-            "command": command,
-            "input": user_input,
-            "model": model,
-        }
+    start_run(
+        run=run,
+        command=command,
+        user_input=user_input,
+        model=model,
     )
 
     # ============================================================
@@ -306,36 +273,22 @@ def main():
     # 📦 Final Agent Output Event
     # ============================================================
 
-    log_event(
-        run,
-        "agent_output",
-        {
-            "status": validated_response.status,
-            "output": validated_response.output,
-        }
-    )
-
-    # ============================================================
-    # 🏁 Session End
-    # ============================================================
-
-    log_event(
-        run,
-        "session_end",
-        {
-            "status": validated_response.status,
-        }
+    record_agent_output(
+        run=run,
+        status=validated_response.status,
+        output=validated_response.output,
     )
 
     # ============================================================
     # 💾 Finalize Run
     # ============================================================
 
-    finalize_run(
-        run,
-        validated_response.model_dump(
+    finalize_lifecycle_run(
+        run=run,
+        status=validated_response.status,
+        result=validated_response.model_dump(
             mode="json"
-        )
+        ),
     )
 
     # ============================================================
