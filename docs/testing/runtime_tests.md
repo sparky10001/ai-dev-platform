@@ -27,6 +27,8 @@ The test system validates:
 * backward compatibility guarantees
 * snapshot regression stability
 * adapter gateway boundary correctness
+* lifecycle orchestration boundary correctness
+* trace pipeline correctness
 
 ---
 
@@ -42,6 +44,10 @@ schemas
 validator
   ↓
 adapter gateway
+  ↓
+run lifecycle
+  ↓
+trace pipeline
   ↓
 runtime engine
   ↓
@@ -317,6 +323,8 @@ Expected result:
 
 ---
 
+# Phase 3.5 Runtime Refactor Guard Suites
+
 ## runtime_snapshot_tests.sh
 
 Validates:
@@ -430,6 +438,50 @@ It serves as a regression guard for:
 
 ---
 
+## runtime_trace_pipeline_tests.sh
+
+Validates:
+
+* trace event append normalization
+* schema-validated event persistence
+* NDJSON append integrity
+* replay-safe trace ingestion
+* strict/tolerant trace handling
+* trace file validation
+* lifecycle ordering validation
+* mixed run_id detection
+* malformed NDJSON rejection in strict mode
+* replay reconstruction guarantees
+
+Expected result:
+
+```text
+unit test pass / 0 failed
+```
+
+This suite validates the Phase 3.5 Step 3 trace pipeline extraction boundary.
+
+It serves as a regression guard for:
+
+* append-only NDJSON persistence
+* event normalization and validation
+* replay loading behavior
+* strict trace validation behavior
+* tolerant runtime ingestion behavior
+* lifecycle ordering checks
+* trace corruption detection
+* trace pipeline refactors
+
+Default behavior remains tolerant for runtime compatibility.
+
+Strict validation is opt-in via:
+
+```bash
+RUNTIME_TRACE_STRICT=1
+```
+
+---
+
 # Running Tests
 
 Run all runtime suites individually:
@@ -452,6 +504,7 @@ Run all runtime suites individually:
 ./scripts/tests/runtime_snapshot_tests.sh
 ./scripts/tests/runtime_adapter_gateway_tests.sh
 ./scripts/tests/runtime_run_lifecycle_tests.sh
+./scripts/tests/runtime_trace_pipeline_tests.sh
 ```
 
 Run the full runtime ladder:
@@ -487,6 +540,7 @@ make validate
 | runtime snapshot stability       | runtime_snapshot_tests.sh        |
 | adapter gateway boundary         | runtime_adapter_gateway_tests.sh |
 | lifecycle orchestration boundary | runtime_run_lifecycle_tests.sh   |
+| trace pipeline boundary          | runtime_trace_pipeline_tests.sh  |
 
 ---
 
@@ -511,6 +565,7 @@ No schema-breaking changes should be merged without:
 * snapshot regression validation
 * adapter gateway validation
 * lifecycle orchestration validation
+* trace pipeline validation
 
 ---
 
@@ -528,6 +583,7 @@ The runtime guarantees:
 * deterministic adapter response normalization
 * snapshot-stable runtime structure
 * deterministic lifecycle transition orchestration
+* validated trace pipeline behavior
 
 Tests are designed to continuously validate these guarantees.
 
@@ -551,6 +607,7 @@ Preferred categories:
 * snapshot regression stability
 * adapter gateway boundary behavior
 * lifecycle orchestration boundary behavior
+* trace pipeline boundary behavior
 
 Avoid:
 
@@ -597,6 +654,7 @@ Validation is mandatory for:
 * evals
 * registry results
 * replay loading
+* trace pipeline persistence
 
 No runtime component may bypass validation.
 
@@ -612,6 +670,7 @@ Likely causes:
 * failure path regression
 * trace truncation
 * interrupted persistence
+* lifecycle orchestration regression
 
 ---
 
@@ -623,6 +682,7 @@ Likely causes:
 * bypassed validation layer
 * malformed adapter output
 * contract regression
+* trace pipeline validation drift
 
 ---
 
@@ -634,6 +694,7 @@ Likely causes:
 * missing lifecycle events
 * event ordering corruption
 * invalid schema migration
+* trace pipeline ingestion regression
 
 ---
 
@@ -705,6 +766,20 @@ Likely causes:
 
 ---
 
+## Trace pipeline failure
+
+Likely causes:
+
+* malformed NDJSON append behavior
+* event normalization drift
+* strict/tolerant behavior regression
+* schema validation bypass
+* mixed run_id trace corruption
+* lifecycle validation regression
+* replay loading drift
+
+---
+
 # Verification Requirements
 
 Before completing runtime changes:
@@ -721,6 +796,7 @@ Before completing runtime changes:
 * verify snapshot stability
 * verify adapter gateway behavior
 * verify lifecycle orchestration behavior
+* verify trace pipeline behavior
 
 No runtime refactor should bypass the validation layer.
 
@@ -738,6 +814,7 @@ The runtime prioritizes:
 * crash survivability
 * adapter boundary correctness
 * lifecycle transition correctness
+* trace pipeline correctness
 * snapshot-stable behavior
 
 over simple output assertions.

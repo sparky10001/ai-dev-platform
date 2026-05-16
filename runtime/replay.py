@@ -17,14 +17,11 @@
 
 from __future__ import annotations
 
-import json
-
 from pathlib import Path
 from typing import Any
+import re
 
-from runtime.validator import (
-    validate_event,
-)
+from runtime.trace_pipeline import load_trace as load_trace_events
 
 from runtime.schemas import (
     TraceEvent,
@@ -89,41 +86,19 @@ def load_trace(
 
     path = Path(trace_path)
 
-    events: list[TraceEvent] = []
-
-    with open(
-        path,
-        "r",
-        encoding="utf-8"
-    ) as f:
-
-        for lineno, raw in enumerate(f, start=1):
-
-            line = raw.strip()
-
-            if not line:
-                continue
-
-            try:
-
-                payload = json.loads(line)
-
-                validated = validate_event(
-                    payload
-                )
-
-                events.append(validated)
-
-            except Exception as e:
-
-                if strict:
-                    raise RuntimeError(
-                        f"Replay failed at "
-                        f"line {lineno}: {e}"
-                    ) from e
-
-                # tolerate malformed lines
-                continue
+    try:
+        events = load_trace_events(path, strict=strict)
+    except Exception as e:
+        if strict:
+            msg = str(e)
+            line_no = "1"
+            matches = re.findall(r":(\d+):", msg)
+            if matches:
+                line_no = matches[0]
+            raise RuntimeError(
+                f"Replay failed at line {line_no}: {e}"
+            ) from e
+        return []
 
     return events
 
