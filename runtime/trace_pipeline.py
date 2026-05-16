@@ -8,11 +8,13 @@ from pathlib import Path
 from typing import Any, Iterator
 
 from runtime.errors import (
+    EventLedgerError,
     LifecycleOrderingError,
     NDJSONIntegrityError,
     ReplayCorruptionError,
     TraceValidationError,
 )
+from runtime.event_ledger import append_event as append_ledger_event
 from runtime.validator import validate_event
 
 
@@ -20,6 +22,18 @@ def _strict_enabled(strict: bool | None = None) -> bool:
     if strict is not None:
         return strict
     return os.getenv("RUNTIME_TRACE_STRICT") == "1"
+
+
+def _ledger_strict_enabled() -> bool:
+    return os.getenv("RUNTIME_LEDGER_STRICT") == "1"
+
+
+def _mirror_event_to_ledger(run: dict[str, Any], event_payload: dict[str, Any]) -> None:
+    try:
+        append_ledger_event(run, event_payload)
+    except Exception as exc:
+        if _ledger_strict_enabled():
+            raise EventLedgerError(f"Ledger dual-write failed: {exc}") from exc
 
 
 def normalize_trace_event(payload: dict[str, Any]) -> dict[str, Any]:
@@ -50,10 +64,14 @@ def append_trace_event(
     validated = validate_trace_event(payload)
     trace_path = run["trace_path"]
 
+    validated_payload = validated.model_dump(mode="json")
+
     with open(trace_path, "a", encoding="utf-8") as f:
-        f.write(json.dumps(validated.model_dump(mode="json")) + "\n")
+        f.write(json.dumps(validated_payload) + "\n")
         f.flush()
         os.fsync(f.fileno())
+
+    _mirror_event_to_ledger(run, validated_payload)
 
 
 def iter_trace_events(
@@ -103,10 +121,12 @@ def append_validated_trace_event(
     payload: dict[str, Any],
 ) -> None:
     validated = validate_trace_event(normalize_trace_event(payload))
+    validated_payload = validated.model_dump(mode="json")
     path = Path(trace_path)
     with open(path, "a", encoding="utf-8") as f:
-        json.dump(validated.model_dump(mode="json"), f)
+        json.dump(validated_payload, f)
         f.write("\n")
+    _mirror_event_to_ledger({"trace_path": str(path)}, validated_payload)
 
 
 def trace_diagnostic(index: int, exc: Exception) -> dict[str, Any]:

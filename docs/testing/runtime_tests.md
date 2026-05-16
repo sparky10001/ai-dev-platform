@@ -488,6 +488,22 @@ RUNTIME_TRACE_STRICT=1
 ```
 
 ---
+## runtime_event_ledger_tests.sh
+
+Validates:
+
+* additive ledger writes
+* ledger NDJSON integrity
+* ledger validation
+* trace/ledger dual-write parity
+* strict ledger checks
+
+Expected result:
+
+unit test pass / 0 failed
+
+This suite validates Phase 3.6A additive EventLedger dual-write scaffolding.
+
 
 # Running Tests
 
@@ -512,6 +528,7 @@ Run all runtime suites individually:
 ./scripts/tests/runtime_adapter_gateway_tests.sh
 ./scripts/tests/runtime_run_lifecycle_tests.sh
 ./scripts/tests/runtime_trace_pipeline_tests.sh
+./scripts/tests/runtime_event_ledger_tests.sh
 ```
 
 Run the full runtime ladder:
@@ -548,6 +565,7 @@ make validate
 | adapter gateway boundary         | runtime_adapter_gateway_tests.sh |
 | lifecycle orchestration boundary | runtime_run_lifecycle_tests.sh   |
 | trace pipeline boundary          | runtime_trace_pipeline_tests.sh  |
+| event ledger boundary            | runtime_event_ledger_tests.sh    |
 
 ---
 
@@ -573,6 +591,7 @@ No schema-breaking changes should be merged without:
 * adapter gateway validation
 * lifecycle orchestration validation
 * trace pipeline validation
+* event ledger dual-write validation
 
 ---
 
@@ -591,6 +610,7 @@ The runtime guarantees:
 * snapshot-stable runtime structure
 * deterministic lifecycle transition orchestration
 * validated trace pipeline behavior
+* additive event ledger dual-write parity
 
 Tests are designed to continuously validate these guarantees.
 
@@ -787,6 +807,16 @@ Likely causes:
 
 ---
 
+## EventLedger dual-write failure
+
+Likely causes:
+
+* ledger append write error
+* ledger strict-mode regression
+* trace/ledger parity drift
+
+---
+
 # Verification Requirements
 
 Before completing runtime changes:
@@ -804,6 +834,7 @@ Before completing runtime changes:
 * verify adapter gateway behavior
 * verify lifecycle orchestration behavior
 * verify trace pipeline behavior
+* verify event ledger dual-write behavior
 
 No runtime refactor should bypass the validation layer.
 

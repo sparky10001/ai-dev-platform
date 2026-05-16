@@ -10,3 +10,6 @@ class LifecycleOrderingError(Exception):
 
 class NDJSONIntegrityError(TraceValidationError):
     pass
+
+class EventLedgerError(Exception):
+    pass

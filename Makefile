@@ -244,6 +244,8 @@ runtime-run-lifecycle-tests:
 	@AI_ADAPTER=agent ./scripts/tests/runtime_run_lifecycle_tests.sh
 runtime-trace-pipeline-tests:
 	@AI_ADAPTER=agent ./scripts/tests/runtime_trace_pipeline_tests.sh
+runtime-event-ledger-tests:
+	@AI_ADAPTER=agent ./scripts/tests/runtime_event_ledger_tests.sh
 
 
 runtime-test-phase3:
@@ -256,6 +258,7 @@ runtime-test-phase3:
 	@AI_ADAPTER=agent ./scripts/tests/runtime_contract_tests.sh
 	@AI_ADAPTER=agent ./scripts/tests/runtime_snapshot_tests.sh
 	@AI_ADAPTER=agent ./scripts/tests/runtime_trace_pipeline_tests.sh
+	@$(MAKE) runtime-event-ledger-tests --no-print-directory
 	@$(MAKE) runtime-adapter-gateway-tests --no-print-directory
 	@$(MAKE) runtime-run-lifecycle-tests --no-print-directory
 
@@ -445,3 +448,5 @@ help:
 	@echo "  make runtime-tests    # Run full runtime test ladder"
 	@echo "  make status"
 	@echo ""
+
+.PHONY: runtime-event-ledger-tests
