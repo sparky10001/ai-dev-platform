@@ -8,6 +8,7 @@ from pathlib import Path
 
 from runtime.errors import LifecycleOrderingError
 from runtime.errors import NDJSONIntegrityError
+from runtime.errors import ReplayCorruptionError
 from runtime.errors import TraceValidationError
 from runtime.trace_pipeline import append_trace_event
 from runtime.trace_pipeline import iter_trace_events
@@ -75,11 +76,11 @@ class TracePipelineTests(unittest.TestCase):
             events = load_trace(tp, strict=False)
             self.assertEqual(len(events), 1)
 
-    def test_ingest_trace_events_preserves_valid_events_and_skips_invalid(self):
+    def test_ingest_trace_events_preserves_valid_events_and_reports_invalid(self):
         with tempfile.TemporaryDirectory() as td:
             tp = Path(td) / "trace.jsonl"
 
-            ingest_trace_events(
+            diagnostics = ingest_trace_events(
                 tp,
                 [
                     {
@@ -105,6 +106,7 @@ class TracePipelineTests(unittest.TestCase):
                         "data": {"status": "done"},
                     },
                 ],
+                strict=False,
             )
 
             self.assertTrue(tp.exists(), "ingest_trace_events should persist valid trace events")
@@ -112,7 +114,29 @@ class TracePipelineTests(unittest.TestCase):
             self.assertEqual(
                 [event.event for event in events],
                 ["session_start", "agent_output", "session_end"],
-            )            
+            )
+            self.assertEqual(len(diagnostics), 1)
+            self.assertEqual(diagnostics[0]["index"], 1)
+            self.assertEqual(diagnostics[0]["error_type"], "ValueError")
+
+    def test_ingest_trace_events_strict_raises_typed_error(self):
+        with tempfile.TemporaryDirectory() as td:
+            tp = Path(td) / "trace.jsonl"
+            with self.assertRaises(ReplayCorruptionError):
+                ingest_trace_events(
+                    tp,
+                    [
+                        {
+                            "schema_version": 1,
+                            "run_id": "run_test",
+                            "event": "session_start",
+                            "timestamp": 1.0,
+                            "data": {"command": "run"},
+                        },
+                        {"bad": "missing event"},
+                    ],
+                    strict=True,
+                )
 
     def test_env_strict_toggle(self):
         with tempfile.TemporaryDirectory() as td:

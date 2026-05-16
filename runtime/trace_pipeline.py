@@ -109,17 +109,38 @@ def append_validated_trace_event(
         f.write("\n")
 
 
+def trace_diagnostic(index: int, exc: Exception) -> dict[str, Any]:
+    return {
+        "index": int(index),
+        "error_type": type(exc).__name__,
+        "message": str(exc),
+    }
+
+
 def ingest_trace_events(
     trace_path: str | Path,
     events: list[dict[str, Any]] | None,
-) -> None:
+    *,
+    strict: bool | None = None,
+) -> list[dict[str, Any]]:
+    diagnostics: list[dict[str, Any]] = []
+    strict_mode = _strict_enabled(strict)
     if not isinstance(events, list):
-        return
-    for evt in events:
+        return diagnostics
+    for index, evt in enumerate(events):
         try:
             append_validated_trace_event(trace_path, evt)
-        except Exception:
+        except Exception as exc:
+            diagnostics.append(trace_diagnostic(index, exc))
+            if strict_mode:
+                if isinstance(exc, (NDJSONIntegrityError, ReplayCorruptionError, TraceValidationError, LifecycleOrderingError)):
+                    raise
+                raise ReplayCorruptionError(
+                    f"Invalid ingested trace fragment at index {index}: {exc}"
+                ) from exc
             continue
+    return diagnostics
+
 def validate_trace_file(
     path: str | Path,
     *,

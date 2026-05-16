@@ -474,6 +474,9 @@ It serves as a regression guard for:
 
 Default behavior remains tolerant for runtime compatibility.
 
+Tolerant ingestion now returns deterministic corruption diagnostics for invalid ingested fragments.
+Strict ingestion raises typed trace errors for invalid fragments.
+
 Strict validation is opt-in via:
 
 ```bash
@@ -828,6 +831,3 @@ The runtime test system exists to guarantee that every run remains:
 * deterministic
 * backward compatible
 * contract validated
-
-```
-```
