@@ -18,7 +18,7 @@
         profile-fast profile-agent profile-offline profile-local profile \
         litellm-fast litellm-code litellm-claude \
         health status validate \
-        runtime-tests runtime-test-core runtime-test-phase3 runtime-test-all runtime-snapshot-tests\
+        runtime-tests runtime-test-core runtime-test-phase3 runtime-test-all runtime-snapshot-tests runtime-adapter-gateway-tests \
         control-plane-dag-tests control-plane-tool-tests control-plane-executor-tests control-plane-trace-tests control-plane-planner-tests control-plane-orchestrator-tests control-plane-cli-tests control-plane-policy-tests control-plane-scenario-tests control-plane-replay-tests control-plane-eval-tests control-plane-experiment-tests control-plane-benchmark-tests control-plane-strategy-tests control-plane-heuristic-tests control-plane-memory-tests control-plane-tests \
         ai-run ai-fix ai-explain ai-refactor ai-query \
         ctx-agent-sim ctx-arb ctx-ai-stack \
@@ -236,6 +236,9 @@ runtime-test-core:
 	@AI_ADAPTER=agent ./scripts/tests/parallel_run_isolation_test.sh
 	@AI_ADAPTER=agent ./scripts/tests/resume_from_trace_tests.sh
 
+runtime-adapter-gateway-tests:
+	@AI_ADAPTER=agent ./scripts/tests/runtime_adapter_gateway_tests.sh
+
 runtime-test-phase3:
 	@echo ""
 	@echo "🧪 Runtime Phase 3 tests"
@@ -245,6 +248,7 @@ runtime-test-phase3:
 	@AI_ADAPTER=agent ./scripts/tests/runtime_dataset_tests.sh
 	@AI_ADAPTER=agent ./scripts/tests/runtime_contract_tests.sh
 	@AI_ADAPTER=agent ./scripts/tests/runtime_snapshot_tests.sh
+	@$(MAKE) runtime-adapter-gateway-tests --no-print-directory
 
 runtime-tests runtime-test-all: runtime-test-core runtime-test-phase3
 	@echo ""

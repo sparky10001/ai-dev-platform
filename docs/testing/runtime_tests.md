@@ -6,9 +6,9 @@ The runtime test suite validates deterministic runtime guarantees, not merely fu
 
 The runtime is treated as:
 
-```text id="c0q9a1"
+```text
 event-sourced deterministic infrastructure
-```
+````
 
 —not merely a command wrapper.
 
@@ -25,6 +25,8 @@ The test system validates:
 * registry correctness
 * replay-derived evaluation correctness
 * backward compatibility guarantees
+* snapshot regression stability
+* adapter gateway boundary correctness
 
 ---
 
@@ -32,12 +34,14 @@ The test system validates:
 
 The runtime validation ladder is intentionally layered:
 
-```text id="v6mu92"
+```text
 contracts
   ↓
 schemas
   ↓
 validator
+  ↓
+adapter gateway
   ↓
 runtime engine
   ↓
@@ -69,7 +73,7 @@ Validates:
 
 Expected result:
 
-```text id="7n6b1v"
+```text
 9 passed / 0 failed
 ```
 
@@ -87,7 +91,7 @@ Validates:
 
 Expected result:
 
-```text id="q4u2ax"
+```text
 6 passed / 0 failed
 ```
 
@@ -105,7 +109,7 @@ Validates:
 
 Expected result:
 
-```text id="k8j0dn"
+```text
 9 passed / 0 failed
 ```
 
@@ -122,7 +126,7 @@ Validates:
 
 Expected result:
 
-```text id="8w3hz9"
+```text
 11 passed / 0 failed
 ```
 
@@ -139,7 +143,7 @@ Validates:
 
 Expected result:
 
-```text id="1q4xcm"
+```text
 11 passed / 0 failed
 ```
 
@@ -156,7 +160,7 @@ Validates:
 
 Expected result:
 
-```text id="bhsz4m"
+```text
 6 passed / 0 failed
 ```
 
@@ -173,7 +177,7 @@ Validates:
 
 Expected result:
 
-```text id="7oe2py"
+```text
 12 passed / 0 failed
 ```
 
@@ -190,7 +194,7 @@ Validates:
 
 Expected result:
 
-```text id="x4ph8w"
+```text
 8 passed / 0 failed
 ```
 
@@ -209,7 +213,7 @@ Validates:
 
 Expected result:
 
-```text id="f2w0kt"
+```text
 13 passed / 0 failed
 ```
 
@@ -230,7 +234,7 @@ Validates:
 
 Expected result:
 
-```text id="tr9g8q"
+```text
 6 passed / 0 failed
 ```
 
@@ -249,7 +253,7 @@ Validates:
 
 Expected result:
 
-```text id="4ax5p1"
+```text
 6 passed / 0 failed
 ```
 
@@ -269,7 +273,7 @@ Validates:
 
 Expected result:
 
-```text id="n6v7pl"
+```text
 7 passed / 0 failed
 ```
 
@@ -289,7 +293,7 @@ Validates:
 
 Expected result:
 
-```text id="0k8j3r"
+```text
 7 passed / 0 failed
 ```
 
@@ -307,7 +311,7 @@ Validates:
 
 Expected result:
 
-```text id="s3pq8j"
+```text
 5 passed / 0 failed
 ```
 
@@ -320,6 +324,7 @@ Validates:
 * deterministic runtime replay structure
 * normalized trace stability
 * normalized result stability
+* optional run.json consistency
 * lifecycle replay consistency
 * replay-safe deterministic hashing
 * volatile metadata normalization
@@ -359,10 +364,39 @@ It serves as a regression guard for:
 
 * runtime decomposition
 * lifecycle extraction
+* adapter gateway extraction
 * replay pipeline refactors
 * trace persistence changes
 * deterministic serialization guarantees
+
 ---
+
+## runtime_adapter_gateway_tests.sh
+
+Validates:
+
+* adapter execution normalization
+* adapter contract validation
+* timeout handling
+* invalid JSON handling
+* deterministic adapter payload handling
+* validation delegation through existing runtime contracts
+
+Expected result:
+
+```text
+7 passed / 0 failed
+```
+
+This suite validates the Phase 3.5 Step 1 adapter gateway extraction boundary.
+
+It serves as a regression guard for:
+
+* adapter subprocess execution
+* adapter stdout parsing
+* adapter contract validation
+* adapter timeout behavior
+* adapter gateway refactors
 
 ---
 
@@ -370,7 +404,7 @@ It serves as a regression guard for:
 
 Run all runtime suites individually:
 
-```bash id="bx6h21"
+```bash
 ./scripts/tests/runtime_tests.sh
 ./scripts/tests/failure_tests.sh
 ./scripts/tests/ndjson_integrity_tests.sh
@@ -386,27 +420,41 @@ Run all runtime suites individually:
 ./scripts/tests/runtime_dataset_tests.sh
 ./scripts/tests/runtime_contract_tests.sh
 ./scripts/tests/runtime_snapshot_tests.sh
+./scripts/tests/runtime_adapter_gateway_tests.sh
+```
+
+Run the full runtime ladder:
+
+```bash
+make runtime-tests
+```
+
+Run the full provider/runtime validation ladder:
+
+```bash
+make validate
 ```
 
 ---
 
 # Validation Coverage Matrix
 
-| Capability                 | Covered By                     |
-| -------------------------- | ------------------------------ |
-| response contracts         | runtime_tests.sh               |
-| replay safety              | replayability_smoke_test.sh    |
-| lifecycle ordering         | event_ordering_tests.sh        |
-| crash durability           | failure_tests.sh               |
-| NDJSON integrity           | ndjson_integrity_tests.sh      |
-| replay reconstruction      | resume_from_trace_tests.sh     |
-| loader correctness         | loader_replay_tests.sh         |
-| evaluation correctness     | runtime_eval_tests.sh          |
-| registry correctness       | runtime_registry_tests.sh      |
-| dataset determinism        | runtime_dataset_tests.sh       |
-| contract enforcement       | runtime_contract_tests.sh      |
-| isolation guarantees       | parallel_run_isolation_test.sh |
-| runtime snapshot stability | runtime_snapshot_tests.sh      |
+| Capability                 | Covered By                       |
+| -------------------------- | -------------------------------- |
+| response contracts         | runtime_tests.sh                 |
+| replay safety              | replayability_smoke_test.sh      |
+| lifecycle ordering         | event_ordering_tests.sh          |
+| crash durability           | failure_tests.sh                 |
+| NDJSON integrity           | ndjson_integrity_tests.sh        |
+| replay reconstruction      | resume_from_trace_tests.sh       |
+| loader correctness         | loader_replay_tests.sh           |
+| evaluation correctness     | runtime_eval_tests.sh            |
+| registry correctness       | runtime_registry_tests.sh        |
+| dataset determinism        | runtime_dataset_tests.sh         |
+| contract enforcement       | runtime_contract_tests.sh        |
+| isolation guarantees       | parallel_run_isolation_test.sh   |
+| runtime snapshot stability | runtime_snapshot_tests.sh        |
+| adapter gateway boundary   | runtime_adapter_gateway_tests.sh |
 
 ---
 
@@ -416,7 +464,7 @@ All runtime suites must pass before merge.
 
 Minimum requirement:
 
-```text id="ff4u5y"
+```text
 0 failed
 ```
 
@@ -428,6 +476,8 @@ No schema-breaking changes should be merged without:
 * dataset validation
 * registry validation
 * contract compatibility validation
+* snapshot regression validation
+* adapter gateway validation
 
 ---
 
@@ -442,6 +492,8 @@ The runtime guarantees:
 * schema-validated contracts
 * crash-safe writes
 * filesystem-native querying
+* deterministic adapter response normalization
+* snapshot-stable runtime structure
 
 Tests are designed to continuously validate these guarantees.
 
@@ -463,6 +515,7 @@ Preferred categories:
 * contract compatibility
 * replay-derived evaluation correctness
 * snapshot regression stability
+* adapter gateway boundary behavior
 
 Avoid:
 
@@ -494,7 +547,7 @@ Replay correctness is a hard runtime invariant.
 
 The runtime treats schemas and contracts as:
 
-```text id="r7n0ma"
+```text
 deterministic infrastructure guarantees
 ```
 
@@ -504,6 +557,7 @@ Validation is mandatory for:
 
 * events
 * responses
+* adapter payloads
 * datasets
 * evals
 * registry results
@@ -580,6 +634,30 @@ Likely causes:
 
 ---
 
+## Snapshot regression failure
+
+Likely causes:
+
+* runtime output drift
+* trace structure drift
+* unnormalized volatile metadata
+* lifecycle event sequence changes
+* result artifact changes
+
+---
+
+## Adapter gateway failure
+
+Likely causes:
+
+* invalid adapter JSON
+* subprocess timeout drift
+* adapter response contract drift
+* validation delegation regression
+* stdout/stderr handling changes
+
+---
+
 # Verification Requirements
 
 Before completing runtime changes:
@@ -593,6 +671,8 @@ Before completing runtime changes:
 * verify dataset exports
 * verify replay reconstruction
 * verify contract compatibility
+* verify snapshot stability
+* verify adapter gateway behavior
 
 No runtime refactor should bypass the validation layer.
 
@@ -608,6 +688,8 @@ The runtime prioritizes:
 * deterministic reconstruction
 * contract stability
 * crash survivability
+* adapter boundary correctness
+* snapshot-stable behavior
 
 over simple output assertions.
 
@@ -619,3 +701,7 @@ The runtime test system exists to guarantee that every run remains:
 * exportable
 * deterministic
 * backward compatible
+* contract validated
+
+```
+```

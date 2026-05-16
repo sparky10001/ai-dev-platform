@@ -27,7 +27,7 @@ from runtime.run import finalize_run
 
 from runtime.events import log_event
 
-from runtime.runner import execute_adapter
+from runtime.adapter_gateway import invoke_adapter
 
 from runtime.validator import (
     validate_response,
@@ -248,52 +248,30 @@ def main():
     # 🚀 Execute Adapter
     # ============================================================
 
-    result = execute_adapter(
-        adapter=adapter,
-        command=command,
-        user_input=user_input,
-        model=model,
-        env={
-            "AI_RUN_ID": run["id"],
-            "AI_RUN_PATH": run["run_path"],
-            "AI_TRACE_PATH": run["trace_path"],
-        },
-    )
-
-    raw_output = (
-        result.get("stdout") or ""
-    ).strip()
-
-    # ============================================================
-    # ✅ Parse Adapter JSON
-    # ============================================================
-
     try:
 
-        parsed = json.loads(raw_output)
+        validated_payload = invoke_adapter(
+            command=[
+                str(adapter),
+                command,
+                user_input,
+                f"--model={model}",
+            ],
+            timeout=int(os.getenv("AI_TIMEOUT", "120")),
+            env={
+                "AI_RUN_ID": run["id"],
+                "AI_RUN_PATH": run["run_path"],
+                "AI_TRACE_PATH": run["trace_path"],
+            },
+        )
 
-    except Exception:
+        validated_response = validate_response(validated_payload)
+
+    except ValueError as e:
 
         fail_run(
             run,
-            "Invalid runtime JSON"
-        )
-
-    # ============================================================
-    # ✅ Validate Response Schema
-    # ============================================================
-
-    try:
-
-        validated_response = validate_response(
-            parsed
-        )
-
-    except Exception as e:
-
-        fail_run(
-            run,
-            f"Invalid adapter contract: {e}"
+            str(e)
         )
 
     # ============================================================

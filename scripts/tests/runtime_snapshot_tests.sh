@@ -27,7 +27,7 @@ echo "=============================="
 PASSED=0
 FAILED=0
 
-if python3 -m unittest scripts/tests/runtime_snapshot_test.py; then
+if python3 -m unittest runtime/tests/runtime_snapshot_test.py; then
   echo "✅ Runtime snapshot test"
   PASSED=$((PASSED + 1))
 else
