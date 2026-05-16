@@ -13,6 +13,7 @@ from runtime.trace_pipeline import append_trace_event
 from runtime.trace_pipeline import iter_trace_events
 from runtime.trace_pipeline import load_trace
 from runtime.trace_pipeline import validate_trace_file
+from runtime.trace_pipeline import ingest_trace_events
 
 
 class TracePipelineTests(unittest.TestCase):
@@ -73,6 +74,45 @@ class TracePipelineTests(unittest.TestCase):
             append_trace_event(run, "session_start", {"command": "run"})
             events = load_trace(tp, strict=False)
             self.assertEqual(len(events), 1)
+
+    def test_ingest_trace_events_preserves_valid_events_and_skips_invalid(self):
+        with tempfile.TemporaryDirectory() as td:
+            tp = Path(td) / "trace.jsonl"
+
+            ingest_trace_events(
+                tp,
+                [
+                    {
+                        "schema_version": 1,
+                        "run_id": "run_test",
+                        "event": "session_start",
+                        "timestamp": 1.0,
+                        "data": {"command": "run"},
+                    },
+                    {"bad": "missing event"},
+                    {
+                        "schema_version": 1,
+                        "run_id": "run_test",
+                        "event": "agent_output",
+                        "timestamp": 2.0,
+                        "data": {"status": "done", "output": "ok"},
+                    },
+                    {
+                        "schema_version": 1,
+                        "run_id": "run_test",
+                        "event": "session_end",
+                        "timestamp": 3.0,
+                        "data": {"status": "done"},
+                    },
+                ],
+            )
+
+            self.assertTrue(tp.exists(), "ingest_trace_events should persist valid trace events")
+            events = load_trace(tp, strict=False)
+            self.assertEqual(
+                [event.event for event in events],
+                ["session_start", "agent_output", "session_end"],
+            )            
 
     def test_env_strict_toggle(self):
         with tempfile.TemporaryDirectory() as td:

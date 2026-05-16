@@ -16,7 +16,6 @@
 
 from __future__ import annotations
 
-import json
 import os
 import sys
 
@@ -31,14 +30,10 @@ from runtime.run_lifecycle import (
     fail_run as lifecycle_fail_run,
 )
 
-from runtime.events import log_event
-
 from runtime.adapter_gateway import invoke_adapter
+from runtime.trace_pipeline import ingest_trace_events
 
-from runtime.validator import (
-    validate_response,
-    validate_event,
-)
+from runtime.validator import validate_response
 
 from runtime.schemas import (
     ResponseModel,
@@ -251,23 +246,10 @@ def main():
         else []
     )
 
-    if isinstance(trace, list):
-
-        for evt in trace:
-
-            try:
-
-                validated_evt = validate_event(evt)
-
-                with open(trace_path, "a", encoding="utf-8") as f:
-                    json.dump(
-                        validated_evt.model_dump(mode="json"),
-                        f,
-                    )
-                    f.write("\n")
-
-            except Exception:
-                continue
+    ingest_trace_events(
+        trace_path=trace_path,
+        events=trace,
+    )
 
     # ============================================================
     # 📦 Final Agent Output Event

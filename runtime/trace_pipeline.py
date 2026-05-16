@@ -96,6 +96,30 @@ def load_trace(
     return list(iter_trace_events(trace_path, strict=strict))
 
 
+
+
+def append_validated_trace_event(
+    trace_path: str | Path,
+    payload: dict[str, Any],
+) -> None:
+    validated = validate_trace_event(normalize_trace_event(payload))
+    path = Path(trace_path)
+    with open(path, "a", encoding="utf-8") as f:
+        json.dump(validated.model_dump(mode="json"), f)
+        f.write("\n")
+
+
+def ingest_trace_events(
+    trace_path: str | Path,
+    events: list[dict[str, Any]] | None,
+) -> None:
+    if not isinstance(events, list):
+        return
+    for evt in events:
+        try:
+            append_validated_trace_event(trace_path, evt)
+        except Exception:
+            continue
 def validate_trace_file(
     path: str | Path,
     *,
