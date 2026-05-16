@@ -138,6 +138,56 @@ class TracePipelineTests(unittest.TestCase):
                     strict=True,
                 )
 
+    def test_rejects_timestamp_regression_strict(self):
+        with tempfile.TemporaryDirectory() as td:
+            tp = Path(td) / "trace.jsonl"
+            ingest_trace_events(tp, [{"schema_version": 1, "run_id": "run_test", "event": "session_start", "timestamp": 2.0, "data": {"command": "run"}}, {"schema_version": 1, "run_id": "run_test", "event": "agent_output", "timestamp": 1.0, "data": {"status": "done", "output": "ok"}}, {"schema_version": 1, "run_id": "run_test", "event": "session_end", "timestamp": 3.0, "data": {"status": "done"}}])
+            with self.assertRaises(TraceValidationError):
+                validate_trace_file(tp, strict=True)
+
+    def test_rejects_mixed_schema_version_strict(self):
+        with tempfile.TemporaryDirectory() as td:
+            tp = Path(td) / "trace.jsonl"
+            ingest_trace_events(tp, [{"schema_version": 1, "run_id": "run_test", "event": "session_start", "timestamp": 1.0, "data": {"command": "run"}}, {"schema_version": 2, "run_id": "run_test", "event": "agent_output", "timestamp": 2.0, "data": {"status": "done", "output": "ok"}}, {"schema_version": 1, "run_id": "run_test", "event": "session_end", "timestamp": 3.0, "data": {"status": "done"}}])
+            with self.assertRaises(TraceValidationError):
+                validate_trace_file(tp, strict=True)
+
+    def test_rejects_duplicate_session_start_strict(self):
+        with tempfile.TemporaryDirectory() as td:
+            tp = Path(td) / "trace.jsonl"
+            ingest_trace_events(tp, [{"schema_version": 1, "run_id": "run_test", "event": "session_start", "timestamp": 1.0, "data": {"command": "run"}}, {"schema_version": 1, "run_id": "run_test", "event": "session_start", "timestamp": 1.1, "data": {"command": "run"}}, {"schema_version": 1, "run_id": "run_test", "event": "agent_output", "timestamp": 2.0, "data": {"status": "done", "output": "ok"}}, {"schema_version": 1, "run_id": "run_test", "event": "session_end", "timestamp": 3.0, "data": {"status": "done"}}])
+            with self.assertRaises(LifecycleOrderingError):
+                validate_trace_file(tp, strict=True)
+
+    def test_rejects_duplicate_session_end_strict(self):
+        with tempfile.TemporaryDirectory() as td:
+            tp = Path(td) / "trace.jsonl"
+            ingest_trace_events(tp, [{"schema_version": 1, "run_id": "run_test", "event": "session_start", "timestamp": 1.0, "data": {"command": "run"}}, {"schema_version": 1, "run_id": "run_test", "event": "agent_output", "timestamp": 2.0, "data": {"status": "done", "output": "ok"}}, {"schema_version": 1, "run_id": "run_test", "event": "session_end", "timestamp": 3.0, "data": {"status": "done"}}, {"schema_version": 1, "run_id": "run_test", "event": "session_end", "timestamp": 3.1, "data": {"status": "done"}}])
+            with self.assertRaises(LifecycleOrderingError):
+                validate_trace_file(tp, strict=True)
+
+    def test_rejects_duplicate_agent_output_strict(self):
+        with tempfile.TemporaryDirectory() as td:
+            tp = Path(td) / "trace.jsonl"
+            ingest_trace_events(tp, [{"schema_version": 1, "run_id": "run_test", "event": "session_start", "timestamp": 1.0, "data": {"command": "run"}}, {"schema_version": 1, "run_id": "run_test", "event": "agent_output", "timestamp": 2.0, "data": {"status": "done", "output": "ok"}}, {"schema_version": 1, "run_id": "run_test", "event": "agent_output", "timestamp": 2.1, "data": {"status": "done", "output": "ok2"}}, {"schema_version": 1, "run_id": "run_test", "event": "session_end", "timestamp": 3.0, "data": {"status": "done"}}])
+            with self.assertRaises(LifecycleOrderingError):
+                validate_trace_file(tp, strict=True)
+
+    def test_rejects_event_after_session_end_strict(self):
+        with tempfile.TemporaryDirectory() as td:
+            tp = Path(td) / "trace.jsonl"
+            ingest_trace_events(tp, [{"schema_version": 1, "run_id": "run_test", "event": "session_start", "timestamp": 1.0, "data": {"command": "run"}}, {"schema_version": 1, "run_id": "run_test", "event": "agent_output", "timestamp": 2.0, "data": {"status": "done", "output": "ok"}}, {"schema_version": 1, "run_id": "run_test", "event": "session_end", "timestamp": 3.0, "data": {"status": "done"}}, {"schema_version": 1, "run_id": "run_test", "event": "session_start", "timestamp": 4.0, "data": {"command": "run"}}])
+            with self.assertRaises(LifecycleOrderingError):
+                validate_trace_file(tp, strict=True)
+
+    def test_accepts_valid_deterministic_lifecycle_trace_strict(self):
+        with tempfile.TemporaryDirectory() as td:
+            tp = Path(td) / "trace.jsonl"
+            ingest_trace_events(tp, [{"schema_version": 1, "run_id": "run_test", "event": "session_start", "timestamp": 1.0, "data": {"command": "run"}}, {"schema_version": 1, "run_id": "run_test", "event": "agent_output", "timestamp": 2.0, "data": {"status": "done", "output": "ok"}}, {"schema_version": 1, "run_id": "run_test", "event": "session_end", "timestamp": 3.0, "data": {"status": "done"}}])
+            validated = validate_trace_file(tp, strict=True)
+            self.assertEqual(len(validated), 3)
+
+
     def test_env_strict_toggle(self):
         with tempfile.TemporaryDirectory() as td:
             tp = Path(td) / "trace.jsonl"

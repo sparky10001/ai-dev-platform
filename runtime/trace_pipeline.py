@@ -141,6 +141,65 @@ def ingest_trace_events(
             continue
     return diagnostics
 
+def validate_monotonic_timestamps(events: list[Any]) -> None:
+    last_ts: float | None = None
+    for evt in events:
+        ts = getattr(evt, "timestamp", None)
+        if not isinstance(ts, (int, float)):
+            raise TraceValidationError("Trace contains non-numeric timestamp")
+        if last_ts is not None and ts < last_ts:
+            raise TraceValidationError("Trace timestamps are not monotonic")
+        last_ts = float(ts)
+
+
+def validate_run_id_consistency(events: list[Any]) -> None:
+    run_ids = {getattr(evt, "run_id", None) for evt in events}
+    if len(run_ids) > 1:
+        raise TraceValidationError("Inconsistent run_id values in trace")
+
+
+def validate_schema_version_consistency(events: list[Any]) -> None:
+    versions = {getattr(evt, "schema_version", None) for evt in events}
+    if len(versions) > 1:
+        raise TraceValidationError("Inconsistent schema_version values in trace")
+
+
+def validate_lifecycle_ordering(events: list[Any]) -> None:
+    names = [evt.event for evt in events]
+    if not names:
+        return
+
+    if names.count("session_start") > 1:
+        raise LifecycleOrderingError("Duplicate session_start events detected")
+    if names.count("session_end") > 1:
+        raise LifecycleOrderingError("Duplicate session_end events detected")
+    if names.count("agent_output") > 1:
+        raise LifecycleOrderingError("Duplicate agent_output events detected")
+
+    if names[0] != "session_start":
+        raise LifecycleOrderingError("First event must be session_start")
+
+    seen_end = False
+    for name in names:
+        if name == "session_end":
+            seen_end = True
+        elif seen_end:
+            raise LifecycleOrderingError("Events found after session_end")
+
+    if "session_end" in names and names[-1] != "session_end":
+        raise LifecycleOrderingError("Last event must be session_end")
+
+    if "session_end" in names and "agent_output" not in names:
+        raise LifecycleOrderingError("Trace missing agent_output")
+
+
+def validate_deterministic_trace(events: list[Any]) -> None:
+    validate_run_id_consistency(events)
+    validate_schema_version_consistency(events)
+    validate_monotonic_timestamps(events)
+    validate_lifecycle_ordering(events)
+
+
 def validate_trace_file(
     path: str | Path,
     *,
@@ -152,24 +211,5 @@ def validate_trace_file(
     if not strict_mode:
         return events
 
-    run_ids = {evt.run_id for evt in events}
-    if len(run_ids) > 1:
-        raise TraceValidationError("Inconsistent run_id values in trace")
-
-    names = [evt.event for evt in events]
-    if names:
-        if names[0] != "session_start":
-            raise LifecycleOrderingError("First event must be session_start")
-        if names[-1] != "session_end":
-            raise LifecycleOrderingError("Last event must be session_end")
-        if "agent_output" not in names:
-            raise LifecycleOrderingError("Trace missing agent_output")
-
-    seen_end = False
-    for evt in names:
-        if evt == "session_end":
-            seen_end = True
-        elif seen_end:
-            raise LifecycleOrderingError("Events found after session_end")
-
+    validate_deterministic_trace(events)
     return events

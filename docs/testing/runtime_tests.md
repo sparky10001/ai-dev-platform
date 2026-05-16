@@ -450,6 +450,10 @@ Validates:
 * trace file validation
 * lifecycle ordering validation
 * mixed run_id detection
+* monotonic timestamp validation in strict mode
+* schema_version consistency validation in strict mode
+* duplicate lifecycle event detection in strict mode
+* no events after session_end enforcement in strict mode
 * malformed NDJSON rejection in strict mode
 * replay reconstruction guarantees
 
