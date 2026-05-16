@@ -313,6 +313,59 @@ Expected result:
 
 ---
 
+## runtime_snapshot_tests.sh
+
+Validates:
+
+* deterministic runtime replay structure
+* normalized trace stability
+* normalized result stability
+* lifecycle replay consistency
+* replay-safe deterministic hashing
+* volatile metadata normalization
+* cross-run structural equivalence
+
+Normalized fields include:
+
+* run_id
+* run_path
+* trace_path
+* timestamp
+* timestamps
+* duration_ms
+* created_at
+* completed_at
+* started_at
+* ended_at
+* absolute run directory paths
+
+The snapshot suite validates:
+
+```text
+same logical execution
+→ same normalized runtime structure
+→ same replay-safe hashes
+```
+
+Expected result:
+
+```text
+1 passed / 0 failed
+```
+
+This suite is intentionally lightweight and exists to lock runtime behavior prior to runtime substrate refactors.
+
+It serves as a regression guard for:
+
+* runtime decomposition
+* lifecycle extraction
+* replay pipeline refactors
+* trace persistence changes
+* deterministic serialization guarantees
+---
+
+---
+
 # Running Tests
 
 Run all runtime suites individually:
@@ -332,26 +385,28 @@ Run all runtime suites individually:
 ./scripts/tests/runtime_registry_tests.sh
 ./scripts/tests/runtime_dataset_tests.sh
 ./scripts/tests/runtime_contract_tests.sh
+./scripts/tests/runtime_snapshot_tests.sh
 ```
 
 ---
 
 # Validation Coverage Matrix
 
-| Capability             | Covered By                     |
-| ---------------------- | ------------------------------ |
-| response contracts     | runtime_tests.sh               |
-| replay safety          | replayability_smoke_test.sh    |
-| lifecycle ordering     | event_ordering_tests.sh        |
-| crash durability       | failure_tests.sh               |
-| NDJSON integrity       | ndjson_integrity_tests.sh      |
-| replay reconstruction  | resume_from_trace_tests.sh     |
-| loader correctness     | loader_replay_tests.sh         |
-| evaluation correctness | runtime_eval_tests.sh          |
-| registry correctness   | runtime_registry_tests.sh      |
-| dataset determinism    | runtime_dataset_tests.sh       |
-| contract enforcement   | runtime_contract_tests.sh      |
-| isolation guarantees   | parallel_run_isolation_test.sh |
+| Capability                 | Covered By                     |
+| -------------------------- | ------------------------------ |
+| response contracts         | runtime_tests.sh               |
+| replay safety              | replayability_smoke_test.sh    |
+| lifecycle ordering         | event_ordering_tests.sh        |
+| crash durability           | failure_tests.sh               |
+| NDJSON integrity           | ndjson_integrity_tests.sh      |
+| replay reconstruction      | resume_from_trace_tests.sh     |
+| loader correctness         | loader_replay_tests.sh         |
+| evaluation correctness     | runtime_eval_tests.sh          |
+| registry correctness       | runtime_registry_tests.sh      |
+| dataset determinism        | runtime_dataset_tests.sh       |
+| contract enforcement       | runtime_contract_tests.sh      |
+| isolation guarantees       | parallel_run_isolation_test.sh |
+| runtime snapshot stability | runtime_snapshot_tests.sh      |
 
 ---
 
@@ -407,6 +462,7 @@ Preferred categories:
 * dataset determinism
 * contract compatibility
 * replay-derived evaluation correctness
+* snapshot regression stability
 
 Avoid:
 
