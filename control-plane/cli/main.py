@@ -14,6 +14,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from core.dag.executor import execute_dag
+from core.dag.parallel_executor import execute_dag_parallel
 from core.dag.validator import dag_to_execution_order
 from core.dag.validator import load_dag
 from core.orchestrator.orchestrator import orchestrate_task
@@ -846,15 +847,38 @@ def main(argv: list[str] | None = None) -> int:
             return 0
 
         if command == 'execute-dag':
-            positional, pretty, trace, _strategy, _policy_name = _parse_flags(raw, allow_trace=True, allow_strategy=False)
+            pretty = '--pretty' in raw
+            trace = '--trace' in raw
+            parallel = '--parallel' in raw
+            max_workers = 4
+            positional = [arg for arg in raw if not arg.startswith('--')]
+
+            for arg in raw:
+                if arg.startswith('--max-workers='):
+                    try:
+                        max_workers = int(arg.split('=', 1)[1])
+                    except ValueError:
+                        print('error: --max-workers must be an integer', file=sys.stderr)
+                        print(_usage(), file=sys.stderr)
+                        return 2
+
+            if max_workers < 1:
+                print('error: --max-workers must be >= 1', file=sys.stderr)
+                print(_usage(), file=sys.stderr)
+                return 2
+
             if not positional:
                 print('error: missing path for execute-dag', file=sys.stderr)
                 print(_usage(), file=sys.stderr)
                 return 2
             path = positional[0]
             try:
-                result = execute_dag(path, trace=trace)
-                payload = result.model_dump(mode='json')
+                if parallel:
+                    result = execute_dag_parallel(path, max_workers=max_workers, trace=trace)
+                    payload = result.model_dump(mode='json')
+                else:
+                    result = execute_dag(path, trace=trace)
+                    payload = result.model_dump(mode='json')
             except Exception as exc:
                 payload = {'status': 'error', 'error': str(exc)}
             _emit(payload, pretty=pretty)

@@ -15,6 +15,7 @@ Plus deterministic replay-backed orchestration recommendations.
 And deterministic orchestration memory + historical recall.
 Plus deterministic orchestration lineage and relationship reconstruction.
 And deterministic replay-safe orchestration graph analytics.
+Plus deterministic bounded parallel DAG execution.
 
 ---
 
@@ -86,6 +87,7 @@ Swap the compute.
 - **Orchestration Memory** — deterministic replay-backed historical context and orchestration recall
 - **Knowledge Graph + Lineage** — deterministic orchestration relationship graphs and lineage reconstruction
 - **Graph Analytics** — deterministic orchestration graph metrics and lineage-depth analytics
+- **Parallel DAG Execution** — bounded deterministic parallel orchestration execution
 - **Tool-Using Agent Runtime** — native OpenAI function-calling loop with dynamic tool execution
 - **Dataset Export Layer** — deterministic NDJSON corpora generation
 - **Schema Compatibility Contracts** — backward-compatible runtime guarantees
@@ -179,6 +181,9 @@ Supported commands:
 ./ai-orchestrate run "task"
 ./ai-orchestrate validate-dag path/to/dag.json
 ./ai-orchestrate execute-dag path/to/dag.json
+./ai-orchestrate execute-dag path/to/dag.json \
+  --parallel \
+  --max-workers=4
 ```
 
 Policy-aware orchestration:
@@ -288,6 +293,8 @@ runtime/
 
 Stage 4 introduces an additive orchestration layer built on top of the deterministic runtime.
 
+Both sequential and bounded parallel orchestration execution modes are supported while preserving deterministic replay semantics.
+
 The control-plane is intentionally separate from the runtime execution substrate.
 
 ```text
@@ -308,6 +315,7 @@ control-plane/
 │   │   ├── models.py
 │   │   ├── validator.py
 │   │   ├── executor.py
+│   │   ├── parallel_executor.py
 │   │   └── observability/
 │   │       └── trace.py
 │   ├── planner/
@@ -489,6 +497,12 @@ The control-plane currently supports:
 - isolated node detection
 - replay-safe graph summaries
 - orchestration dependency analytics
+- deterministic dependency-level DAG batching
+- bounded local parallel DAG execution
+- deterministic parallel execution ordering
+- deterministic parallel DAG scheduling
+- replay-safe parallel orchestration execution
+- bounded worker-pool orchestration execution
 
 ---
 
@@ -1152,6 +1166,73 @@ Graph analytics validation is included in:
 make control-plane-tests
 ```
 
+# ⚡ Parallel DAG Execution
+
+Stage 4T introduces bounded deterministic parallel DAG execution.
+
+The parallel execution layer executes independent DAG nodes concurrently while preserving deterministic orchestration semantics and replay-safe ordering guarantees.
+
+trace=True is intentionally deferred for parallel execution in Stage 4T to preserve deterministic NDJSON guarantees.
+
+Important:
+
+```text
+This is NOT distributed execution.
+This is NOT Celery.
+This is NOT async orchestration APIs.
+This is bounded deterministic local execution.
+```
+
+Parallel execution capabilities:
+
+- dependency-level DAG batching
+- bounded local worker pools
+- deterministic execution ordering
+- deterministic parallel scheduling
+- replay-safe parallel orchestration
+- deterministic skipped-node handling
+- bounded thread-based execution
+
+Parallel execution flow:
+
+```text
+validated DAG
+→ dependency batching
+→ deterministic batch ordering
+→ bounded worker execution
+→ deterministic result ordering
+→ replay/eval-compatible artifacts
+```
+
+Supported CLI commands:
+
+```bash
+./ai-orchestrate execute-dag \
+  path/to/dag.json \
+  --parallel
+
+./ai-orchestrate execute-dag \
+  path/to/dag.json \
+  --parallel \
+  --max-workers=4
+```
+
+Parallel execution guarantees:
+
+- sequential executor remains default
+- deterministic dependency scheduling
+- deterministic result ordering
+- deterministic execution_order output
+- bounded worker pool execution
+- cycle-safe dependency traversal
+- deterministic skipped-node propagation
+
+Parallel execution validation is included in:
+
+```bash
+make control-plane-tests
+```
+
 ---
 
 # 🧠 Runtime Philosophy
@@ -1180,9 +1261,13 @@ This enables:
 - deterministic orchestration memory
 - orchestration lineage reconstruction
 - replay-backed orchestration ancestry analysis
-- deterministic orchestration relationship graphs- deterministic orchestration graph analytics
+- deterministic orchestration relationship graphs
+- deterministic orchestration graph analytics
 - replay-safe orchestration dependency analysis
 - deterministic lineage-depth metrics
+- deterministic bounded parallel orchestration
+- replay-safe parallel DAG execution
+- deterministic dependency-level execution batching
 
 All runtime artifacts are schema-versioned and replay-safe by default.
 
@@ -1381,6 +1466,7 @@ make control-plane-heuristic-tests
 make control-plane-memory-tests
 make control-plane-knowledge-tests
 make control-plane-graph-analytics-tests
+make control-plane-parallel-tests
 ```
 
 Important:
@@ -1465,10 +1551,11 @@ AI_ADAPTER=my-agent ./ai run "test"
 - [x] Orchestration memory + historical context
 - [x] Orchestration knowledge graph + lineage relationships
 - [x] Orchestration graph analytics
-- [ ] Parallel DAG execution
+- [x] Parallel DAG execution
 - [ ] Orchestration API
 - [ ] Web UI
 - [ ] LLM-assisted planner
+- [ ] Distributed orchestration execution
 
 ## Platform
 

@@ -305,6 +305,9 @@ control-plane-knowledge-tests:
 control-plane-graph-analytics-tests:
 	@./scripts/tests/control_plane_graph_analytics_tests.sh
 
+control-plane-parallel-tests:
+	@./scripts/tests/control_plane_parallel_executor_tests.sh
+
 control-plane-tests:
 	@$(MAKE) control-plane-dag-tests --no-print-directory
 	@$(MAKE) control-plane-tool-tests --no-print-directory
@@ -324,6 +327,7 @@ control-plane-tests:
 	@$(MAKE) control-plane-memory-tests --no-print-directory
 	@$(MAKE) control-plane-knowledge-tests --no-print-directory
 	@$(MAKE) control-plane-graph-analytics-tests --no-print-directory
+	@$(MAKE) control-plane-parallel-tests --no-print-directory
 	
 ###################################################################
 # Validation Ladder (HARDENED)
