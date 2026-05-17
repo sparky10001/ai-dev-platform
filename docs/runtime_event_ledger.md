@@ -1,4 +1,4 @@
-# Runtime EventLedger (Phase 3.6C)
+# Runtime EventLedger (Phase 3.6D)
 
 Phase 3.6B extends the additive EventLedger with deterministic hashing, index generation, and parity validation.
 
@@ -79,8 +79,18 @@ Phase 3.6C adds optional replay-from-ledger behind a flag.
 - Missing `ledger.jsonl` in ledger mode fails deterministically; no implicit fallback is performed.
 - `evals.py` and `registry.py` remain trace-based in this phase.
 
+
+## Phase 3.6D Eval Flag
+
+Phase 3.6D adds optional eval-from-ledger behind a flag.
+
+- Default evaluation source remains trace-based.
+- Set `RUNTIME_EVAL_SOURCE=ledger` (or pass `source="ledger"`) to evaluate from `ledger.jsonl`.
+- Replay and eval now both support optional ledger mode.
+- Registry remains trace-based in this phase.
+- Ledger remains non-authoritative and additive.
+
 ## Migration Path
 
-- 3.6D: eval-from-ledger behind feature flag
 - 3.6E: registry-from-ledger behind feature flag
 - 3.6F: ledger-authoritative cutover

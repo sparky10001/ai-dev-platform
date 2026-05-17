@@ -521,6 +521,21 @@ unit test pass / 0 failed
 
 This suite validates Phase 3.6C replay-from-ledger behavior behind opt-in source selection.
 
+## runtime_eval_ledger_tests.sh
+
+Validates:
+
+* default trace-based evaluation
+* optional ledger-based evaluation
+* trace/ledger evaluation parity
+* deterministic missing-ledger behavior
+
+Expected result:
+
+unit test pass / 0 failed
+
+This suite validates Phase 3.6D eval-from-ledger behavior behind opt-in source selection.
+
 
 # Running Tests
 
@@ -547,6 +562,7 @@ Run all runtime suites individually:
 ./scripts/tests/runtime_trace_pipeline_tests.sh
 ./scripts/tests/runtime_event_ledger_tests.sh
 ./scripts/tests/runtime_replay_ledger_tests.sh
+./scripts/tests/runtime_eval_ledger_tests.sh
 ```
 
 Run the full runtime ladder:
@@ -585,6 +601,7 @@ make validate
 | trace pipeline boundary          | runtime_trace_pipeline_tests.sh  |
 | event ledger boundary            | runtime_event_ledger_tests.sh    |
 | replay ledger boundary           | runtime_replay_ledger_tests.sh   |
+| eval ledger boundary             | runtime_eval_ledger_tests.sh     |
 
 ---
 
@@ -612,6 +629,7 @@ No schema-breaking changes should be merged without:
 * trace pipeline validation
 * event ledger dual-write validation
 * replay source selection validation
+* eval source selection validation
 
 ---
 
@@ -856,6 +874,7 @@ Before completing runtime changes:
 * verify trace pipeline behavior
 * verify event ledger dual-write behavior
 * verify replay source selection behavior
+* verify eval source selection behavior
 
 No runtime refactor should bypass the validation layer.
 
