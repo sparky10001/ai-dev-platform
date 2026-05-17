@@ -1,4 +1,4 @@
-# Runtime EventLedger (Phase 3.6D)
+# Runtime EventLedger (Phase 3.6E)
 
 Phase 3.6B extends the additive EventLedger with deterministic hashing, index generation, and parity validation.
 
@@ -90,7 +90,17 @@ Phase 3.6D adds optional eval-from-ledger behind a flag.
 - Registry remains trace-based in this phase.
 - Ledger remains non-authoritative and additive.
 
+
+## Phase 3.6E Registry Flag
+
+Phase 3.6E adds optional registry-from-ledger behind a flag.
+
+- Default registry source remains trace-based.
+- Set `RUNTIME_REGISTRY_SOURCE=ledger` (or pass `source="ledger"`) to use ledger-backed registry summaries.
+- Replay and eval already support optional ledger mode.
+- Registry now optionally supports ledger mode.
+- Ledger remains non-authoritative and additive.
+
 ## Migration Path
 
-- 3.6E: registry-from-ledger behind feature flag
 - 3.6F: ledger-authoritative cutover

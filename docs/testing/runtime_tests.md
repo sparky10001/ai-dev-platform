@@ -536,6 +536,21 @@ unit test pass / 0 failed
 
 This suite validates Phase 3.6D eval-from-ledger behavior behind opt-in source selection.
 
+## runtime_registry_ledger_tests.sh
+
+Validates:
+
+* default trace-based registry behavior
+* optional ledger-based registry loading
+* trace/ledger registry parity
+* deterministic missing-ledger handling
+
+Expected result:
+
+unit test pass / 0 failed
+
+This suite validates Phase 3.6E registry-from-ledger behavior behind opt-in source selection.
+
 
 # Running Tests
 
@@ -563,6 +578,7 @@ Run all runtime suites individually:
 ./scripts/tests/runtime_event_ledger_tests.sh
 ./scripts/tests/runtime_replay_ledger_tests.sh
 ./scripts/tests/runtime_eval_ledger_tests.sh
+./scripts/tests/runtime_registry_ledger_tests.sh
 ```
 
 Run the full runtime ladder:
@@ -602,6 +618,7 @@ make validate
 | event ledger boundary            | runtime_event_ledger_tests.sh    |
 | replay ledger boundary           | runtime_replay_ledger_tests.sh   |
 | eval ledger boundary             | runtime_eval_ledger_tests.sh     |
+| registry ledger boundary         | runtime_registry_ledger_tests.sh |
 
 ---
 
@@ -630,6 +647,7 @@ No schema-breaking changes should be merged without:
 * event ledger dual-write validation
 * replay source selection validation
 * eval source selection validation
+* registry source selection validation
 
 ---
 
@@ -875,6 +893,7 @@ Before completing runtime changes:
 * verify event ledger dual-write behavior
 * verify replay source selection behavior
 * verify eval source selection behavior
+* verify registry source selection behavior
 
 No runtime refactor should bypass the validation layer.
 

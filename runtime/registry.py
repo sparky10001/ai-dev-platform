@@ -15,13 +15,61 @@
 from __future__ import annotations
 
 import json
-from typing import Any
+import os
+from pathlib import Path
+from typing import Any, Literal
 
 from runtime.evals import evaluate_run
+from runtime.event_ledger import load_ledger
+from runtime.loader import get_run_path
 from runtime.loader import list_runs as list_run_ids
 from runtime.loader import load_run
+from runtime.replay import load_replay_events
 from runtime.schemas import RunQueryResult
 from runtime.schemas import RunSummary
+
+RegistrySource = Literal["trace", "ledger"]
+
+
+# ================================================================
+# Source Helpers
+# ================================================================
+
+def registry_source(default: RegistrySource = "trace") -> RegistrySource:
+    raw = os.getenv("RUNTIME_REGISTRY_SOURCE")
+    if not raw:
+        return default
+    normalized = raw.strip().lower()
+    if normalized in ("trace", "ledger"):
+        return normalized  # type: ignore[return-value]
+    return default
+
+
+def _registry_path_for_source(run_path: Path, source: RegistrySource) -> Path:
+    if source == "ledger":
+        return run_path / "ledger.jsonl"
+    return run_path / "trace.jsonl"
+
+
+def load_registry_events(
+    run_or_path: str | Path,
+    *,
+    source: RegistrySource = "trace",
+) -> list[Any]:
+    path = Path(run_or_path)
+    if path.is_dir():
+        event_path = _registry_path_for_source(path, source)
+    elif source == "ledger" and path.name == "trace.jsonl":
+        event_path = path.with_name("ledger.jsonl")
+    else:
+        event_path = path
+
+    if source == "ledger":
+        if not event_path.exists():
+            raise RuntimeError(f"Registry source ledger missing file: {event_path}")
+        return load_ledger(event_path, strict=True)
+
+    return load_replay_events(event_path, strict=True, source="trace")
 
 
 # ================================================================
@@ -186,7 +234,10 @@ def summarize_runs(
     sort_by: str = "created_at",
     descending: bool = False,
     limit: int | None = None,
+    source: RegistrySource = "trace",
 ) -> RunSummary:
+
+    selected_source = source if source != "trace" else registry_source(default="trace")
 
     query = query_runs(
         status=status,
@@ -208,7 +259,9 @@ def summarize_runs(
             continue
 
         try:
-            evals.append(evaluate_run(run_id))
+            if selected_source == "ledger":
+                load_registry_events(get_run_path(run_id), source="ledger")
+            evals.append(evaluate_run(run_id, source=selected_source))
         except (FileNotFoundError, RuntimeError, json.JSONDecodeError, TypeError, ValueError):
             continue
 
