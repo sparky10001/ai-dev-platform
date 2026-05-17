@@ -1,16 +1,22 @@
 #!/usr/bin/env python3
 ###################################################################
-# runtime/engine.py — Runtime Engine (Phase 3)
+# runtime/engine.py — Thin Runtime Coordinator (Phase 3.5)
 #
 # Responsibilities:
-# ✅ canonical run lifecycle
-# ✅ schema-validated adapter responses
-# ✅ NDJSON event durability
-# ✅ replay-safe event ingestion
-# ✅ deterministic runtime envelopes
-# ✅ trace persistence
-# ✅ adapter orchestration
-# ✅ schema-versioned runtime contracts
+# ✅ CLI argument parsing and command coordination
+# ✅ adapter path/model selection coordination
+# ✅ lifecycle orchestration via runtime.run_lifecycle
+# ✅ adapter execution via runtime.adapter_gateway
+# ✅ trace ingestion coordination via runtime.trace_pipeline
+# ✅ deterministic final JSON response emission
+# ✅ preservation of runtime contracts and replay semantics
+#
+# Explicitly delegated:
+# - adapter subprocess execution → runtime.adapter_gateway
+# - adapter response validation → runtime.adapter_gateway
+# - run lifecycle transitions → runtime.run_lifecycle
+# - NDJSON append/ingestion → runtime.trace_pipeline
+# - replay loading → runtime.replay / runtime.trace_pipeline
 #
 ###################################################################
 

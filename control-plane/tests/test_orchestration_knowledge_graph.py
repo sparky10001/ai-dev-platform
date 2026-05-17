@@ -134,7 +134,7 @@ class OrchestrationKnowledgeGraphTests(unittest.TestCase):
 
     def test_cli_build_knowledge_graph(self):
         proc = subprocess.run(
-            ['/workspace/ai-orchestrate', 'build-knowledge-graph', '/workspace/runs'],
+            ['/workspace/ai-orchestrate', 'build-knowledge-graph', '/workspace/runs', '--max-records=25'],
             capture_output=True,
             text=True,
             check=False,
@@ -146,7 +146,7 @@ class OrchestrationKnowledgeGraphTests(unittest.TestCase):
 
     def test_cli_compute_lineage(self):
         graph_proc = subprocess.run(
-            ['/workspace/ai-orchestrate', 'build-knowledge-graph', '/workspace/runs'],
+            ['/workspace/ai-orchestrate', 'build-knowledge-graph', '/workspace/runs', '--max-records=25'],
             capture_output=True,
             text=True,
             check=False,
@@ -158,7 +158,7 @@ class OrchestrationKnowledgeGraphTests(unittest.TestCase):
         node_id = graph['nodes'][0]['node_id']
 
         proc = subprocess.run(
-            ['/workspace/ai-orchestrate', 'compute-lineage', '/workspace/runs', node_id],
+            ['/workspace/ai-orchestrate', 'compute-lineage', '/workspace/runs', node_id, '--max-records=25'],
             capture_output=True,
             text=True,
             check=False,
@@ -173,7 +173,7 @@ class OrchestrationKnowledgeGraphTests(unittest.TestCase):
         out_path = out_dir / 'graph.md'
 
         proc = subprocess.run(
-            ['/workspace/ai-orchestrate', 'export-knowledge-graph', '/workspace/runs', str(out_path)],
+            ['/workspace/ai-orchestrate', 'export-knowledge-graph', '/workspace/runs', str(out_path), '--max-records=25'],
             capture_output=True,
             text=True,
             check=False,

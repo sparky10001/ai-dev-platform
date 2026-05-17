@@ -63,16 +63,16 @@ export_knowledge_graph_json(graph, out_dir / 'graph.json')
 export_knowledge_graph_markdown(graph, out_dir / 'graph.md')
 export_lineage_markdown(lineage, out_dir / 'lineage.md')
 
-kg = subprocess.run(['/workspace/ai-orchestrate', 'build-knowledge-graph', '/workspace/runs'], check=True, capture_output=True, text=True)
+kg = subprocess.run(['/workspace/ai-orchestrate', 'build-knowledge-graph', '/workspace/runs', '--max-records=25'], check=True, capture_output=True, text=True)
 json.loads(kg.stdout)
 
 graph_payload = json.loads(kg.stdout)
 if graph_payload.get('nodes'):
     node_id = graph_payload['nodes'][0]['node_id']
-    ln = subprocess.run(['/workspace/ai-orchestrate', 'compute-lineage', '/workspace/runs', node_id], check=True, capture_output=True, text=True)
+    ln = subprocess.run(['/workspace/ai-orchestrate', 'compute-lineage', '/workspace/runs', node_id, '--max-records=25'], check=True, capture_output=True, text=True)
     json.loads(ln.stdout)
 
-exp = subprocess.run(['/workspace/ai-orchestrate', 'export-knowledge-graph', '/workspace/runs', str(out_dir / 'graph_cli.md')], check=True, capture_output=True, text=True)
+exp = subprocess.run(['/workspace/ai-orchestrate', 'export-knowledge-graph', '/workspace/runs', str(out_dir / 'graph_cli.md'), '--max-records=25'], check=True, capture_output=True, text=True)
 json.loads(exp.stdout)
 
 print('[control-plane-knowledge] Smoke flow passed')

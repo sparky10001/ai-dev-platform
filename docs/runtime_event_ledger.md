@@ -1,4 +1,4 @@
-# Runtime EventLedger (Phase 3.6E)
+# Runtime EventLedger (Phase 3.6F)
 
 Phase 3.6B extends the additive EventLedger with deterministic hashing, index generation, and parity validation.
 
@@ -101,6 +101,20 @@ Phase 3.6E adds optional registry-from-ledger behind a flag.
 - Registry now optionally supports ledger mode.
 - Ledger remains non-authoritative and additive.
 
+
+## Phase 3.6F Authoritative Mode
+
+Phase 3.6F adds opt-in ledger-authoritative mode behind feature flags.
+
+- Enable with `RUNTIME_LEDGER_AUTHORITATIVE=1`.
+- In authoritative mode, replay/eval/registry default sources become ledger.
+- Explicit `source="trace"` overrides still force trace behavior.
+- Trace artifacts are still emitted for compatibility.
+- Optional parity enforcement via `RUNTIME_LEDGER_PARITY_REQUIRED=1`.
+- With parity required, trace/ledger mismatch raises `EventLedgerError`.
+
+Ledger remains non-authoritative unless this mode is explicitly enabled.
+
 ## Migration Path
 
-- 3.6F: ledger-authoritative cutover
+- 3.6F: ledger-authoritative cutover (implemented behind flag)

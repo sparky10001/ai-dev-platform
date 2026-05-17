@@ -551,6 +551,21 @@ unit test pass / 0 failed
 
 This suite validates Phase 3.6E registry-from-ledger behavior behind opt-in source selection.
 
+## runtime_ledger_authoritative_tests.sh
+
+Validates:
+
+* authoritative default switching
+* explicit source override behavior
+* parity enforcement
+* trace compatibility preservation
+
+Expected result:
+
+unit test pass / 0 failed
+
+This suite validates Phase 3.6F ledger-authoritative cutover behind explicit flags.
+
 
 # Running Tests
 
@@ -579,6 +594,7 @@ Run all runtime suites individually:
 ./scripts/tests/runtime_replay_ledger_tests.sh
 ./scripts/tests/runtime_eval_ledger_tests.sh
 ./scripts/tests/runtime_registry_ledger_tests.sh
+./scripts/tests/runtime_ledger_authoritative_tests.sh
 ```
 
 Run the full runtime ladder:
@@ -597,28 +613,29 @@ make validate
 
 # Validation Coverage Matrix
 
-| Capability                       | Covered By                       |
-| -------------------------------- | -------------------------------- |
-| response contracts               | runtime_tests.sh                 |
-| replay safety                    | replayability_smoke_test.sh      |
-| lifecycle ordering               | event_ordering_tests.sh          |
-| crash durability                 | failure_tests.sh                 |
-| NDJSON integrity                 | ndjson_integrity_tests.sh        |
-| replay reconstruction            | resume_from_trace_tests.sh       |
-| loader correctness               | loader_replay_tests.sh           |
-| evaluation correctness           | runtime_eval_tests.sh            |
-| registry correctness             | runtime_registry_tests.sh        |
-| dataset determinism              | runtime_dataset_tests.sh         |
-| contract enforcement             | runtime_contract_tests.sh        |
-| isolation guarantees             | parallel_run_isolation_test.sh   |
-| runtime snapshot stability       | runtime_snapshot_tests.sh        |
-| adapter gateway boundary         | runtime_adapter_gateway_tests.sh |
-| lifecycle orchestration boundary | runtime_run_lifecycle_tests.sh   |
-| trace pipeline boundary          | runtime_trace_pipeline_tests.sh  |
-| event ledger boundary            | runtime_event_ledger_tests.sh    |
-| replay ledger boundary           | runtime_replay_ledger_tests.sh   |
-| eval ledger boundary             | runtime_eval_ledger_tests.sh     |
-| registry ledger boundary         | runtime_registry_ledger_tests.sh |
+| Capability                       | Covered By                            |
+| -------------------------------- | ------------------------------------- |
+| response contracts               | runtime_tests.sh                      |
+| replay safety                    | replayability_smoke_test.sh           |
+| lifecycle ordering               | event_ordering_tests.sh               |
+| crash durability                 | failure_tests.sh                      |
+| NDJSON integrity                 | ndjson_integrity_tests.sh             |
+| replay reconstruction            | resume_from_trace_tests.sh            |
+| loader correctness               | loader_replay_tests.sh                |
+| evaluation correctness           | runtime_eval_tests.sh                 |
+| registry correctness             | runtime_registry_tests.sh             |
+| dataset determinism              | runtime_dataset_tests.sh              |
+| contract enforcement             | runtime_contract_tests.sh             |
+| isolation guarantees             | parallel_run_isolation_test.sh        |
+| runtime snapshot stability       | runtime_snapshot_tests.sh             |
+| adapter gateway boundary         | runtime_adapter_gateway_tests.sh      |
+| lifecycle orchestration boundary | runtime_run_lifecycle_tests.sh        |
+| trace pipeline boundary          | runtime_trace_pipeline_tests.sh       |
+| event ledger boundary            | runtime_event_ledger_tests.sh         |
+| replay ledger boundary           | runtime_replay_ledger_tests.sh        |
+| eval ledger boundary             | runtime_eval_ledger_tests.sh          |
+| registry ledger boundary         | runtime_registry_ledger_tests.sh      |
+| ledger authoritative boundary    | runtime_ledger_authoritative_tests.sh |
 
 ---
 
@@ -648,6 +665,7 @@ No schema-breaking changes should be merged without:
 * replay source selection validation
 * eval source selection validation
 * registry source selection validation
+* ledger authoritative mode validation
 
 ---
 
@@ -894,6 +912,7 @@ Before completing runtime changes:
 * verify replay source selection behavior
 * verify eval source selection behavior
 * verify registry source selection behavior
+* verify ledger authoritative mode behavior
 
 No runtime refactor should bypass the validation layer.
 

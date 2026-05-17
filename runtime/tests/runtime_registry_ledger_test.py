@@ -33,8 +33,8 @@ class RuntimeRegistryLedgerTests(unittest.TestCase):
             "status": "done",
             "created_at": 1.0,
             "completed_at": 4.0,
-            "command": "run",
-            "model": "test",
+            "command": self.run_id,
+            "model": self.run_id,
         }
         result_payload = {
             "status": "done",
@@ -72,11 +72,11 @@ class RuntimeRegistryLedgerTests(unittest.TestCase):
 
     def test_env_var_ledger_selection(self) -> None:
         os.environ["RUNTIME_REGISTRY_SOURCE"] = "ledger"
-        summary = summarize_runs(command="run", model="test", limit=1)
+        summary = summarize_runs(command=self.run_id, model=self.run_id, limit=1)
         self.assertEqual(summary.total_runs, 1)
 
     def test_explicit_source_ledger(self) -> None:
-        summary = summarize_runs(command="run", model="test", limit=1, source="ledger")
+        summary = summarize_runs(command=self.run_id, model=self.run_id, limit=1, source="ledger")
         self.assertEqual(summary.total_runs, 1)
 
     def test_missing_ledger_deterministic_error(self) -> None:
@@ -87,8 +87,8 @@ class RuntimeRegistryLedgerTests(unittest.TestCase):
             load_registry_events(self.run_dir, source="ledger")
 
     def test_trace_ledger_registry_parity_for_dual_written_run(self) -> None:
-        trace_summary = summarize_runs(command="run", model="test", limit=1, source="trace")
-        ledger_summary = summarize_runs(command="run", model="test", limit=1, source="ledger")
+        trace_summary = summarize_runs(command=self.run_id, model=self.run_id, limit=1, source="trace")
+        ledger_summary = summarize_runs(command=self.run_id, model=self.run_id, limit=1, source="ledger")
 
         self.assertEqual(trace_summary.total_runs, ledger_summary.total_runs)
         self.assertEqual(trace_summary.completed_runs, ledger_summary.completed_runs)
@@ -107,7 +107,7 @@ class RuntimeRegistryLedgerTests(unittest.TestCase):
         self.assertEqual(sum(1 for e in trace_events if e.event == "tool_result"), sum(1 for e in ledger_events if e.event == "tool_result"))
 
     def test_existing_trace_registry_behavior_unchanged(self) -> None:
-        summary = summarize_runs(command="run", model="test", limit=1, source="trace")
+        summary = summarize_runs(command=self.run_id, model=self.run_id, limit=1, source="trace")
         self.assertEqual(summary.total_runs, 1)
         self.assertEqual(summary.completed_runs, 1)
         self.assertEqual(summary.total_tool_calls, 1)

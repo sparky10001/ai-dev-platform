@@ -14,6 +14,19 @@ from runtime.validator import validate_event
 LEDGER_INDEX_SCHEMA_VERSION = 1
 
 
+def ledger_authoritative_enabled() -> bool:
+    return os.getenv("RUNTIME_LEDGER_AUTHORITATIVE") == "1"
+
+
+def ledger_parity_required() -> bool:
+    return os.getenv("RUNTIME_LEDGER_PARITY_REQUIRED") == "1"
+
+
+def enforce_trace_ledger_parity_if_required(run_or_path: str | Path | dict[str, Any]) -> None:
+    if ledger_authoritative_enabled() and ledger_parity_required():
+        validate_trace_ledger_parity(run_or_path, strict=True)
+
+
 def _to_event_dict(event: dict[str, Any] | Any) -> dict[str, Any]:
     if hasattr(event, "model_dump"):
         return event.model_dump(mode="json")
