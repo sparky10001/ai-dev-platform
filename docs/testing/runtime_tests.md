@@ -566,6 +566,21 @@ unit test pass / 0 failed
 
 This suite validates Phase 3.6F ledger-authoritative cutover behind explicit flags.
 
+## runtime_ledger_readiness_tests.sh
+
+Validates:
+
+* cutover readiness reporting
+* parity readiness
+* dependency audit structure
+* authoritative readiness state
+
+Expected result:
+
+unit test pass / 0 failed
+
+This suite validates Phase 3.6G ledger cutover readiness auditing and migration-readiness reporting.
+
 
 # Running Tests
 
@@ -595,6 +610,7 @@ Run all runtime suites individually:
 ./scripts/tests/runtime_eval_ledger_tests.sh
 ./scripts/tests/runtime_registry_ledger_tests.sh
 ./scripts/tests/runtime_ledger_authoritative_tests.sh
+./scripts/tests/runtime_ledger_readiness_tests.sh
 ```
 
 Run the full runtime ladder:
@@ -636,6 +652,7 @@ make validate
 | eval ledger boundary             | runtime_eval_ledger_tests.sh          |
 | registry ledger boundary         | runtime_registry_ledger_tests.sh      |
 | ledger authoritative boundary    | runtime_ledger_authoritative_tests.sh |
+| ledger readiness boundary        | runtime_ledger_readiness_tests.sh     |
 
 ---
 
@@ -666,6 +683,7 @@ No schema-breaking changes should be merged without:
 * eval source selection validation
 * registry source selection validation
 * ledger authoritative mode validation
+* ledger cutover readiness audit validation
 
 ---
 
@@ -913,6 +931,7 @@ Before completing runtime changes:
 * verify eval source selection behavior
 * verify registry source selection behavior
 * verify ledger authoritative mode behavior
+* verify ledger cutover readiness behavior
 
 No runtime refactor should bypass the validation layer.
 

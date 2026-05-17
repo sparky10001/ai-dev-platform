@@ -1,4 +1,4 @@
-# Runtime EventLedger (Phase 3.6F)
+# Runtime EventLedger (Phase 3.6G)
 
 Phase 3.6B extends the additive EventLedger with deterministic hashing, index generation, and parity validation.
 
@@ -118,3 +118,65 @@ Ledger remains non-authoritative unless this mode is explicitly enabled.
 ## Migration Path
 
 - 3.6F: ledger-authoritative cutover (implemented behind flag)
+
+
+## Phase 3.6G Cutover Readiness
+
+Phase 3.6G focuses on cutover readiness auditing, migration clarity, and operational hardening.
+
+Current readiness state:
+
+- replay is ledger-capable and authoritative-mode aware
+- eval is ledger-capable and authoritative-mode aware
+- registry is ledger-capable and authoritative-mode aware
+- trace artifacts remain emitted for compatibility
+- parity enforcement is optional and gated
+
+Authoritative operation flags:
+
+- `RUNTIME_LEDGER_AUTHORITATIVE=1`
+- `RUNTIME_LEDGER_PARITY_REQUIRED=1`
+
+Migration matrix:
+
+| Component           | Ledger Ready | Default Source          | Authoritative Support |
+|---------------------|--------------|-------------------------|-----------------------|
+| replay              | yes          | trace                   | yes                   |
+| eval                | yes          | trace                   | yes                   |
+| registry            | yes          | trace                   | yes                   |
+| trace compatibility | required     | trace artifacts emitted | retained              |
+| parity enforcement  | yes          | off                     | optional strict       |
+| ledger index        | yes          | additive sidecar        | available             |
+
+Operational guidance:
+
+- Keep default mode trace-first unless explicit operational cutover is required.
+- Enable authoritative mode first in controlled environments.
+- Enable parity enforcement after baseline parity confidence is established.
+- Treat parity failures as hard blockers for authoritative operation.
+
+Cutover checklist:
+
+1. Validate dual-write parity across representative runs.
+2. Run readiness audit helpers on recent runs.
+3. Enable `RUNTIME_LEDGER_AUTHORITATIVE=1` in staging.
+4. Optionally enable `RUNTIME_LEDGER_PARITY_REQUIRED=1`.
+5. Validate replay/eval/registry equivalence and rollback readiness.
+
+Rollback strategy:
+
+- unset `RUNTIME_LEDGER_AUTHORITATIVE`
+- unset `RUNTIME_LEDGER_PARITY_REQUIRED`
+- continue with trace-first defaults using unchanged artifacts
+
+Operational risks and remaining assumptions:
+
+- some scripts/docs still reference `trace.jsonl` as compatibility anchor
+- authoritative mode depends on dual-write parity and ledger presence
+- compatibility tooling still expects trace artifact emission
+
+Recovery expectations:
+
+- ledger and trace both remain available for replay-safe recovery
+- parity checks can identify divergence early
+- rollback to trace-first mode is immediate via env flags

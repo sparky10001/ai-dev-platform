@@ -239,3 +239,128 @@ def validate_trace_ledger_parity(run_or_path: str | Path | dict[str, Any], *, st
         raise EventLedgerError("trace/ledger parity validation failed: " + ",".join(errors))
 
     return report
+
+
+def trace_compatibility_required() -> bool:
+    # Compatibility remains required until trace removal is explicitly planned.
+    return True
+
+
+def _resolve_run_dir(run_or_path: str | Path | dict[str, Any]) -> Path:
+    if isinstance(run_or_path, dict):
+        return Path(
+            run_or_path.get("run_path")
+            or run_or_path.get("path")
+            or Path(run_or_path.get("trace_path", "")).parent
+        )
+    path = Path(run_or_path)
+    return path if path.is_dir() else path.parent
+
+
+def audit_trace_dependencies() -> dict[str, Any]:
+    root = Path(__file__).resolve().parent.parent
+    scopes = [
+        ("runtime", root / "runtime"),
+        ("scripts", root / "scripts"),
+        ("control-plane", root / "control-plane"),
+        ("docs", root / "docs"),
+    ]
+
+    dependencies: list[dict[str, Any]] = []
+
+    for scope, base in scopes:
+        if not base.exists():
+            continue
+        for fp in sorted(base.rglob("*")):
+            if not fp.is_file():
+                continue
+            if "__pycache__" in fp.parts:
+                continue
+            try:
+                content = fp.read_text(encoding="utf-8")
+            except Exception:
+                continue
+            if "trace.jsonl" not in content:
+                continue
+            rel = str(fp.relative_to(root))
+            # Heuristic: runtime modules with source-switching are compatibility usage.
+            kind = "compatibility_only" if rel in {
+                "runtime/replay.py",
+                "runtime/evals.py",
+                "runtime/registry.py",
+                "runtime/event_ledger.py",
+            } else "trace_assumption"
+            dependencies.append({"scope": scope, "path": rel, "kind": kind})
+
+    compatibility_only = [d["path"] for d in dependencies if d["kind"] == "compatibility_only"]
+    assumptions = [d["path"] for d in dependencies if d["kind"] == "trace_assumption"]
+
+    status = "ready"
+    if assumptions:
+        status = "warning"
+
+    return {
+        "status": status,
+        "total_dependencies": len(dependencies),
+        "remaining_trace_dependencies": assumptions,
+        "compatibility_only_dependencies": compatibility_only,
+        "dependencies": dependencies,
+    }
+
+
+def ledger_cutover_readiness(run_or_path: str | Path | dict[str, Any]) -> dict[str, Any]:
+    run_dir = _resolve_run_dir(run_or_path)
+    trace_path = run_dir / "trace.jsonl"
+    ledger_path = run_dir / "ledger.jsonl"
+
+    trace_exists = trace_path.exists()
+    ledger_exists = ledger_path.exists()
+
+    warnings: list[str] = []
+    errors: list[str] = []
+
+    parity_valid = False
+    if trace_exists and ledger_exists:
+        try:
+            validate_trace_ledger_parity(run_dir, strict=True)
+            parity_valid = True
+        except Exception as exc:
+            errors.append(f"parity_validation_failed: {exc}")
+    else:
+        if not trace_exists:
+            errors.append("missing_trace")
+        if not ledger_exists:
+            errors.append("missing_ledger")
+
+    dep_audit = audit_trace_dependencies()
+
+    replay_ledger_ready = ledger_exists and parity_valid
+    eval_ledger_ready = ledger_exists and parity_valid
+    registry_ledger_ready = ledger_exists and parity_valid
+
+    if dep_audit["remaining_trace_dependencies"]:
+        warnings.append("remaining_trace_dependencies_present")
+
+    status = "ready"
+    if errors:
+        status = "blocked"
+    elif warnings:
+        status = "warning"
+
+    return {
+        "status": status,
+        "run_path": str(run_dir),
+        "trace_exists": trace_exists,
+        "ledger_exists": ledger_exists,
+        "parity_valid": parity_valid,
+        "replay_ledger_ready": replay_ledger_ready,
+        "eval_ledger_ready": eval_ledger_ready,
+        "registry_ledger_ready": registry_ledger_ready,
+        "authoritative_mode_available": True,
+        "authoritative_mode_enabled": ledger_authoritative_enabled(),
+        "trace_compatibility_required": trace_compatibility_required(),
+        "remaining_trace_dependencies": dep_audit["remaining_trace_dependencies"],
+        "compatibility_only_dependencies": dep_audit["compatibility_only_dependencies"],
+        "warnings": warnings,
+        "errors": errors,
+    }
