@@ -506,6 +506,21 @@ unit test pass / 0 failed
 
 This suite validates Phase 3.6B additive EventLedger validation/index/parity behavior.
 
+## runtime_replay_ledger_tests.sh
+
+Validates:
+
+* trace replay remains default
+* optional ledger replay
+* trace/ledger replay parity
+* deterministic missing-ledger handling
+
+Expected result:
+
+unit test pass / 0 failed
+
+This suite validates Phase 3.6C replay-from-ledger behavior behind opt-in source selection.
+
 
 # Running Tests
 
@@ -531,6 +546,7 @@ Run all runtime suites individually:
 ./scripts/tests/runtime_run_lifecycle_tests.sh
 ./scripts/tests/runtime_trace_pipeline_tests.sh
 ./scripts/tests/runtime_event_ledger_tests.sh
+./scripts/tests/runtime_replay_ledger_tests.sh
 ```
 
 Run the full runtime ladder:
@@ -568,6 +584,7 @@ make validate
 | lifecycle orchestration boundary | runtime_run_lifecycle_tests.sh   |
 | trace pipeline boundary          | runtime_trace_pipeline_tests.sh  |
 | event ledger boundary            | runtime_event_ledger_tests.sh    |
+| replay ledger boundary           | runtime_replay_ledger_tests.sh   |
 
 ---
 
@@ -594,6 +611,7 @@ No schema-breaking changes should be merged without:
 * lifecycle orchestration validation
 * trace pipeline validation
 * event ledger dual-write validation
+* replay source selection validation
 
 ---
 
@@ -837,6 +855,7 @@ Before completing runtime changes:
 * verify lifecycle orchestration behavior
 * verify trace pipeline behavior
 * verify event ledger dual-write behavior
+* verify replay source selection behavior
 
 No runtime refactor should bypass the validation layer.
 

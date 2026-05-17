@@ -1,4 +1,4 @@
-# Runtime EventLedger (Phase 3.6B)
+# Runtime EventLedger (Phase 3.6C)
 
 Phase 3.6B extends the additive EventLedger with deterministic hashing, index generation, and parity validation.
 
@@ -6,7 +6,7 @@ Phase 3.6B extends the additive EventLedger with deterministic hashing, index ge
 
 - `trace.jsonl` remains the authoritative runtime event source of truth.
 - `ledger.jsonl` remains an additive mirror only.
-- Replay, evals, and registry behavior remain unchanged.
+- Default replay behavior, evals, and registry behavior remain unchanged.
 
 ## Phase 3.6B Scope
 
@@ -67,11 +67,20 @@ In strict mode, `validate_ledger_file(...)` rejects:
 - No NDJSON trace format changes.
 - `trace.jsonl` remains source of truth.
 - `ledger.jsonl` remains additive mirror only.
-- replay/eval/registry layers remain unchanged.
+- Default replay behavior remains trace-based; eval/registry layers remain unchanged.
+
+## Phase 3.6C Replay Flag
+
+Phase 3.6C adds optional replay-from-ledger behind a flag.
+
+- Default replay source remains `trace.jsonl`.
+- Set `RUNTIME_REPLAY_SOURCE=ledger` (or pass `source="ledger"`) to replay from `ledger.jsonl`.
+- Ledger replay is opt-in and non-authoritative.
+- Missing `ledger.jsonl` in ledger mode fails deterministically; no implicit fallback is performed.
+- `evals.py` and `registry.py` remain trace-based in this phase.
 
 ## Migration Path
 
-- 3.6C: replay-from-ledger behind feature flag
 - 3.6D: eval-from-ledger behind feature flag
 - 3.6E: registry-from-ledger behind feature flag
 - 3.6F: ledger-authoritative cutover

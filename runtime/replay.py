@@ -18,14 +18,18 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
+import os
 import re
 
+from runtime.event_ledger import load_ledger
 from runtime.trace_pipeline import load_trace as load_trace_events
 
 from runtime.schemas import (
     TraceEvent,
 )
+
+ReplaySource = Literal["trace", "ledger"]
 
 
 # ================================================================
@@ -75,19 +79,50 @@ class ReplayState:
 
 
 # ================================================================
-# 📥 Load Trace
+# 🔧 Replay Source Resolution
 # ================================================================
 
-def load_trace(
-    trace_path: str | Path,
+def replay_source(default: ReplaySource = "trace") -> ReplaySource:
+    raw = os.getenv("RUNTIME_REPLAY_SOURCE")
+    if not raw:
+        return default
+    normalized = raw.strip().lower()
+    if normalized in ("trace", "ledger"):
+        return normalized  # type: ignore[return-value]
+    return default
+
+
+def _source_path_for_replay(path_or_run: str | Path, source: ReplaySource) -> Path:
+    path = Path(path_or_run)
+
+    if path.is_dir():
+        return path / ("trace.jsonl" if source == "trace" else "ledger.jsonl")
+
+    if source == "trace":
+        return path
+
+    if path.name == "trace.jsonl":
+        return path.with_name("ledger.jsonl")
+
+    return path
+
+
+def load_replay_events(
+    path_or_run: str | Path,
     *,
     strict: bool = False,
+    source: ReplaySource = "trace",
 ) -> list[TraceEvent]:
+    resolved_path = _source_path_for_replay(path_or_run, source)
 
-    path = Path(trace_path)
+    if source == "ledger" and not resolved_path.exists():
+        raise RuntimeError(f"Replay source ledger missing file: {resolved_path}")
+
+    if source == "ledger":
+        return load_ledger(resolved_path, strict=strict)
 
     try:
-        events = load_trace_events(path, strict=strict)
+        return load_trace_events(resolved_path, strict=strict)
     except Exception as e:
         if strict:
             msg = str(e)
@@ -100,7 +135,23 @@ def load_trace(
             ) from e
         return []
 
-    return events
+
+# ================================================================
+# 📥 Load Trace
+# ================================================================
+
+def load_trace(
+    trace_path: str | Path,
+    *,
+    strict: bool = False,
+    source: ReplaySource = "trace",
+) -> list[TraceEvent]:
+    selected_source = source if source != "trace" else replay_source(default="trace")
+    return load_replay_events(
+        trace_path,
+        strict=strict,
+        source=selected_source,
+    )
 
 
 # ================================================================
@@ -111,6 +162,7 @@ def replay_trace(
     trace_path: str | Path,
     *,
     strict: bool = False,
+    source: ReplaySource = "trace",
 ) -> ReplayState:
 
     state = ReplayState()
@@ -118,6 +170,7 @@ def replay_trace(
     events = load_trace(
         trace_path,
         strict=strict,
+        source=source,
     )
 
     state.events = events
@@ -185,9 +238,11 @@ def replay_trace(
 
 def summarize_trace(
     trace_path: str | Path,
+    *,
+    source: ReplaySource = "trace",
 ) -> dict:
 
-    replay = replay_trace(trace_path)
+    replay = replay_trace(trace_path, source=source)
 
     return {
         "run_id": replay.run_id,
