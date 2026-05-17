@@ -494,15 +494,17 @@ Validates:
 
 * additive ledger writes
 * ledger NDJSON integrity
-* ledger validation
+* strict ledger validation hardening
 * trace/ledger dual-write parity
-* strict ledger checks
+* trace/ledger parity mismatch detection
+* checksum/index validation
+* deterministic event hashing
 
 Expected result:
 
 unit test pass / 0 failed
 
-This suite validates Phase 3.6A additive EventLedger dual-write scaffolding.
+This suite validates Phase 3.6B additive EventLedger validation/index/parity behavior.
 
 
 # Running Tests

@@ -1,13 +1,17 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 from pathlib import Path
 from typing import Any, Iterator
 
-from runtime.errors import NDJSONIntegrityError, TraceValidationError
+from runtime.errors import EventLedgerError, NDJSONIntegrityError, TraceValidationError
 from runtime.validator import validate_event
+
+
+LEDGER_INDEX_SCHEMA_VERSION = 1
 
 
 def _to_event_dict(event: dict[str, Any] | Any) -> dict[str, Any]:
@@ -16,6 +20,32 @@ def _to_event_dict(event: dict[str, Any] | Any) -> dict[str, Any]:
     if isinstance(event, dict):
         return event
     return dict(event)
+
+
+def canonical_event_payload(event: dict[str, Any] | Any) -> dict[str, Any]:
+    payload = _to_event_dict(event)
+    return {
+        "schema_version": payload.get("schema_version"),
+        "run_id": payload.get("run_id"),
+        "event": payload.get("event"),
+        "timestamp": payload.get("timestamp"),
+        "data": payload.get("data"),
+    }
+
+
+def event_hash(event: dict[str, Any] | Any) -> str:
+    canonical = canonical_event_payload(event)
+    encoded = json.dumps(canonical, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def ledger_event_record(event: dict[str, Any] | Any, index: int) -> dict[str, Any]:
+    canonical = canonical_event_payload(event)
+    return {
+        "index": int(index),
+        "event_hash": event_hash(canonical),
+        "event": canonical,
+    }
 
 
 def ledger_path_for_run(run: dict[str, Any]) -> Path:
@@ -30,6 +60,20 @@ def ledger_path_for_run(run: dict[str, Any]) -> Path:
     raise ValueError("Unable to derive ledger path for run")
 
 
+def _resolve_ledger_path(path_or_run: str | Path | dict[str, Any]) -> Path:
+    if isinstance(path_or_run, (str, Path)):
+        p = Path(path_or_run)
+        if p.is_dir():
+            return p / "ledger.jsonl"
+        return p
+    return ledger_path_for_run(path_or_run)
+
+
+def ledger_index_path_for_run(path_or_run: str | Path | dict[str, Any]) -> Path:
+    ledger_path = _resolve_ledger_path(path_or_run)
+    return ledger_path.with_name("ledger.index.json")
+
+
 def append_event(run: dict[str, Any], event: dict[str, Any] | Any) -> None:
     payload = _to_event_dict(event)
     validated = validate_event(payload)
@@ -39,15 +83,6 @@ def append_event(run: dict[str, Any], event: dict[str, Any] | Any) -> None:
         f.write(json.dumps(validated.model_dump(mode="json")) + "\n")
         f.flush()
         os.fsync(f.fileno())
-
-
-def _resolve_ledger_path(path_or_run: str | Path | dict[str, Any]) -> Path:
-    if isinstance(path_or_run, (str, Path)):
-        p = Path(path_or_run)
-        if p.is_dir():
-            return p / "ledger.jsonl"
-        return p
-    return ledger_path_for_run(path_or_run)
 
 
 def iter_ledger_events(path_or_run: str | Path | dict[str, Any], *, strict: bool = False) -> Iterator[Any]:
@@ -82,18 +117,112 @@ def validate_ledger_file(path_or_run: str | Path | dict[str, Any], *, strict: bo
     events = load_ledger(path, strict=strict)
     if not strict:
         return events
+    if not events:
+        raise TraceValidationError("Ledger is empty in strict mode")
+
     run_ids = {getattr(evt, "run_id", None) for evt in events}
-    if len(run_ids) > 1:
+    if len(run_ids) != 1:
         raise TraceValidationError("Inconsistent run_id values in ledger")
+
     versions = {getattr(evt, "schema_version", None) for evt in events}
-    if len(versions) > 1:
+    if len(versions) != 1:
         raise TraceValidationError("Inconsistent schema_version values in ledger")
-    last_ts = None
+
+    last_ts: float | None = None
     for evt in events:
+        event_dict = _to_event_dict(evt)
+        event_hash(event_dict)
+
         ts = getattr(evt, "timestamp", None)
         if not isinstance(ts, (int, float)):
             raise TraceValidationError("Ledger contains non-numeric timestamp")
-        if last_ts is not None and ts < last_ts:
+        current_ts = float(ts)
+        if last_ts is not None and current_ts < last_ts:
             raise TraceValidationError("Ledger timestamps are not monotonic")
-        last_ts = float(ts)
+        last_ts = current_ts
+
     return events
+
+
+def build_ledger_index(path_or_run: str | Path | dict[str, Any]) -> dict[str, Any]:
+    events = validate_ledger_file(path_or_run, strict=True)
+    event_records: list[dict[str, Any]] = []
+    event_hashes: list[str] = []
+
+    for idx, evt in enumerate(events):
+        record = ledger_event_record(evt, idx)
+        event_records.append(record)
+        event_hashes.append(record["event_hash"])
+
+    first_event = _to_event_dict(events[0])
+    ledger_hash = hashlib.sha256("".join(event_hashes).encode("utf-8")).hexdigest()
+    return {
+        "schema_version": LEDGER_INDEX_SCHEMA_VERSION,
+        "run_id": first_event.get("run_id"),
+        "event_count": len(event_records),
+        "ledger_hash": ledger_hash,
+        "events": event_records,
+    }
+
+
+def write_ledger_index(path_or_run: str | Path | dict[str, Any]) -> Path:
+    index = build_ledger_index(path_or_run)
+    index_path = ledger_index_path_for_run(path_or_run)
+    index_path.parent.mkdir(parents=True, exist_ok=True)
+    index_path.write_text(json.dumps(index, sort_keys=True, separators=(",", ":")) + "\n", encoding="utf-8")
+    return index_path
+
+
+def load_ledger_index(path_or_run: str | Path | dict[str, Any]) -> dict[str, Any]:
+    index_path = ledger_index_path_for_run(path_or_run)
+    return json.loads(index_path.read_text(encoding="utf-8"))
+
+
+def validate_trace_ledger_parity(run_or_path: str | Path | dict[str, Any], *, strict: bool = False) -> dict[str, Any]:
+    if isinstance(run_or_path, dict):
+        run_dir = Path(
+            run_or_path.get("run_path")
+            or run_or_path.get("path")
+            or Path(run_or_path.get("trace_path", "")).parent
+        )
+    else:
+        path = Path(run_or_path)
+        run_dir = path if path.is_dir() else path.parent
+
+    trace_path = run_dir / "trace.jsonl"
+    ledger_path = run_dir / "ledger.jsonl"
+
+    from runtime.trace_pipeline import load_trace
+
+    trace_events = load_trace(trace_path, strict=True)
+    ledger_events = load_ledger(ledger_path, strict=True)
+
+    trace_payloads = [_to_event_dict(evt) for evt in trace_events]
+    ledger_payloads = [_to_event_dict(evt) for evt in ledger_events]
+
+    trace_event_names = [payload.get("event") for payload in trace_payloads]
+    ledger_event_names = [payload.get("event") for payload in ledger_payloads]
+    trace_hashes = [event_hash(payload) for payload in trace_payloads]
+    ledger_hashes = [event_hash(payload) for payload in ledger_payloads]
+
+    errors: list[str] = []
+    if len(trace_payloads) != len(ledger_payloads):
+        errors.append("event_count_mismatch")
+    if trace_event_names != ledger_event_names:
+        errors.append("event_sequence_mismatch")
+    if trace_hashes != ledger_hashes:
+        errors.append("hash_sequence_mismatch")
+
+    report = {
+        "status": "success" if not errors else "error",
+        "trace_event_count": len(trace_payloads),
+        "ledger_event_count": len(ledger_payloads),
+        "event_sequence_match": trace_event_names == ledger_event_names,
+        "hash_sequence_match": trace_hashes == ledger_hashes,
+        "errors": errors,
+    }
+
+    if strict and errors:
+        raise EventLedgerError("trace/ledger parity validation failed: " + ",".join(errors))
+
+    return report

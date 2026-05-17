@@ -1,27 +1,76 @@
-# Runtime EventLedger (Phase 3.6A)
+# Runtime EventLedger (Phase 3.6B)
 
-Phase 3.6A introduces an additive EventLedger stream.
+Phase 3.6B extends the additive EventLedger with deterministic hashing, index generation, and parity validation.
 
-## Current State
+## Authoritative Source
 
-- trace.jsonl remains the authoritative runtime event source.
-- ledger.jsonl is a dual-written mirror stored per run directory.
-- Replay, evals, and registry continue to read existing sources.
+- `trace.jsonl` remains the authoritative runtime event source of truth.
+- `ledger.jsonl` remains an additive mirror only.
+- Replay, evals, and registry behavior remain unchanged.
 
-## Phase 3.6A Scope
+## Phase 3.6B Scope
 
-- Add runtime/event_ledger.py.
-- Dual-write validated runtime events to ledger.jsonl.
-- Keep runtime behavior and response contracts unchanged.
+- Deterministic event canonicalization via `canonical_event_payload(...)`.
+- Deterministic event hashing via `event_hash(...)`.
+- Per-event index records via `ledger_event_record(...)`.
+- `ledger.index.json` sidecar generation and loading.
+- Trace/Ledger parity validation via `validate_trace_ledger_parity(..., strict=False)`.
+- Hardened strict ledger validation in `validate_ledger_file(..., strict=True)`.
 
-## Strictness
+## ledger.index.json Sidecar
 
-- Default: ledger failures are non-fatal to preserve compatibility.
-- RUNTIME_LEDGER_STRICT=1: ledger write failures raise typed errors.
+`ledger.index.json` is generated from `ledger.jsonl` and includes:
+
+- `schema_version`
+- `run_id`
+- `event_count`
+- `ledger_hash`
+- deterministic `events` entries (`index`, `event_hash`, canonical `event`)
+
+The sidecar is deterministic and reproducible from the same ledger input.
+
+## Deterministic Event Hashing
+
+Event hashing is based on canonical payload fields:
+
+- `schema_version`
+- `run_id`
+- `event`
+- `timestamp`
+- `data`
+
+Equivalent event content yields identical hashes regardless of dict key ordering.
+
+## Trace/Ledger Parity Validation
+
+`validate_trace_ledger_parity(...)` compares `trace.jsonl` and `ledger.jsonl` for:
+
+- event count parity
+- event sequence parity
+- event hash sequence parity
+
+Default mode returns a structured report. `strict=True` raises `EventLedgerError` on mismatch.
+
+## Strict Ledger Validation
+
+In strict mode, `validate_ledger_file(...)` rejects:
+
+- empty ledgers
+- mixed `run_id`
+- mixed `schema_version`
+- timestamp regression
+- events that cannot be canonicalized/hashed
+
+## Compatibility
+
+- No response contract changes.
+- No NDJSON trace format changes.
+- `trace.jsonl` remains source of truth.
+- `ledger.jsonl` remains additive mirror only.
+- replay/eval/registry layers remain unchanged.
 
 ## Migration Path
 
-- 3.6B: validation and checksum guards
 - 3.6C: replay-from-ledger behind feature flag
 - 3.6D: eval-from-ledger behind feature flag
 - 3.6E: registry-from-ledger behind feature flag
