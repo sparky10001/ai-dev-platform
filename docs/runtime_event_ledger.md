@@ -255,3 +255,38 @@ Tooling:
 - strict mode: `python3 scripts/maintenance/runtime_boundary_audit.py --strict`
 
 This is observational guardrail enforcement only and does not modify runtime behavior.
+
+## Phase 3.7D Ledger Corruption & Recovery Validation
+
+Phase 3.7D adds deterministic corruption classification and recovery-readiness auditing for ledger artifacts before authority cutover.
+
+Corruption categories:
+
+- `missing_ledger`
+- `missing_trace`
+- `malformed_ndjson`
+- `empty_ledger`
+- `mixed_run_id`
+- `mixed_schema_version`
+- `timestamp_regression`
+- `duplicate_lifecycle_event`
+- `missing_lifecycle_event`
+- `event_after_session_end`
+- `parity_mismatch`
+- `index_mismatch`
+- `replay_failure`
+- `eval_failure`
+- `registry_failure`
+
+Audit commands:
+
+- `python3 scripts/maintenance/ledger_corruption_audit.py --latest`
+- `python3 scripts/maintenance/ledger_corruption_audit.py --latest --json`
+- `python3 scripts/maintenance/ledger_corruption_audit.py --latest --strict`
+
+Operational guidance:
+
+- corruption audit is observational only
+- no automatic repair or mutation is performed
+- trace fallback remains available for compatibility and recovery
+- strict mode is intended for pre-cutover and CI enforcement

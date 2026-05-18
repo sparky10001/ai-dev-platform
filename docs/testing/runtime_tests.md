@@ -1075,3 +1075,36 @@ Relationship to purity audit:
 
 - purity audit checks read/write side effects
 - boundary audit checks import direction and layering ownership
+
+## runtime_ledger_corruption_tests.sh
+
+Validates:
+
+- ledger corruption category detection
+- strict vs tolerant corruption handling
+- parity/index mismatch detection
+- ledger-mode replay/eval/registry failure categorization
+- corruption audit CLI strict/json behavior
+
+Expected result:
+
+unit test pass / 0 failed
+
+This suite validates Phase 3.7D ledger corruption and recovery-readiness guardrails.
+
+## Phase 3.7D Additions
+
+Running Tests list additions:
+
+- `./scripts/tests/runtime_ledger_corruption_tests.sh`
+
+Make targets:
+
+- `make runtime-ledger-corruption-tests`
+- `make ledger-corruption-audit`
+
+Pre-cutover workflow:
+
+- run `ledger-corruption-audit --latest --strict` on representative runs
+- investigate categories before enabling authority mode
+- do not auto-repair; preserve trace compatibility fallback
