@@ -1040,3 +1040,38 @@ Coverage Matrix additions:
 CI usage:
 
 - `python3 scripts/maintenance/derived_purity_audit.py --strict`
+
+## runtime_boundary_audit_tests.sh
+
+Validates:
+
+- runtime import-boundary model enforcement
+- forbidden cross-layer import detection
+- control-plane `runtime.engine` import prohibition
+- boundary audit CLI strict/json behavior
+
+Expected result:
+
+unit test pass / 0 failed
+
+This suite validates Phase 3.7C runtime boundary enforcement guardrails.
+
+## Phase 3.7C Additions
+
+Running Tests list additions:
+
+- `./scripts/tests/runtime_boundary_audit_tests.sh`
+
+Make targets:
+
+- `make runtime-boundary-audit-tests`
+- `make runtime-boundary-audit`
+
+CI usage:
+
+- `python3 scripts/maintenance/runtime_boundary_audit.py --strict`
+
+Relationship to purity audit:
+
+- purity audit checks read/write side effects
+- boundary audit checks import direction and layering ownership

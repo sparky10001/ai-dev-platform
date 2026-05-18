@@ -237,3 +237,21 @@ Strict mode:
 - exits nonzero when purity violations are detected.
 - intended for CI/staging guardrails.
 - observational only; no auto-repair or behavior cutover.
+
+## Phase 3.7C Runtime Boundary Enforcement
+
+Phase 3.7C adds import-boundary guardrails that protect runtime layering around trace/ledger persistence and derived readers.
+
+Key enforcement points:
+
+- execution modules remain coordinator-directed (`engine` -> gateway/lifecycle/trace/ledger)
+- derived modules (`replay`, `evals`, `registry`) remain read-side projections
+- ledger/trace layers are protected from replay/eval/registry/control-plane coupling
+- control-plane importing `runtime.engine` is treated as a boundary violation
+
+Tooling:
+
+- `python3 scripts/maintenance/runtime_boundary_audit.py`
+- strict mode: `python3 scripts/maintenance/runtime_boundary_audit.py --strict`
+
+This is observational guardrail enforcement only and does not modify runtime behavior.

@@ -26,3 +26,23 @@ Lower-level runtime modules should flow toward contracts, validator, and schemas
 ## Step 6 and Step 7 Notes
 
 Keep engine as a coordinator only, and keep dependency direction one-way into contracts and validation layers to avoid circular-import regressions.
+
+## Phase 3.7C Boundary Enforcement
+
+Phase 3.7C adds static runtime boundary enforcement to prevent cross-layer coupling regressions.
+
+Boundary model:
+
+- `runtime/engine.py` coordinates execution modules (`adapter_gateway`, `run_lifecycle`, `trace_pipeline`, `event_ledger`).
+- `runtime/event_ledger.py` and `runtime/trace_pipeline.py` are persistence/validation layers and must not import replay/eval/registry or control-plane modules.
+- `runtime/replay.py`, `runtime/evals.py`, `runtime/registry.py` are derived readers and must not import engine/adapter/lifecycle execution modules.
+- `runtime/datasets.py` is a projection writer and must not import engine/adapter/lifecycle modules.
+- control-plane must not import `runtime.engine`.
+
+Audit command:
+
+- `python3 scripts/maintenance/runtime_boundary_audit.py`
+- `python3 scripts/maintenance/runtime_boundary_audit.py --json`
+- `python3 scripts/maintenance/runtime_boundary_audit.py --strict`
+
+Strict mode is enforcement-only for CI/staging and performs no runtime mutation or behavior cutover.
