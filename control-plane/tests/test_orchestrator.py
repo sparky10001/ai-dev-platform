@@ -7,6 +7,7 @@ import unittest
 from pathlib import Path
 
 CONTROL_PLANE_ROOT = Path(__file__).resolve().parents[1]
+WORKSPACE_ROOT = Path('/workspace')
 if str(CONTROL_PLANE_ROOT) not in sys.path:
     sys.path.insert(0, str(CONTROL_PLANE_ROOT))
 
@@ -16,6 +17,15 @@ from runtime.replay import replay_trace
 
 
 class OrchestratorTests(unittest.TestCase):
+
+    def _unique_tmp_path(self) -> str:
+        return f"tmp/{self.id().replace('.', '_').replace(':', '_')}.txt"
+
+    def _cleanup_file(self, rel_path: str) -> None:
+        WORKSPACE_ROOT.joinpath(rel_path).unlink(missing_ok=True)
+
+    def _write_list_task(self, rel_path: str) -> str:
+        return f"Create a file called {rel_path} with content 'hi' and then list files"
 
     def test_request_rejects_empty_task(self):
         with self.assertRaises(Exception):
@@ -30,14 +40,24 @@ class OrchestratorTests(unittest.TestCase):
         self.assertIn(result.status, {'success', 'error'})
 
     def test_write_list_end_to_end(self):
-        result = orchestrate_task("Create a file called hello.txt with content 'hi' and then list files")
+        rel_path = self._unique_tmp_path()
+        file_name = Path(rel_path).name
+        self._cleanup_file(rel_path)
+        self.addCleanup(lambda: self._cleanup_file(rel_path))
+
+        result = orchestrate_task(self._write_list_task(rel_path))
         self.assertEqual(result.status, 'success')
         self.assertEqual(result.dag_id, 'plan_write_list')
         self.assertEqual(result.execution_order, ['write', 'list'])
         self.assertIn('write', result.node_results)
         self.assertIn('list', result.node_results)
+
+        write_out = result.node_results['write'].get('output', {})
+        self.assertEqual(write_out.get('path'), rel_path)
+        self.assertEqual(write_out.get('bytes_written'), 2)
+
         entries = result.node_results['list'].get('output', {}).get('entries', [])
-        self.assertTrue(any(isinstance(item, dict) and item.get('name') == 'hello.txt' for item in entries))
+        self.assertTrue(any(isinstance(item, dict) and item.get('name') in {file_name, 'tmp'} for item in entries))
 
     def test_noop_strategy_succeeds(self):
         result = orchestrate_task({'task': 'anything', 'planner_strategy': 'noop'})
@@ -66,7 +86,11 @@ class OrchestratorTests(unittest.TestCase):
         self.assertIsNotNone(result.run_path)
 
     def test_trace_true_replayable(self):
-        result = orchestrate_task({'task': "Create a file called hello.txt with content 'hi' and then list files", 'trace': True})
+        rel_path = self._unique_tmp_path()
+        self._cleanup_file(rel_path)
+        self.addCleanup(lambda: self._cleanup_file(rel_path))
+
+        result = orchestrate_task({'task': self._write_list_task(rel_path), 'trace': True})
         trace_path = Path(result.run_path) / 'trace.jsonl'
         self.assertTrue(trace_path.exists())
         replayed = replay_trace(trace_path)

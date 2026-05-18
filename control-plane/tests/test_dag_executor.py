@@ -6,6 +6,7 @@ from pathlib import Path
 import sys
 
 CONTROL_PLANE_ROOT = Path(__file__).resolve().parents[1]
+WORKSPACE_ROOT = Path('/workspace')
 if str(CONTROL_PLANE_ROOT) not in sys.path:
     sys.path.insert(0, str(CONTROL_PLANE_ROOT))
 
@@ -14,9 +15,16 @@ from core.dag.executor import execute_dag
 
 class DagExecutorTests(unittest.TestCase):
 
+    def _cleanup_file(self, rel_path: str) -> None:
+        WORKSPACE_ROOT.joinpath(rel_path).unlink(missing_ok=True)
+
     def test_execute_example_dag_success(self):
 
         dag_path = CONTROL_PLANE_ROOT / 'dags' / 'examples' / 'file_write_flow.json'
+        expected_rel_path = 'tmp/file_write_flow_hello.txt'
+        expected_name = Path(expected_rel_path).name
+        self._cleanup_file(expected_rel_path)
+        self.addCleanup(lambda: self._cleanup_file(expected_rel_path))
 
         result = execute_dag(dag_path)
 
@@ -28,7 +36,7 @@ class DagExecutorTests(unittest.TestCase):
         list_out = result.results['list'].output
         self.assertIsInstance(list_out, dict)
         entries = list_out.get('entries', [])
-        self.assertTrue(any(item.get('name') == 'hello.txt' for item in entries if isinstance(item, dict)))
+        self.assertTrue(any(item.get('name') == expected_name for item in entries if isinstance(item, dict)))
 
     def test_noop_node_succeeds(self):
 

@@ -4,6 +4,10 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT_DIR"
 
+TEST_FILE="tmp/control_plane_cli_${$}.txt"
+trap 'rm -f "$TEST_FILE" tmp/file_write_flow_hello.txt tmp/hello.txt hello.txt' EXIT
+rm -f "$TEST_FILE" tmp/file_write_flow_hello.txt tmp/hello.txt hello.txt
+
 echo "[control-plane-cli] Running CLI unit tests"
 python3 -m unittest control-plane/tests/test_cli.py
 
@@ -22,7 +26,7 @@ PY
 echo "[control-plane-cli] Running command smoke checks"
 ./ai-orchestrate plan "list files" | jq . >/dev/null
 ./ai-orchestrate run "list files" | jq . >/dev/null
-./ai-orchestrate run "Create a file called hello.txt with content 'hi' and then list files" --trace | jq . >/dev/null
+./ai-orchestrate run "Create a file called ${TEST_FILE} with content 'hi' and then list files" --trace | jq . >/dev/null
 ./ai-orchestrate validate-dag control-plane/dags/examples/file_write_flow.json | jq . >/dev/null
 ./ai-orchestrate execute-dag control-plane/dags/examples/file_write_flow.json | jq . >/dev/null
 

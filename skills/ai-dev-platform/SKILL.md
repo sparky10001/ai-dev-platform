@@ -63,7 +63,7 @@ ai-dev-platform/
 │   ├── start-colab-proxy.sh ← Google Colab GPU setup
 │   └── switch-model.sh      ← Provider switching (persists to .env)
 ├── runtime/
-│   └── tool_executor.sh/py  ← Tool execution layer (Python)
+│   └── tool_executor.py  ← Tool execution layer (Python)
 ├── skills/                  ← Agent Skills for managed projects
 │   ├── agent-sim/SKILL.md
 │   ├── arb-agent-system/SKILL.md

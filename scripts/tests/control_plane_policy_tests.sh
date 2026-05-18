@@ -20,7 +20,7 @@ from core.orchestrator.orchestrator import orchestrate_task
 from core.policy.defaults import SAFE_READONLY_POLICY
 
 result = orchestrate_task({
-    'task': "Create a file called hello.txt with content 'hi' and then list files",
+    'task': "Create a file called tmp/hello.txt with content 'hi' and then list files",
     'policy': SAFE_READONLY_POLICY.model_dump(mode='json'),
 })
 

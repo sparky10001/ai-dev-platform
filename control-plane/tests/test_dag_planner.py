@@ -26,7 +26,7 @@ class DagPlannerTests(unittest.TestCase):
         self.assertEqual(result.dag.dag_id, "plan_noop")
 
     def test_create_file_and_list_produces_expected_dag(self):
-        result = plan_task("Create a file called hello.txt with content 'hi' and then list files")
+        result = plan_task("Create a file called tmp/hello.txt with content 'hi' and then list files")
         self.assertEqual(result.status, "success")
         self.assertEqual(result.dag.dag_id, "plan_write_list")
         write = next(n for n in result.dag.nodes if n.id == "write")
@@ -55,7 +55,7 @@ class DagPlannerTests(unittest.TestCase):
 
     def test_all_generated_dags_validate(self):
         dags = [
-            deterministic_plan("Create a file called hello.txt with content 'hi' and then list files"),
+            deterministic_plan("Create a file called tmp/hello.txt with content 'hi' and then list files"),
             deterministic_plan("list files"),
             deterministic_plan("read README.md"),
             deterministic_plan("unsupported task"),

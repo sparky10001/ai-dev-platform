@@ -217,11 +217,11 @@ The orchestration CLI is intentionally separate from the existing runtime CLI:
 
 # 🧠 Model Tiers
 
-| Tier | Purpose | Example |
-|---|---|---|
-| `fast` | low latency | tinyllama |
-| `balanced` | reasoning | NVIDIA NIM |
-| `heavy` | complex execution | GPT-4.1 / Claude |
+| Tier       | Purpose           | Example          |
+|------------|-------------------|------------------|
+| `fast`     | low latency       | tinyllama        |
+| `balanced` | reasoning         | NVIDIA NIM       |
+| `heavy`    | complex execution | GPT-4.1 / Claude |
 
 Override manually:
 
@@ -532,10 +532,10 @@ planner
 
 Included policies:
 
-| Policy | Purpose |
-|---|---|
-| `default` | permissive deterministic policy |
-| `safe-readonly` | read-only orchestration policy |
+| Policy          | Purpose                         |
+|-----------------|---------------------------------|
+| `default`       | permissive deterministic policy |
+| `safe-readonly` | read-only orchestration policy  |
 
 Example:
 
@@ -582,19 +582,19 @@ control-plane/scenarios/tests/
 Example:
 
 ```bash
-python3 -m control-plane.core.scenarios.runner \
+python3 -m control-plane/core/scenarios/runner.py \
   control-plane/scenarios/tests/write_then_list.json
 ```
 
 Example scenario categories:
 
-| Scenario | Purpose |
-|---|---|
-| `list_files.json` | deterministic read workflow |
-| `write_then_list.json` | multi-node orchestration |
-| `safe_readonly_blocks_write.json` | policy enforcement |
-| `traced_write_then_list.json` | replayable orchestration |
-| `unsupported_task_noop.json` | noop fallback behavior |
+| Scenario                          | Purpose                     |
+|-----------------------------------|-----------------------------|
+| `list_files.json`                 | deterministic read workflow |
+| `write_then_list.json`            | multi-node orchestration    |
+| `safe_readonly_blocks_write.json` | policy enforcement          |
+| `traced_write_then_list.json`     | replayable orchestration    |
+| `unsupported_task_noop.json`      | noop fallback behavior      |
 
 Scenario tests are included in:
 
@@ -1377,16 +1377,16 @@ ai-dev-platform/
 
 The platform supports runtime-discovered tools.
 
-| Tool | Purpose |
-|---|---|
-| `read_file` | read workspace files |
-| `write_file` | write files safely |
-| `list_files` | enumerate directories |
-| `run_bash` | execute shell commands |
-| `http_get` | HTTP GET requests |
-| `read_trace` | replay trace inspection |
-| `run_scenario` | scenario execution |
-| `evaluate_trace` | runtime evaluation |
+| Tool              | Purpose                 |
+|-------------------|-------------------------|
+| `read_file`       | read workspace files    |
+| `write_file`      | write files safely      |
+| `list_files`      | enumerate directories   |
+| `run_bash`        | execute shell commands  |
+| `http_get`        | HTTP GET requests       |
+| `read_trace`      | replay trace inspection |
+| `run_scenario`    | scenario execution      |
+| `evaluate_trace`  | runtime evaluation      |
 | `compare_results` | compare evaluation runs |
 
 Tools are exported automatically as OpenAI-compatible function schemas.
@@ -1398,9 +1398,14 @@ Tools are exported automatically as OpenAI-compatible function schemas.
 Run structured evaluations:
 
 ```bash
-./scripts/run_scenario.sh \
-  scenarios/tests/test_list_files_v2.json \
+AI_ADAPTER=mock ./scripts/runtime_run_scenario.sh \
+  scenarios/tests/test_list_files_v3.json \
   --model=balanced
+
+# Optional bounded runtime/eval timeout (seconds)
+AI_ADAPTER=mock SCENARIO_TIMEOUT=60 ./scripts/runtime_run_scenario.sh \
+  scenarios/tests/test_list_files_v3.json \
+  --model=fast
 ```
 
 Example:
@@ -1410,6 +1415,8 @@ Example:
 🎯 SCORE: 1
 ✅ Scenario passed
 ```
+
+`AI_ADAPTER=mock` now includes deterministic, side-effect-isolated simulation for a small tool subset (`write_file`, `list_files`, `read_file`) for basic scenario compatibility. Real tool execution remains under `AI_ADAPTER=agent`.
 
 ---
 

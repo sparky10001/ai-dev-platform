@@ -8,6 +8,7 @@ import unittest
 from pathlib import Path
 
 CONTROL_PLANE_ROOT = Path(__file__).resolve().parents[1]
+WORKSPACE_ROOT = Path('/workspace')
 if str(CONTROL_PLANE_ROOT) not in sys.path:
     sys.path.insert(0, str(CONTROL_PLANE_ROOT))
 
@@ -27,9 +28,19 @@ from core.replay.loader import load_orchestration_trace
 
 class OrchestrationMemoryTests(unittest.TestCase):
 
+    def _cleanup_file(self, rel_path: str) -> None:
+        WORKSPACE_ROOT.joinpath(rel_path).unlink(missing_ok=True)
+
+    def _unique_tmp_path(self, tag: str = 'memory') -> str:
+        return f"tmp/{self.id().replace('.', '_').replace(':', '_')}_{tag}.txt"
+
     def _records(self):
+        rel_path = self._unique_tmp_path('records')
+        self._cleanup_file(rel_path)
+        self.addCleanup(lambda: self._cleanup_file(rel_path))
+
         a = orchestrate_task({'task': 'list files', 'trace': True})
-        b = orchestrate_task({'task': "Create a file called hello.txt with content 'hi' and then list files", 'trace': True})
+        b = orchestrate_task({'task': f"Create a file called {rel_path} with content 'hi' and then list files", 'trace': True})
         ra = load_orchestration_trace(a.run_path)
         rb = load_orchestration_trace(b.run_path)
         ea = evaluate_replay(ra)

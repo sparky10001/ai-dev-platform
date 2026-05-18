@@ -151,7 +151,7 @@ class PolicyLayerTests(unittest.TestCase):
 
     def test_orchestrator_skips_on_policy_violation(self):
         result = orchestrate_task({
-            'task': "Create a file called hello.txt with content 'hi' and then list files",
+            'task': "Create a file called tmp/hello.txt with content 'hi' and then list files",
             'policy': SAFE_READONLY_POLICY.model_dump(mode='json'),
         })
         self.assertEqual(result.status, 'error')
@@ -159,7 +159,7 @@ class PolicyLayerTests(unittest.TestCase):
 
     def test_orchestrator_metadata_contains_violations(self):
         result = orchestrate_task({
-            'task': "Create a file called hello.txt with content 'hi' and then list files",
+            'task': "Create a file called tmp/hello.txt with content 'hi' and then list files",
             'policy': SAFE_READONLY_POLICY.model_dump(mode='json'),
         })
         self.assertIn('policy', result.metadata)

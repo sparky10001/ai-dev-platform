@@ -8,6 +8,7 @@ import unittest
 from pathlib import Path
 
 CONTROL_PLANE_ROOT = Path(__file__).resolve().parents[1]
+WORKSPACE_ROOT = Path('/workspace')
 if str(CONTROL_PLANE_ROOT) not in sys.path:
     sys.path.insert(0, str(CONTROL_PLANE_ROOT))
 
@@ -23,13 +24,23 @@ from core.replay.loader import load_orchestration_trace
 
 class OrchestrationEvalTests(unittest.TestCase):
 
+    def _cleanup_file(self, rel_path: str) -> None:
+        WORKSPACE_ROOT.joinpath(rel_path).unlink(missing_ok=True)
+
+    def _unique_tmp_path(self, tag: str) -> str:
+        return f"tmp/{self.id().replace('.', '_').replace(':', '_')}_{tag}.txt"
+
     def _run(self, task: str):
         result = orchestrate_task({'task': task, 'trace': True})
         self.assertTrue(result.run_path)
         return load_orchestration_trace(result.run_path)
 
     def test_evaluation_succeeds_and_deterministic(self):
-        replay = self._run("Create a file called hello.txt with content 'hi' and then list files")
+        rel_path = self._unique_tmp_path('det')
+        self._cleanup_file(rel_path)
+        self.addCleanup(lambda: self._cleanup_file(rel_path))
+
+        replay = self._run(f"Create a file called {rel_path} with content 'hi' and then list files")
         a = evaluate_replay(replay)
         b = evaluate_replay(replay)
         self.assertEqual(a.model_dump(mode='json'), b.model_dump(mode='json'))
@@ -48,15 +59,23 @@ class OrchestrationEvalTests(unittest.TestCase):
         self.assertTrue(cmp.identical)
 
     def test_comparison_differences(self):
+        rel_path = self._unique_tmp_path('diff')
+        self._cleanup_file(rel_path)
+        self.addCleanup(lambda: self._cleanup_file(rel_path))
+
         left = self._run('list files')
-        right = self._run("Create a file called hello.txt with content 'hi' and then list files")
+        right = self._run(f"Create a file called {rel_path} with content 'hi' and then list files")
         cmp = compare_replays(left, right)
         self.assertFalse(cmp.identical)
         self.assertTrue(cmp.execution_order_changed or len(cmp.tool_delta) > 0 or cmp.node_count_delta != 0)
 
     def test_benchmark_aggregation(self):
+        rel_path = self._unique_tmp_path('bench')
+        self._cleanup_file(rel_path)
+        self.addCleanup(lambda: self._cleanup_file(rel_path))
+
         a = self._run('list files')
-        b = self._run("Create a file called hello.txt with content 'hi' and then list files")
+        b = self._run(f"Create a file called {rel_path} with content 'hi' and then list files")
         bench = benchmark_replays([a, b], benchmark_id='b1')
         self.assertEqual(bench.total_runs, 2)
         self.assertGreaterEqual(bench.average_score, 0.0)

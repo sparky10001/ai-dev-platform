@@ -18,7 +18,7 @@
         profile-fast profile-agent profile-offline profile-local profile \
         litellm-fast litellm-code litellm-claude \
         health status validate \
-        runtime-tests runtime-test-core runtime-test-phase3 runtime-test-all runtime-snapshot-tests runtime-adapter-gateway-tests runtime-run-lifecycle-tests runtime-trace-pipeline-tests runtime-replay-ledger-tests runtime-eval-ledger-tests runtime-registry-ledger-tests runtime-ledger-authoritative-tests runtime-ledger-readiness-tests \
+        runtime-tests runtime-test-core runtime-test-phase3 runtime-test-all runtime-snapshot-tests runtime-adapter-gateway-tests runtime-run-lifecycle-tests runtime-trace-pipeline-tests runtime-replay-ledger-tests runtime-eval-ledger-tests runtime-registry-ledger-tests runtime-ledger-authoritative-tests runtime-ledger-readiness-tests runtime-scenario-runner-tests mock-adapter-tool-tests \
         control-plane-dag-tests control-plane-tool-tests control-plane-executor-tests control-plane-trace-tests control-plane-planner-tests control-plane-orchestrator-tests control-plane-cli-tests control-plane-policy-tests control-plane-scenario-tests control-plane-replay-tests control-plane-eval-tests control-plane-experiment-tests control-plane-benchmark-tests control-plane-strategy-tests control-plane-heuristic-tests control-plane-memory-tests control-plane-tests \
         ai-run ai-fix ai-explain ai-refactor ai-query \
         ctx-agent-sim ctx-arb ctx-ai-stack \
@@ -256,6 +256,10 @@ runtime-ledger-authoritative-tests:
 	@AI_ADAPTER=agent ./scripts/tests/runtime_ledger_authoritative_tests.sh
 runtime-ledger-readiness-tests:
 	@AI_ADAPTER=agent ./scripts/tests/runtime_ledger_readiness_tests.sh
+runtime-scenario-runner-tests:
+	@./scripts/tests/runtime_scenario_runner_tests.sh
+mock-adapter-tool-tests:
+	@./scripts/tests/mock_adapter_tool_simulation_tests.sh
 
 
 runtime-test-phase3:
@@ -268,6 +272,7 @@ runtime-test-phase3:
 	@AI_ADAPTER=agent ./scripts/tests/runtime_contract_tests.sh
 	@AI_ADAPTER=agent ./scripts/tests/runtime_snapshot_tests.sh
 	@AI_ADAPTER=agent ./scripts/tests/runtime_trace_pipeline_tests.sh
+	@$(MAKE) runtime-scenario-runner-tests --no-print-directory
 	@$(MAKE) runtime-event-ledger-tests --no-print-directory
 	@$(MAKE) runtime-replay-ledger-tests --no-print-directory
 	@$(MAKE) runtime-eval-ledger-tests --no-print-directory
@@ -463,5 +468,3 @@ help:
 	@echo "  make runtime-tests    # Run full runtime test ladder"
 	@echo "  make status"
 	@echo ""
-
-.PHONY: runtime-event-ledger-tests runtime-replay-ledger-tests runtime-eval-ledger-tests runtime-registry-ledger-tests runtime-ledger-authoritative-tests runtime-ledger-readiness-tests

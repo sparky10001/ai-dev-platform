@@ -1,7 +1,7 @@
 {
   "scenario_id": "test_list_files_v3",
   "name": "Create file and list files",
-  "task": "Create a file called hello.txt with content 'hi' and then list files",
+  "task": "Create a file called tmp/hello.txt with content 'hi' and then list files",
   "success_criteria": [
     {
       "type": "tool_used",

@@ -8,7 +8,7 @@
       "type": "tool",
       "tool": "write_file",
       "args": {
-        "path": "hello.txt",
+        "path": "tmp/file_write_flow_hello.txt",
         "content": "hi",
         "overwrite": true
       }
@@ -19,7 +19,7 @@
       "depends_on": ["write"],
       "tool": "list_files",
       "args": {
-        "path": "."
+        "path": "tmp"
       }
     }
   ]
