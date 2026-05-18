@@ -18,7 +18,7 @@
         profile-fast profile-agent profile-offline profile-local profile \
         litellm-fast litellm-code litellm-claude \
         health status validate \
-        runtime-tests runtime-test-core runtime-test-phase3 runtime-test-all runtime-snapshot-tests runtime-adapter-gateway-tests runtime-run-lifecycle-tests runtime-trace-pipeline-tests runtime-replay-ledger-tests runtime-eval-ledger-tests runtime-registry-ledger-tests runtime-ledger-authoritative-tests runtime-ledger-readiness-tests runtime-scenario-runner-tests mock-adapter-tool-tests log-maintenance-tests log-maintenance log-maintenance-dry-run \
+        runtime-tests runtime-test-core runtime-test-phase3 runtime-test-all runtime-snapshot-tests runtime-adapter-gateway-tests runtime-run-lifecycle-tests runtime-trace-pipeline-tests runtime-replay-ledger-tests runtime-eval-ledger-tests runtime-registry-ledger-tests runtime-ledger-authoritative-tests runtime-ledger-readiness-tests runtime-ledger-drift-tests runtime-scenario-runner-tests mock-adapter-tool-tests log-maintenance-tests log-maintenance log-maintenance-dry-run ledger-drift-audit \
         control-plane-dag-tests control-plane-tool-tests control-plane-executor-tests control-plane-trace-tests control-plane-planner-tests control-plane-orchestrator-tests control-plane-cli-tests control-plane-policy-tests control-plane-scenario-tests control-plane-replay-tests control-plane-eval-tests control-plane-experiment-tests control-plane-benchmark-tests control-plane-strategy-tests control-plane-heuristic-tests control-plane-memory-tests control-plane-tests \
         ai-run ai-fix ai-explain ai-refactor ai-query \
         ctx-agent-sim ctx-arb ctx-ai-stack \
@@ -256,6 +256,8 @@ runtime-ledger-authoritative-tests:
 	@AI_ADAPTER=agent ./scripts/tests/runtime_ledger_authoritative_tests.sh
 runtime-ledger-readiness-tests:
 	@AI_ADAPTER=agent ./scripts/tests/runtime_ledger_readiness_tests.sh
+runtime-ledger-drift-tests:
+	@AI_ADAPTER=agent ./scripts/tests/runtime_ledger_drift_tests.sh
 runtime-scenario-runner-tests:
 	@./scripts/tests/runtime_scenario_runner_tests.sh
 mock-adapter-tool-tests:
@@ -266,6 +268,8 @@ log-maintenance:
 	@python3 scripts/maintenance/log_manager.py
 log-maintenance-dry-run:
 	@python3 scripts/maintenance/log_manager.py --dry-run --verbose
+ledger-drift-audit:
+	@python3 scripts/maintenance/ledger_drift_audit.py --latest
 
 
 runtime-test-phase3:
@@ -285,6 +289,7 @@ runtime-test-phase3:
 	@$(MAKE) runtime-registry-ledger-tests --no-print-directory
 	@$(MAKE) runtime-ledger-authoritative-tests --no-print-directory
 	@$(MAKE) runtime-ledger-readiness-tests --no-print-directory
+	@$(MAKE) runtime-ledger-drift-tests --no-print-directory
 	@$(MAKE) runtime-adapter-gateway-tests --no-print-directory
 	@$(MAKE) runtime-run-lifecycle-tests --no-print-directory
 

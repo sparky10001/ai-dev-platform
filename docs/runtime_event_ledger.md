@@ -1,4 +1,4 @@
-# Runtime EventLedger (Phase 3.6G)
+# Runtime EventLedger
 
 Phase 3.6B extends the additive EventLedger with deterministic hashing, index generation, and parity validation.
 
@@ -180,3 +180,31 @@ Recovery expectations:
 - ledger and trace both remain available for replay-safe recovery
 - parity checks can identify divergence early
 - rollback to trace-first mode is immediate via env flags
+
+## Phase 3.7A Drift Detection
+
+Phase 3.7A adds observational ledger/trace drift auditing and enforcement tooling without changing runtime behavior.
+
+- Drift audit API: `runtime/ledger_drift.py`
+- Operator CLI: `python3 scripts/maintenance/ledger_drift_audit.py --latest`
+- Strict no-drift helper: `validate_no_drift(...)`
+
+Drift categories:
+
+- `missing_trace`
+- `missing_ledger`
+- `event_count_mismatch`
+- `event_sequence_mismatch`
+- `event_hash_mismatch`
+- `lifecycle_mismatch`
+- `replay_summary_mismatch`
+- `eval_summary_mismatch`
+- `registry_summary_mismatch`
+- `parse_error`
+
+Operational semantics:
+
+- observational only; no automatic repair or mutation
+- default runtime behavior remains unchanged
+- strict mode can fail fast for CI/staging enforcement
+- recommended before cutover: run `--all --strict` and resolve any drift categories

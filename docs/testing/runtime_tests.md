@@ -963,3 +963,46 @@ The runtime test system exists to guarantee that every run remains:
 * deterministic
 * backward compatible
 * contract validated
+
+## runtime_ledger_drift_tests.sh
+
+Validates:
+
+- cutover drift reporting
+- parity drift category classification
+- replay/eval/registry parity dimensions
+- strict no-drift enforcement semantics
+- audit CLI deterministic output and exit codes
+
+Expected result:
+
+unit test pass / 0 failed
+
+This suite validates Phase 3.7A ledger/trace drift detection as observational verification tooling.
+
+## Phase 3.7A Additions
+
+Running Tests list additions:
+
+- `./scripts/tests/runtime_ledger_drift_tests.sh`
+
+Make targets:
+
+- `make runtime-ledger-drift-tests`
+- `make ledger-drift-audit`
+
+Coverage Matrix additions:
+
+- ledger/trace drift auditing → `runtime_ledger_drift_tests.sh`
+- strict drift enforcement → `runtime_ledger_drift_tests.sh`
+
+CI Expectations additions:
+
+- run drift suite before cutover changes
+- treat drift in strict mode as a blocking signal
+
+Verification Requirements additions:
+
+- `python3 scripts/maintenance/ledger_drift_audit.py --latest`
+- `python3 scripts/maintenance/ledger_drift_audit.py --latest --json`
+- `python3 scripts/maintenance/ledger_drift_audit.py --latest --strict`
