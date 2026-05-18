@@ -208,3 +208,32 @@ Operational semantics:
 - default runtime behavior remains unchanged
 - strict mode can fail fast for CI/staging enforcement
 - recommended before cutover: run `--all --strict` and resolve any drift categories
+
+## Phase 3.7B Derived-System Purity Audit
+
+Phase 3.7B adds static purity guardrails to verify derived systems are read-only projections over runtime artifacts.
+
+Purity expectations:
+
+- `runtime/replay.py` is projection-only.
+- `runtime/evals.py` is replay-derived projection-only.
+- `runtime/registry.py` is filesystem query projection-only.
+- `runtime/ledger_drift.py` is observational audit-only.
+
+`runtime/datasets.py` classification:
+
+- classified as `projection_writer`.
+- allowed to write export outputs.
+- not allowed to write runtime source artifacts (`trace.jsonl`, `ledger.jsonl`, `run.json`, `result.json`).
+
+Audit commands:
+
+- `python3 scripts/maintenance/derived_purity_audit.py`
+- `python3 scripts/maintenance/derived_purity_audit.py --json`
+- `python3 scripts/maintenance/derived_purity_audit.py --strict`
+
+Strict mode:
+
+- exits nonzero when purity violations are detected.
+- intended for CI/staging guardrails.
+- observational only; no auto-repair or behavior cutover.

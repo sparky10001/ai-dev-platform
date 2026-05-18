@@ -1006,3 +1006,37 @@ Verification Requirements additions:
 - `python3 scripts/maintenance/ledger_drift_audit.py --latest`
 - `python3 scripts/maintenance/ledger_drift_audit.py --latest --json`
 - `python3 scripts/maintenance/ledger_drift_audit.py --latest --strict`
+
+## runtime_derived_purity_tests.sh
+
+Validates:
+
+- derived projection modules remain read-only
+- forbidden write/import/subprocess detection
+- dataset projection-writer classification
+- strict derived purity audit behavior
+
+Expected result:
+
+unit test pass / 0 failed
+
+This suite validates Phase 3.7B derived-system purity audit guardrails.
+
+## Phase 3.7B Additions
+
+Running Tests list additions:
+
+- `./scripts/tests/runtime_derived_purity_tests.sh`
+
+Make targets:
+
+- `make runtime-derived-purity-tests`
+- `make derived-purity-audit`
+
+Coverage Matrix additions:
+
+- derived-system purity audit → `runtime_derived_purity_tests.sh`
+
+CI usage:
+
+- `python3 scripts/maintenance/derived_purity_audit.py --strict`
