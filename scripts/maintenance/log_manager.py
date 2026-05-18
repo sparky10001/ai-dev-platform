@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 ###################################################################
-# log_manager.py — Trace & run cleanup (v1.4 PRODUCTION-HARDENED)
+# log_manager.py — Trace & run cleanup (v1.5 maintenance-integrated)
 ###################################################################
 
 from __future__ import annotations
 
 import argparse
+import fcntl
 import os
 import shutil
 import tempfile
@@ -13,6 +14,7 @@ import time
 from collections import deque
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TextIO
 
 BASE_DIR = Path(__file__).resolve().parents[2]
 
@@ -21,6 +23,7 @@ BASE_DIR = Path(__file__).resolve().parents[2]
 class LogManagerConfig:
     trace_dir: Path
     runs_dir: Path
+    lock_file: Path
     max_files: int
     max_file_size: int
     truncate_lines: int
@@ -52,6 +55,10 @@ def build_config(args: argparse.Namespace) -> LogManagerConfig:
         or os.getenv("AI_RUNS_DIR")
         or str(BASE_DIR / "runs")
     )
+    lock_file = Path(
+        os.getenv("AI_LOG_LOCK_FILE")
+        or str(BASE_DIR / "tmp" / "log_manager.lock")
+    )
 
     verbose = args.verbose or os.getenv("AI_LOG_VERBOSE", "0") == "1"
     dry_run = args.dry_run or os.getenv("AI_LOG_DRY_RUN", "0") == "1"
@@ -59,6 +66,7 @@ def build_config(args: argparse.Namespace) -> LogManagerConfig:
     return LogManagerConfig(
         trace_dir=trace_dir,
         runs_dir=runs_dir,
+        lock_file=lock_file,
         max_files=int(os.getenv("AI_LOG_MAX_FILES", "50")),
         max_file_size=int(os.getenv("AI_LOG_MAX_SIZE_MB", "5")) * 1024 * 1024,
         truncate_lines=int(os.getenv("AI_LOG_TRUNCATE_LINES", "500")),
@@ -73,6 +81,7 @@ def build_config(args: argparse.Namespace) -> LogManagerConfig:
 def ensure_dirs(cfg: LogManagerConfig) -> None:
     cfg.trace_dir.mkdir(parents=True, exist_ok=True)
     cfg.runs_dir.mkdir(parents=True, exist_ok=True)
+    cfg.lock_file.parent.mkdir(parents=True, exist_ok=True)
 
 
 def log(cfg: LogManagerConfig, msg: str) -> None:
@@ -87,18 +96,37 @@ def is_safe_path(base: Path | str, target: Path | str, *, allow_equal: bool = Fa
     except Exception:
         return False
 
-    if not allow_equal and target_path == base_path:
-        return False
+    if target_path == base_path:
+        return allow_equal
 
     try:
         target_path.relative_to(base_path)
     except ValueError:
         return False
 
-    if not allow_equal and target_path == base_path:
-        return False
-
     return True
+
+
+def acquire_lock(cfg: LogManagerConfig) -> TextIO | None:
+    cfg.lock_file.parent.mkdir(parents=True, exist_ok=True)
+    handle = cfg.lock_file.open("a+", encoding="utf-8")
+
+    try:
+        fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        handle.close()
+        return None
+
+    return handle
+
+
+def release_lock(handle: TextIO) -> None:
+    try:
+        fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+    except OSError:
+        pass
+    finally:
+        handle.close()
 
 
 def get_trace_files(cfg: LogManagerConfig) -> list[str]:
@@ -282,23 +310,36 @@ def cleanup_runs(cfg: LogManagerConfig) -> None:
     cleanup_empty_file_dirs(cfg, runs)
 
 
-def main() -> None:
+def run_cleanup(cfg: LogManagerConfig, protected_name: str | None = None) -> int:
+    handle = acquire_lock(cfg)
+    if handle is None:
+        log(cfg, "maintenance already running")
+        return 0
+
+    try:
+        try:
+            cleanup_traces(cfg, protected_name)
+        except Exception as e:
+            print(f"⚠️ Trace cleanup failed: {e}")
+
+        try:
+            cleanup_runs(cfg)
+        except Exception as e:
+            print(f"⚠️ Run cleanup failed: {e}")
+
+        return 0
+    finally:
+        release_lock(handle)
+
+
+def main() -> int:
     args = parse_args()
     cfg = build_config(args)
     protected = Path(args.protect).name if args.protect else None
 
     ensure_dirs(cfg)
-
-    try:
-        cleanup_traces(cfg, protected)
-    except Exception as e:
-        print(f"⚠️ Trace cleanup failed: {e}")
-
-    try:
-        cleanup_runs(cfg)
-    except Exception as e:
-        print(f"⚠️ Run cleanup failed: {e}")
+    return run_cleanup(cfg, protected)
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

@@ -16,11 +16,11 @@ class LogManagerTests(unittest.TestCase):
         self.tmp = Path(tempfile.mkdtemp(prefix='log_manager_test_'))
         self.trace_dir = self.tmp / 'logs' / 'traces'
         self.runs_dir = self.tmp / 'runs'
+        self.lock_file = self.tmp / 'tmp' / 'log_manager.lock'
         self.trace_dir.mkdir(parents=True, exist_ok=True)
         self.runs_dir.mkdir(parents=True, exist_ok=True)
 
         self.mod = importlib.import_module('scripts.maintenance.log_manager')
-        args = self.mod.parse_args.__wrapped__ if hasattr(self.mod.parse_args, '__wrapped__') else None
 
         ns = type('Args', (), {
             'protect': None,
@@ -29,9 +29,13 @@ class LogManagerTests(unittest.TestCase):
             'trace_dir': str(self.trace_dir),
             'runs_dir': str(self.runs_dir),
         })
+        os.environ['AI_LOG_LOCK_FILE'] = str(self.lock_file)
         self.cfg = self.mod.build_config(ns)
 
     def tearDown(self) -> None:
+        os.environ.pop('AI_TRACE_DIR', None)
+        os.environ.pop('AI_RUNS_DIR', None)
+        os.environ.pop('AI_LOG_LOCK_FILE', None)
         shutil.rmtree(self.tmp, ignore_errors=True)
 
     def _trace(self, name: str, content: str = 'x\n') -> Path:
@@ -160,7 +164,6 @@ class LogManagerTests(unittest.TestCase):
             runs_dir = alt / 'not_created_runs'
             os.environ['AI_TRACE_DIR'] = str(trace_dir)
             os.environ['AI_RUNS_DIR'] = str(runs_dir)
-            import importlib
             mod = importlib.reload(self.mod)
             self.assertFalse(trace_dir.exists())
             self.assertFalse(runs_dir.exists())
@@ -169,6 +172,31 @@ class LogManagerTests(unittest.TestCase):
             os.environ.pop('AI_TRACE_DIR', None)
             os.environ.pop('AI_RUNS_DIR', None)
             shutil.rmtree(alt, ignore_errors=True)
+
+    def test_lock_acquisition(self):
+        h = self.mod.acquire_lock(self.cfg)
+        self.assertIsNotNone(h)
+        if h is not None:
+            self.mod.release_lock(h)
+
+    def test_second_nonblocking_acquisition_returns_none(self):
+        h1 = self.mod.acquire_lock(self.cfg)
+        self.assertIsNotNone(h1)
+        try:
+            h2 = self.mod.acquire_lock(self.cfg)
+            self.assertIsNone(h2)
+        finally:
+            if h1 is not None:
+                self.mod.release_lock(h1)
+
+    def test_custom_lock_file_path(self):
+        custom_lock = self.tmp / 'custom' / 'maintenance.lock'
+        cfg = self.cfg.__class__(**{**self.cfg.__dict__, 'lock_file': custom_lock})
+        h = self.mod.acquire_lock(cfg)
+        self.assertIsNotNone(h)
+        self.assertTrue(custom_lock.exists())
+        if h is not None:
+            self.mod.release_lock(h)
 
 
 if __name__ == '__main__':
