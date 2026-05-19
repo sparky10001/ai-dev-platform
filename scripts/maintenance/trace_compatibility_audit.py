@@ -39,8 +39,9 @@ def _print_human(report: dict[str, Any], summary_only: bool) -> None:
     cats = report.get("categories", {})
 
     print("\n[cutover_blockers]")
-    for dep in cats.get("cutover_blocker", []):
+    for dep in report.get("cutover_blockers", []):
         print(f"- {dep['path']}: {dep['reason']}")
+        print(f"  hint: {dep.get('resolution_hint', 'n/a')}")
 
     print("\n[compatibility_only]")
     for dep in cats.get("compatibility_only", []):
@@ -74,7 +75,7 @@ def main() -> int:
             print(f"error: {exc}")
         return EXIT_ERROR
 
-    blockers = report.get("summary", {}).get("cutover_blocker_count", 0)
+    blockers = len(report.get("cutover_blockers", []))
 
     if args.json:
         payload = summarize_trace_dependencies(report) if args.summary else report

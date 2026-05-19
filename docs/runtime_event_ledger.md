@@ -346,3 +346,25 @@ CLI:
 Strict mode exits nonzero only when `cutover_blocker` dependencies are present.
 
 This audit is observational-only and does not modify runtime behavior, schemas, or artifacts.
+
+## Phase 3.7H Trace Cutover Blocker Resolution
+
+Phase 3.7H refines trace compatibility blocker semantics to reduce false positives.
+
+Cutover blocker definition (strict):
+
+- only dependencies that would fail operationally if trace were retired/default-ledger cutover were attempted
+- compatibility scaffolding, migration helpers, and dual-source readers are not blockers
+
+Reporting improvements:
+
+- audit output now includes `cutover_blockers` with:
+  - `path`
+  - `reason`
+  - `resolution_hint`
+
+Operational interpretation:
+
+- `compatibility_only` references are allowed during migration
+- `legacy_runtime_dependency` references are tracked but do not fail strict blocker gates
+- strict mode fails only on true `cutover_blocker` items

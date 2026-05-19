@@ -65,3 +65,16 @@ Audit command:
 Strict command (cutover-blocker gate only):
 
 - `python3 scripts/maintenance/trace_compatibility_audit.py --strict`
+
+## Phase 3.7H Blocker Semantics
+
+`cutover_blocker` now means only a true runtime trace-only dependency that would break future trace retirement/cutover.
+
+Not blockers:
+
+- replay/eval/registry dual-source compatibility paths
+- parity/drift/corruption/health audit helpers
+- tests/docs/operational tooling references
+- legacy-tracked runtime dependencies (`runtime/loader.py`, `runtime/run.py`)
+
+Audit output includes `resolution_hint` for each blocker to keep mitigation steps deterministic and minimal.

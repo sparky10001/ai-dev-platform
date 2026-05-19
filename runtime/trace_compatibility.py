@@ -14,7 +14,6 @@ TRACE_PATTERNS = (
     "trace_pipeline",
 )
 
-
 CATEGORY_NAMES = (
     "compatibility_only",
     "cutover_blocker",
@@ -24,13 +23,24 @@ CATEGORY_NAMES = (
     "operational_tooling",
 )
 
+LEGACY_RUNTIME_PATHS = {"runtime/loader.py", "runtime/run.py"}
+
+COMPATIBILITY_RUNTIME_PATHS = {
+    "runtime/replay.py",
+    "runtime/evals.py",
+    "runtime/registry.py",
+    "runtime/event_ledger.py",
+    "runtime/ledger_drift.py",
+    "runtime/ledger_corruption.py",
+    "runtime/ledger_health.py",
+    "runtime/trace_pipeline.py",
+    "runtime/engine.py",
+    "runtime/events.py",
+}
+
 
 def _extract_trace_usage(content: str) -> list[str]:
-    usage: list[str] = []
-    for token in TRACE_PATTERNS:
-        if token in content:
-            usage.append(token)
-    return usage
+    return [token for token in TRACE_PATTERNS if token in content]
 
 
 def _extract_imports(content: str) -> list[str]:
@@ -45,8 +55,7 @@ def _extract_imports(content: str) -> list[str]:
             for alias in node.names:
                 imports.append(alias.name)
         elif isinstance(node, ast.ImportFrom):
-            module = node.module or ""
-            imports.append(module)
+            imports.append(node.module or "")
     return imports
 
 
@@ -60,6 +69,27 @@ def _reason_for(path: str, classification: str) -> str:
         "operational_tooling": "Trace usage is operational maintenance/audit tooling, not runtime execution authority.",
     }
     return f"{reasons[classification]} ({path})"
+
+
+def _is_true_cutover_blocker(path_str: str, content: str) -> bool:
+    # True blockers are runtime modules with explicit trace-only artifact assumptions.
+    if not path_str.startswith("runtime/") or "/tests/" in path_str:
+        return False
+
+    if path_str in LEGACY_RUNTIME_PATHS:
+        return False
+
+    if path_str in COMPATIBILITY_RUNTIME_PATHS:
+        return False
+
+    has_trace_artifact = "trace.jsonl" in content
+    has_ledger_artifact = "ledger.jsonl" in content
+
+    # Trace-only artifact access with no ledger alternative remains a blocker.
+    if has_trace_artifact and not has_ledger_artifact:
+        return True
+
+    return False
 
 
 def classify_trace_dependency(path: str | Path, content: str | None = None) -> dict[str, Any]:
@@ -78,46 +108,44 @@ def classify_trace_dependency(path: str | Path, content: str | None = None) -> d
             "classification": "compatibility_only",
             "reason": "No trace dependency usage found.",
             "trace_usage": [],
+            "resolution_hint": "No action required.",
         }
 
     if path_str.startswith("docs/") or path_str.endswith(".md"):
         cls = "documentation_only"
+        hint = "Documentation-only reference; keep until migration docs are updated."
     elif "/tests/" in path_str or path_str.startswith("tests/"):
         cls = "test_only"
+        hint = "Test-only trace reference; retain for compatibility coverage."
     elif path_str.startswith("scripts/maintenance/"):
         cls = "operational_tooling"
-    elif path_str in {"runtime/loader.py", "runtime/run.py"}:
+        hint = "Operational audit/tooling reference; retain for observability and diagnostics."
+    elif path_str in LEGACY_RUNTIME_PATHS:
         cls = "legacy_runtime_dependency"
-    elif path_str.startswith("runtime/"):
-        blocker_paths = {
-            "runtime/run.py",
-            "runtime/engine.py",
-            "runtime/events.py",
-            "runtime/trace_pipeline.py",
-        }
-        if path_str in blocker_paths:
-            cls = "cutover_blocker"
-        else:
-            cls = "compatibility_only"
+        hint = "Legacy runtime coupling; migrate through additive compatibility steps, not cutover phase."
+    elif _is_true_cutover_blocker(path_str, content):
+        cls = "cutover_blocker"
+        hint = "Introduce ledger-aware source resolution or compatibility abstraction before cutover."
     elif path_str.startswith("control-plane/"):
-        # control-plane trace coupling is currently compatibility but blocks full trace retirement
         if "runtime.engine" in imports:
             cls = "cutover_blocker"
+            hint = "Control-plane must avoid importing runtime engine internals directly."
         else:
             cls = "compatibility_only"
-    elif path_str.startswith("scripts/"):
-        if path_str.startswith("scripts/tests/"):
-            cls = "test_only"
-        else:
-            cls = "compatibility_only"
+            hint = "Compatibility-only trace consumer; acceptable until trace retirement planning."
+    elif path_str.startswith("scripts/") and not path_str.startswith("scripts/tests/"):
+        cls = "compatibility_only"
+        hint = "Script-level compatibility reference; not a runtime cutover blocker."
     else:
         cls = "compatibility_only"
+        hint = "Compatibility scaffolding; maintain until cutover execution phase."
 
     return {
         "path": path_str,
         "classification": cls,
         "reason": _reason_for(path_str, cls),
         "trace_usage": trace_usage,
+        "resolution_hint": hint,
     }
 
 
@@ -131,9 +159,7 @@ def audit_trace_compatibility(root: str | Path = ".") -> dict[str, Any]:
         if not search_root.exists():
             continue
         for fp in sorted(search_root.rglob("*")):
-            if not fp.is_file():
-                continue
-            if "__pycache__" in fp.parts:
+            if not fp.is_file() or "__pycache__" in fp.parts:
                 continue
             if fp.suffix not in {".py", ".md", ".sh", ".json", ".yaml", ".yml", ".txt"}:
                 continue
@@ -143,7 +169,6 @@ def audit_trace_compatibility(root: str | Path = ".") -> dict[str, Any]:
                 continue
             if not any(token in content for token in TRACE_PATTERNS):
                 continue
-
             rel = fp.relative_to(base)
             dependencies.append(classify_trace_dependency(rel, content=content))
 
@@ -168,12 +193,22 @@ def audit_trace_compatibility(root: str | Path = ".") -> dict[str, Any]:
     elif summary["legacy_runtime_dependency_count"] > 0:
         status = "warning"
 
+    cutover_blockers = [
+        {
+            "path": dep["path"],
+            "reason": dep["reason"],
+            "resolution_hint": dep.get("resolution_hint", "Add ledger-compatible source handling."),
+        }
+        for dep in categories["cutover_blocker"]
+    ]
+
     return {
         "status": status,
         "total_dependencies": len(dependencies),
         "categories": categories,
         "summary": summary,
         "dependencies": dependencies,
+        "cutover_blockers": cutover_blockers,
     }
 
 
@@ -182,12 +217,13 @@ def summarize_trace_dependencies(report: dict[str, Any]) -> dict[str, Any]:
         "status": report.get("status", "warning"),
         "total_dependencies": report.get("total_dependencies", 0),
         "summary": dict(report.get("summary", {})),
+        "cutover_blockers": list(report.get("cutover_blockers", [])),
     }
 
 
 def validate_trace_cutover_readiness() -> None:
     report = audit_trace_compatibility()
-    blockers = report.get("categories", {}).get("cutover_blocker", [])
+    blockers = report.get("cutover_blockers", [])
     if blockers:
         paths = ", ".join(item.get("path", "<unknown>") for item in blockers)
         raise RuntimeError(f"Trace cutover blockers detected: {paths}")
