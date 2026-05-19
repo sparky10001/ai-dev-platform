@@ -63,3 +63,18 @@ Operational health reporting is available via:
 - `python3 scripts/maintenance/ledger_health_report.py --latest --strict`
 
 This reporting is read-only and does not mutate runtime artifacts.
+
+## Ledger Default Dry-Run Audit
+
+Operational dry-run readiness reporting:
+
+- `python3 scripts/maintenance/ledger_default_dry_run.py --latest`
+- `python3 scripts/maintenance/ledger_default_dry_run.py --summary --recent 50`
+- `python3 scripts/maintenance/ledger_default_dry_run.py --json`
+- `python3 scripts/maintenance/ledger_default_dry_run.py --strict`
+
+Flag:
+
+- `RUNTIME_LEDGER_DRY_RUN_DEFAULT=1` enables dry-run signaling only.
+
+This mode is observational and does not switch runtime authority or mutate artifacts.

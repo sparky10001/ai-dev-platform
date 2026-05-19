@@ -18,6 +18,10 @@ def ledger_authoritative_enabled() -> bool:
     return os.getenv("RUNTIME_LEDGER_AUTHORITATIVE") == "1"
 
 
+def ledger_default_dry_run_enabled() -> bool:
+    return os.getenv("RUNTIME_LEDGER_DRY_RUN_DEFAULT") == "1"
+
+
 def ledger_parity_required() -> bool:
     return os.getenv("RUNTIME_LEDGER_PARITY_REQUIRED") == "1"
 
@@ -363,4 +367,109 @@ def ledger_cutover_readiness(run_or_path: str | Path | dict[str, Any]) -> dict[s
         "compatibility_only_dependencies": dep_audit["compatibility_only_dependencies"],
         "warnings": warnings,
         "errors": errors,
+    }
+
+
+def evaluate_ledger_default_readiness(run_or_path: str | Path | dict[str, Any]) -> dict[str, Any]:
+    run_dir = _resolve_run_dir(run_or_path)
+
+    from runtime.ledger_corruption import classify_ledger_corruption
+    from runtime.ledger_drift import compare_trace_and_ledger, drift_detected
+    from runtime.ledger_health import ledger_health_report
+    from runtime.trace_compatibility import audit_trace_compatibility
+
+    categories: list[str] = []
+    warnings: list[str] = []
+    blocking_reasons: list[str] = []
+    details: dict[str, Any] = {}
+
+    parity_ok = False
+    try:
+        parity = validate_trace_ledger_parity(run_dir, strict=False)
+        parity_ok = parity.get("status") == "success"
+        details["parity_report"] = parity
+    except Exception as exc:
+        details["parity_error"] = str(exc)
+        categories.append("parity_failure")
+        blocking_reasons.append(f"parity validation error: {exc}")
+
+    if not parity_ok:
+        categories.append("parity_failure")
+        blocking_reasons.append("trace/ledger parity check failed")
+
+    drift_report = compare_trace_and_ledger(run_dir, strict=False)
+    details["drift_report"] = drift_report
+    drift_categories = list(drift_report.get("drift_categories", []))
+    # Parse-only drift from non-local eval/registry contexts is a compatibility warning
+    # when core parity and lifecycle dimensions already match for this run.
+    parse_only = set(drift_categories) == {"parse_error"}
+    core_match = bool(drift_report.get("event_count_match")) and bool(drift_report.get("event_sequence_match")) and bool(drift_report.get("event_hash_match")) and bool(drift_report.get("lifecycle_match"))
+    drift_flag = drift_detected(drift_report) and not (parse_only and core_match and parity_ok)
+    if drift_flag:
+        categories.append("drift_detected")
+        blocking_reasons.append("trace/ledger drift detected")
+
+    corruption_report = classify_ledger_corruption(run_dir)
+    details["corruption_report"] = corruption_report
+    corruption_categories = list(corruption_report.get("corruption_categories", []))
+    corruption_flag = bool(corruption_categories)
+    if corruption_flag:
+        categories.append("corruption_detected")
+        blocking_reasons.append("ledger corruption categories present")
+
+    health_report = ledger_health_report(run_dir)
+    details["ledger_health_report"] = health_report
+
+    replay_ready = bool(health_report.get("replay_ok"))
+    eval_ready = bool(health_report.get("eval_ok"))
+    registry_ready = bool(health_report.get("registry_ok"))
+    if not replay_ready:
+        categories.append("replay_not_ready")
+        blocking_reasons.append("ledger replay readiness failed")
+    if not eval_ready:
+        categories.append("eval_not_ready")
+        blocking_reasons.append("ledger eval readiness failed")
+    if not registry_ready:
+        categories.append("registry_not_ready")
+        blocking_reasons.append("ledger registry readiness failed")
+
+    trace_compat = audit_trace_compatibility()
+    cutover_blockers = int(trace_compat.get("summary", {}).get("cutover_blocker_count", 0))
+    if cutover_blockers > 0:
+        categories.append("trace_blockers_present")
+        blocking_reasons.append(f"trace cutover blockers present: {cutover_blockers}")
+    if trace_compat.get("status") == "warning":
+        categories.append("compatibility_warning")
+        warnings.append("trace compatibility audit reports warnings")
+
+    maintenance = health_report.get("maintenance", {})
+    if not maintenance.get("maintenance_enabled", False) or maintenance.get("stale", False):
+        categories.append("maintenance_warning")
+        warnings.append("maintenance is disabled or stale")
+
+    cutover = ledger_cutover_readiness(run_dir)
+    details["cutover_readiness"] = cutover
+
+    status = "ready"
+    if blocking_reasons:
+        status = "blocked"
+    elif warnings:
+        status = "warning"
+
+    return {
+        "status": status,
+        "ledger_default_dry_run_enabled": ledger_default_dry_run_enabled(),
+        "ledger_authoritative_enabled": ledger_authoritative_enabled(),
+        "parity_ok": parity_ok,
+        "drift_detected": drift_flag,
+        "corruption_detected": corruption_flag,
+        "cutover_blockers": cutover_blockers,
+        "trace_compatibility_status": trace_compat.get("status"),
+        "replay_ledger_ready": replay_ready,
+        "eval_ledger_ready": eval_ready,
+        "registry_ledger_ready": registry_ready,
+        "categories": sorted(set(categories)),
+        "warnings": sorted(set(warnings)),
+        "blocking_reasons": sorted(set(blocking_reasons)),
+        "details": details,
     }

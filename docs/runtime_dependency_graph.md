@@ -78,3 +78,13 @@ Not blockers:
 - legacy-tracked runtime dependencies (`runtime/loader.py`, `runtime/run.py`)
 
 Audit output includes `resolution_hint` for each blocker to keep mitigation steps deterministic and minimal.
+
+## Phase 3.7I Dry-Run Readiness Layer
+
+A new observational layer evaluates whether ledger-default mode would be safe without changing runtime authority.
+
+- helper: `runtime.event_ledger.evaluate_ledger_default_readiness(...)`
+- CLI: `python3 scripts/maintenance/ledger_default_dry_run.py`
+
+This layer consumes drift/corruption/health/compatibility audits and is read-only.
+It does not change replay/eval/registry source defaults unless authoritative mode is explicitly enabled.

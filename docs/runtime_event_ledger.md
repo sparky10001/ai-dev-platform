@@ -368,3 +368,41 @@ Operational interpretation:
 - `compatibility_only` references are allowed during migration
 - `legacy_runtime_dependency` references are tracked but do not fail strict blocker gates
 - strict mode fails only on true `cutover_blocker` items
+
+## Phase 3.7I Ledger-Default Dry-Run Mode
+
+Phase 3.7I adds an observational dry-run gate for ledger-default readiness.
+
+- Flag: `RUNTIME_LEDGER_DRY_RUN_DEFAULT=1`
+- No authority switch is performed by this flag.
+- Trace remains emitted and default runtime behavior remains unchanged.
+
+Dry-run readiness aggregates:
+
+- parity state
+- drift state
+- corruption state
+- health readiness (replay/eval/registry in ledger mode)
+- cutover blocker inventory
+- compatibility and maintenance warnings
+
+Categories:
+
+- `drift_detected`
+- `corruption_detected`
+- `parity_failure`
+- `replay_not_ready`
+- `eval_not_ready`
+- `registry_not_ready`
+- `trace_blockers_present`
+- `compatibility_warning`
+- `maintenance_warning`
+
+CLI:
+
+- `python3 scripts/maintenance/ledger_default_dry_run.py --latest`
+- `python3 scripts/maintenance/ledger_default_dry_run.py --summary --recent 50`
+- `python3 scripts/maintenance/ledger_default_dry_run.py --json`
+- `python3 scripts/maintenance/ledger_default_dry_run.py --strict`
+
+Dry-run mode is warning/validation only and does not mutate artifacts or contracts.

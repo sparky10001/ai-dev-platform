@@ -1179,3 +1179,23 @@ Verification Requirements additions:
 - `python3 scripts/maintenance/trace_compatibility_audit.py --summary`
 - `python3 scripts/maintenance/trace_compatibility_audit.py --json`
 - `python3 scripts/maintenance/trace_compatibility_audit.py --strict`
+
+## runtime_ledger_default_dry_run_tests.sh
+
+Validates:
+
+- dry-run mode enablement and default-disabled behavior
+- ledger-default readiness aggregation and categories
+- strict CLI behavior and deterministic summary output
+- no authority/default switching side effects
+
+Expected result:
+
+unit test pass / 0 failed
+
+This suite validates Phase 3.7I ledger-default dry-run observability without changing runtime authority.
+
+Make targets:
+
+- `make runtime-ledger-default-dry-run-tests`
+- `make ledger-default-dry-run` (uses `--summary --recent 50`)
