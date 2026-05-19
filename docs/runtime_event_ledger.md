@@ -1,408 +1,650 @@
 # Runtime EventLedger
 
+The EventLedger system provides deterministic additive runtime event indexing, parity validation, migration readiness, and future ledger-authoritative support. 
+
+The runtime currently operates in compatibility mode:
+
+* `trace.jsonl` remains canonical
+* `ledger.jsonl` remains additive
+* replay/eval/registry support dual-source operation
+* authoritative mode remains opt-in
+* operational audits remain observational-only
+
+EventLedger migration prioritizes:
+
+* replay safety
+* deterministic parity
+* compatibility preservation
+* audit-first cutover validation
+* rollback safety
+
+---
+
+# Migration Model
+
+The EventLedger migration proceeds through:
+
+1. additive dual-write
+2. deterministic parity validation
+3. replay/eval/registry dual-source support
+4. authoritative-mode opt-in
+5. operational observability
+6. cutover-readiness auditing
+7. dry-run authority simulation
+8. future controlled cutover
+
+At every phase:
+
+* trace compatibility is preserved
+* replay guarantees remain authoritative
+* rollback remains immediate
+
+---
+
+# Operational Safety Guarantees
+
+EventLedger tooling must never:
+
+* mutate runtime history implicitly
+* bypass replay validation
+* invalidate trace compatibility automatically
+* perform automatic repair
+* force authority changes
+
+Operational audits are intentionally:
+
+* read-only
+* deterministic
+* observational-first
+* compatibility-preserving
+
+---
+
+# Current Runtime State
+
+Current default runtime behavior:
+
+* `trace.jsonl` remains canonical
+* `ledger.jsonl` remains additive
+* replay defaults to trace
+* eval defaults to trace
+* registry defaults to trace
+* authoritative mode is opt-in
+* dry-run mode is observational-only
+* parity enforcement is optional
+
+---
+
+# Authoritative Source
+
+* `trace.jsonl` remains the authoritative runtime event source of truth.
+* `ledger.jsonl` remains an additive mirror only.
+* Default replay behavior, evals, and registry behavior remain unchanged.
+
+---
+
+# Authoritative Mode
+
+Authoritative mode means:
+
+* replay/eval/registry default to ledger
+* ledger parity may become enforcement-critical
+* ledger readiness becomes operationally significant
+* trace compatibility remains available unless explicitly retired later
+
+Authoritative mode does NOT:
+
+* remove trace artifacts
+* disable replay fallback
+* bypass parity validation
+* mutate historical runtime artifacts
+
+---
+
+# Phase 3.6B Scope
+
 Phase 3.6B extends the additive EventLedger with deterministic hashing, index generation, and parity validation.
 
-## Authoritative Source
+Implemented capabilities:
 
-- `trace.jsonl` remains the authoritative runtime event source of truth.
-- `ledger.jsonl` remains an additive mirror only.
-- Default replay behavior, evals, and registry behavior remain unchanged.
+* deterministic event canonicalization via `canonical_event_payload(...)`
+* deterministic event hashing via `event_hash(...)`
+* per-event index records via `ledger_event_record(...)`
+* `ledger.index.json` sidecar generation and loading
+* trace/ledger parity validation via `validate_trace_ledger_parity(..., strict=False)`
+* hardened strict ledger validation in `validate_ledger_file(..., strict=True)`
 
-## Phase 3.6B Scope
+---
 
-- Deterministic event canonicalization via `canonical_event_payload(...)`.
-- Deterministic event hashing via `event_hash(...)`.
-- Per-event index records via `ledger_event_record(...)`.
-- `ledger.index.json` sidecar generation and loading.
-- Trace/Ledger parity validation via `validate_trace_ledger_parity(..., strict=False)`.
-- Hardened strict ledger validation in `validate_ledger_file(..., strict=True)`.
-
-## ledger.index.json Sidecar
+# ledger.index.json Sidecar
 
 `ledger.index.json` is generated from `ledger.jsonl` and includes:
 
-- `schema_version`
-- `run_id`
-- `event_count`
-- `ledger_hash`
-- deterministic `events` entries (`index`, `event_hash`, canonical `event`)
+* `schema_version`
+* `run_id`
+* `event_count`
+* `ledger_hash`
+* deterministic `events` entries:
 
-The sidecar is deterministic and reproducible from the same ledger input.
+  * `index`
+  * `event_hash`
+  * canonical `event`
 
-## Deterministic Event Hashing
+The sidecar is deterministic and reproducible from identical ledger input.
+
+---
+
+# Deterministic Event Hashing
 
 Event hashing is based on canonical payload fields:
 
-- `schema_version`
-- `run_id`
-- `event`
-- `timestamp`
-- `data`
+* `schema_version`
+* `run_id`
+* `event`
+* `timestamp`
+* `data`
 
 Equivalent event content yields identical hashes regardless of dict key ordering.
 
-## Trace/Ledger Parity Validation
+---
+
+# Trace/Ledger Parity Validation
 
 `validate_trace_ledger_parity(...)` compares `trace.jsonl` and `ledger.jsonl` for:
 
-- event count parity
-- event sequence parity
-- event hash sequence parity
+* event count parity
+* event sequence parity
+* event hash sequence parity
 
-Default mode returns a structured report. `strict=True` raises `EventLedgerError` on mismatch.
+Default mode returns a structured report.
 
-## Strict Ledger Validation
+`strict=True` raises `EventLedgerError` on mismatch.
+
+---
+
+# Strict Ledger Validation
 
 In strict mode, `validate_ledger_file(...)` rejects:
 
-- empty ledgers
-- mixed `run_id`
-- mixed `schema_version`
-- timestamp regression
-- events that cannot be canonicalized/hashed
+* empty ledgers
+* mixed `run_id`
+* mixed `schema_version`
+* timestamp regression
+* events that cannot be canonicalized or hashed
 
-## Compatibility
+---
 
-- No response contract changes.
-- No NDJSON trace format changes.
-- `trace.jsonl` remains source of truth.
-- `ledger.jsonl` remains additive mirror only.
-- Default replay behavior remains trace-based; eval/registry layers remain unchanged.
+# Compatibility Guarantees
 
-## Phase 3.6C Replay Flag
+* No response contract changes.
+* No NDJSON trace format changes.
+* `trace.jsonl` remains source of truth.
+* `ledger.jsonl` remains additive mirror only.
+* Default replay behavior remains trace-based.
+* Eval and registry behavior remain compatibility-preserving.
+
+---
+
+# Phase 3.6C Replay Flag
 
 Phase 3.6C adds optional replay-from-ledger behind a flag.
 
-- Default replay source remains `trace.jsonl`.
-- Set `RUNTIME_REPLAY_SOURCE=ledger` (or pass `source="ledger"`) to replay from `ledger.jsonl`.
-- Ledger replay is opt-in and non-authoritative.
-- Missing `ledger.jsonl` in ledger mode fails deterministically; no implicit fallback is performed.
-- `evals.py` and `registry.py` remain trace-based in this phase.
+* default replay source remains `trace.jsonl`
+* set `RUNTIME_REPLAY_SOURCE=ledger` or pass `source="ledger"` to replay from `ledger.jsonl`
+* ledger replay is opt-in and non-authoritative
+* missing `ledger.jsonl` in ledger mode fails deterministically
+* no implicit fallback is performed
+* evals and registry remain trace-based in this phase
 
+---
 
-## Phase 3.6D Eval Flag
+# Phase 3.6D Eval Flag
 
 Phase 3.6D adds optional eval-from-ledger behind a flag.
 
-- Default evaluation source remains trace-based.
-- Set `RUNTIME_EVAL_SOURCE=ledger` (or pass `source="ledger"`) to evaluate from `ledger.jsonl`.
-- Replay and eval now both support optional ledger mode.
-- Registry remains trace-based in this phase.
-- Ledger remains non-authoritative and additive.
+* default evaluation source remains trace-based
+* set `RUNTIME_EVAL_SOURCE=ledger` or pass `source="ledger"` to evaluate from `ledger.jsonl`
+* replay and eval now support optional ledger mode
+* registry remains trace-based in this phase
+* ledger remains additive and non-authoritative
 
+---
 
-## Phase 3.6E Registry Flag
+# Phase 3.6E Registry Flag
 
 Phase 3.6E adds optional registry-from-ledger behind a flag.
 
-- Default registry source remains trace-based.
-- Set `RUNTIME_REGISTRY_SOURCE=ledger` (or pass `source="ledger"`) to use ledger-backed registry summaries.
-- Replay and eval already support optional ledger mode.
-- Registry now optionally supports ledger mode.
-- Ledger remains non-authoritative and additive.
+* default registry source remains trace-based
+* set `RUNTIME_REGISTRY_SOURCE=ledger` or pass `source="ledger"` to use ledger-backed registry summaries
+* replay and eval already support optional ledger mode
+* registry now supports optional ledger mode
+* ledger remains additive and non-authoritative
 
+---
 
-## Phase 3.6F Authoritative Mode
+# Phase 3.6F Authoritative Mode
 
 Phase 3.6F adds opt-in ledger-authoritative mode behind feature flags.
 
-- Enable with `RUNTIME_LEDGER_AUTHORITATIVE=1`.
-- In authoritative mode, replay/eval/registry default sources become ledger.
-- Explicit `source="trace"` overrides still force trace behavior.
-- Trace artifacts are still emitted for compatibility.
-- Optional parity enforcement via `RUNTIME_LEDGER_PARITY_REQUIRED=1`.
-- With parity required, trace/ledger mismatch raises `EventLedgerError`.
+Enable via:
 
-Ledger remains non-authoritative unless this mode is explicitly enabled.
+```text
+RUNTIME_LEDGER_AUTHORITATIVE=1
+```
 
-## Migration Path
+In authoritative mode:
 
-- 3.6F: ledger-authoritative cutover (implemented behind flag)
+* replay/eval/registry default sources become ledger
+* explicit `source="trace"` overrides still force trace behavior
+* trace artifacts are still emitted for compatibility
+* optional parity enforcement is available
 
+Optional parity enforcement:
 
-## Phase 3.6G Cutover Readiness
+```text
+RUNTIME_LEDGER_PARITY_REQUIRED=1
+```
+
+With parity required:
+
+* trace/ledger mismatch raises `EventLedgerError`
+
+Ledger remains non-authoritative unless authoritative mode is explicitly enabled.
+
+---
+
+# Migration Path
+
+Migration phases:
+
+* 3.6B deterministic additive ledger foundation
+* 3.6C replay dual-source support
+* 3.6D eval dual-source support
+* 3.6E registry dual-source support
+* 3.6F authoritative-mode opt-in
+* 3.6G cutover readiness auditing
+* 3.7A–3.7I operational hardening and observability
+
+---
+
+# Phase 3.6G Cutover Readiness
 
 Phase 3.6G focuses on cutover readiness auditing, migration clarity, and operational hardening.
 
 Current readiness state:
 
-- replay is ledger-capable and authoritative-mode aware
-- eval is ledger-capable and authoritative-mode aware
-- registry is ledger-capable and authoritative-mode aware
-- trace artifacts remain emitted for compatibility
-- parity enforcement is optional and gated
+* replay is ledger-capable and authoritative-aware
+* eval is ledger-capable and authoritative-aware
+* registry is ledger-capable and authoritative-aware
+* trace artifacts remain emitted for compatibility
+* parity enforcement is optional and gated
 
 Authoritative operation flags:
 
-- `RUNTIME_LEDGER_AUTHORITATIVE=1`
-- `RUNTIME_LEDGER_PARITY_REQUIRED=1`
+* `RUNTIME_LEDGER_AUTHORITATIVE=1`
+* `RUNTIME_LEDGER_PARITY_REQUIRED=1`
 
-Migration matrix:
+---
 
-| Component           | Ledger Ready | Default Source          | Authoritative Support |
-|---------------------|--------------|-------------------------|-----------------------|
-| replay              | yes          | trace                   | yes                   |
-| eval                | yes          | trace                   | yes                   |
-| registry            | yes          | trace                   | yes                   |
-| trace compatibility | required     | trace artifacts emitted | retained              |
-| parity enforcement  | yes          | off                     | optional strict       |
-| ledger index        | yes          | additive sidecar        | available             |
+## Migration Matrix
 
-Operational guidance:
+| Component           | Ledger Ready | Default Source   | Authoritative Support |
+| ------------------- | ------------ | ---------------- | --------------------- |
+| replay              | yes          | trace            | yes                   |
+| eval                | yes          | trace            | yes                   |
+| registry            | yes          | trace            | yes                   |
+| trace compatibility | required     | trace emitted    | retained              |
+| parity enforcement  | yes          | off              | optional strict       |
+| ledger index        | yes          | additive sidecar | available             |
 
-- Keep default mode trace-first unless explicit operational cutover is required.
-- Enable authoritative mode first in controlled environments.
-- Enable parity enforcement after baseline parity confidence is established.
-- Treat parity failures as hard blockers for authoritative operation.
+---
 
-Cutover checklist:
+## Operational Guidance
 
-1. Validate dual-write parity across representative runs.
-2. Run readiness audit helpers on recent runs.
-3. Enable `RUNTIME_LEDGER_AUTHORITATIVE=1` in staging.
-4. Optionally enable `RUNTIME_LEDGER_PARITY_REQUIRED=1`.
-5. Validate replay/eval/registry equivalence and rollback readiness.
+* keep default mode trace-first unless explicit operational cutover is required
+* enable authoritative mode first in controlled environments
+* enable parity enforcement after parity confidence is established
+* treat parity failures as hard blockers for authoritative operation
 
-Rollback strategy:
+---
 
-- unset `RUNTIME_LEDGER_AUTHORITATIVE`
-- unset `RUNTIME_LEDGER_PARITY_REQUIRED`
-- continue with trace-first defaults using unchanged artifacts
+## Cutover Checklist
 
-Operational risks and remaining assumptions:
+1. validate dual-write parity across representative runs
+2. run readiness audit helpers on recent runs
+3. enable `RUNTIME_LEDGER_AUTHORITATIVE=1` in staging
+4. optionally enable `RUNTIME_LEDGER_PARITY_REQUIRED=1`
+5. validate replay/eval/registry equivalence and rollback readiness
 
-- some scripts/docs still reference `trace.jsonl` as compatibility anchor
-- authoritative mode depends on dual-write parity and ledger presence
-- compatibility tooling still expects trace artifact emission
+---
+
+## Rollback Strategy
+
+Rollback is immediate:
+
+```bash
+unset RUNTIME_LEDGER_AUTHORITATIVE
+unset RUNTIME_LEDGER_PARITY_REQUIRED
+```
+
+Trace-first defaults continue using unchanged artifacts.
+
+---
+
+## Operational Risks and Assumptions
+
+Remaining operational assumptions:
+
+* some scripts/docs still reference `trace.jsonl` as compatibility anchor
+* authoritative mode depends on parity confidence and ledger presence
+* compatibility tooling still expects trace artifact emission
 
 Recovery expectations:
 
-- ledger and trace both remain available for replay-safe recovery
-- parity checks can identify divergence early
-- rollback to trace-first mode is immediate via env flags
+* ledger and trace remain available for replay-safe recovery
+* parity checks identify divergence early
+* rollback to trace-first mode remains immediate
 
-## Phase 3.7A Drift Detection
+---
 
-Phase 3.7A adds observational ledger/trace drift auditing and enforcement tooling without changing runtime behavior.
+# Audit System Inventory
 
-- Drift audit API: `runtime/ledger_drift.py`
-- Operator CLI: `python3 scripts/maintenance/ledger_drift_audit.py --latest`
-- Strict no-drift helper: `validate_no_drift(...)`
+| Audit System             | Purpose                                |
+| ------------------------ | -------------------------------------- |
+| `ledger_drift`           | parity divergence detection            |
+| `ledger_corruption`      | corruption classification              |
+| `ledger_health`          | operational readiness visibility       |
+| `trace_compatibility`    | cutover dependency inventory           |
+| `derived_purity`         | replay-safe derived-system enforcement |
+| `runtime_boundary`       | import-layer enforcement               |
+| `ledger_default_dry_run` | simulated ledger-default readiness     |
+
+---
+
+# Phase 3.7A Drift Detection
+
+Phase 3.7A adds observational ledger/trace drift auditing and enforcement tooling.
 
 Drift categories:
 
-- `missing_trace`
-- `missing_ledger`
-- `event_count_mismatch`
-- `event_sequence_mismatch`
-- `event_hash_mismatch`
-- `lifecycle_mismatch`
-- `replay_summary_mismatch`
-- `eval_summary_mismatch`
-- `registry_summary_mismatch`
-- `parse_error`
-
-Operational semantics:
-
-- observational only; no automatic repair or mutation
-- default runtime behavior remains unchanged
-- strict mode can fail fast for CI/staging enforcement
-- recommended before cutover: run `--all --strict` and resolve any drift categories
-
-## Phase 3.7B Derived-System Purity Audit
-
-Phase 3.7B adds static purity guardrails to verify derived systems are read-only projections over runtime artifacts.
-
-Purity expectations:
-
-- `runtime/replay.py` is projection-only.
-- `runtime/evals.py` is replay-derived projection-only.
-- `runtime/registry.py` is filesystem query projection-only.
-- `runtime/ledger_drift.py` is observational audit-only.
-
-`runtime/datasets.py` classification:
-
-- classified as `projection_writer`.
-- allowed to write export outputs.
-- not allowed to write runtime source artifacts (`trace.jsonl`, `ledger.jsonl`, `run.json`, `result.json`).
-
-Audit commands:
-
-- `python3 scripts/maintenance/derived_purity_audit.py`
-- `python3 scripts/maintenance/derived_purity_audit.py --json`
-- `python3 scripts/maintenance/derived_purity_audit.py --strict`
-
-Strict mode:
-
-- exits nonzero when purity violations are detected.
-- intended for CI/staging guardrails.
-- observational only; no auto-repair or behavior cutover.
-
-## Phase 3.7C Runtime Boundary Enforcement
-
-Phase 3.7C adds import-boundary guardrails that protect runtime layering around trace/ledger persistence and derived readers.
-
-Key enforcement points:
-
-- execution modules remain coordinator-directed (`engine` -> gateway/lifecycle/trace/ledger)
-- derived modules (`replay`, `evals`, `registry`) remain read-side projections
-- ledger/trace layers are protected from replay/eval/registry/control-plane coupling
-- control-plane importing `runtime.engine` is treated as a boundary violation
+* `missing_trace`
+* `missing_ledger`
+* `event_count_mismatch`
+* `event_sequence_mismatch`
+* `event_hash_mismatch`
+* `lifecycle_mismatch`
+* `replay_summary_mismatch`
+* `eval_summary_mismatch`
+* `registry_summary_mismatch`
+* `parse_error`
 
 Tooling:
 
-- `python3 scripts/maintenance/runtime_boundary_audit.py`
-- strict mode: `python3 scripts/maintenance/runtime_boundary_audit.py --strict`
+* `runtime/ledger_drift.py`
+* `python3 scripts/maintenance/ledger_drift_audit.py --latest`
 
-This is observational guardrail enforcement only and does not modify runtime behavior.
+Strict helper:
 
-## Phase 3.7D Ledger Corruption & Recovery Validation
+```text
+validate_no_drift(...)
+```
 
-Phase 3.7D adds deterministic corruption classification and recovery-readiness auditing for ledger artifacts before authority cutover.
+Operational semantics follow the standard observational safety model.
 
-Corruption categories:
+---
 
-- `missing_ledger`
-- `missing_trace`
-- `malformed_ndjson`
-- `empty_ledger`
-- `mixed_run_id`
-- `mixed_schema_version`
-- `timestamp_regression`
-- `duplicate_lifecycle_event`
-- `missing_lifecycle_event`
-- `event_after_session_end`
-- `parity_mismatch`
-- `index_mismatch`
-- `replay_failure`
-- `eval_failure`
-- `registry_failure`
+# Phase 3.7B Derived-System Purity Audit
+
+Phase 3.7B adds static purity guardrails verifying that derived systems remain replay-safe projections.
+
+Purity expectations:
+
+* `runtime/replay.py` is projection-only
+* `runtime/evals.py` is replay-derived projection-only
+* `runtime/registry.py` is filesystem-query projection-only
+* `runtime/ledger_drift.py` is observational-only
+
+`runtime/datasets.py` classification:
+
+* classified as `projection_writer`
+* allowed to write export outputs
+* forbidden from mutating runtime source artifacts
 
 Audit commands:
 
-- `python3 scripts/maintenance/ledger_corruption_audit.py --latest`
-- `python3 scripts/maintenance/ledger_corruption_audit.py --latest --json`
-- `python3 scripts/maintenance/ledger_corruption_audit.py --latest --strict`
+* `python3 scripts/maintenance/derived_purity_audit.py`
+* `python3 scripts/maintenance/derived_purity_audit.py --json`
+* `python3 scripts/maintenance/derived_purity_audit.py --strict`
+
+This audit follows the standard observational safety model.
+
+---
+
+# Phase 3.7C Runtime Boundary Enforcement
+
+Phase 3.7C adds import-boundary guardrails protecting runtime layering around trace/ledger persistence and derived readers.
+
+Key enforcement points:
+
+* execution modules remain coordinator-directed
+* derived modules remain read-side projections
+* ledger/trace layers remain protected from replay/eval/registry coupling
+* control-plane importing `runtime.engine` is treated as a boundary violation
+
+Tooling:
+
+* `python3 scripts/maintenance/runtime_boundary_audit.py`
+* `python3 scripts/maintenance/runtime_boundary_audit.py --strict`
+
+This audit follows the standard observational safety model.
+
+---
+
+# Phase 3.7D Ledger Corruption & Recovery Validation
+
+Phase 3.7D adds deterministic corruption classification and recovery-readiness auditing.
+
+Corruption categories:
+
+* `missing_ledger`
+* `missing_trace`
+* `malformed_ndjson`
+* `empty_ledger`
+* `mixed_run_id`
+* `mixed_schema_version`
+* `timestamp_regression`
+* `duplicate_lifecycle_event`
+* `missing_lifecycle_event`
+* `event_after_session_end`
+* `parity_mismatch`
+* `index_mismatch`
+* `replay_failure`
+* `eval_failure`
+* `registry_failure`
+
+Audit commands:
+
+* `python3 scripts/maintenance/ledger_corruption_audit.py --latest`
+* `python3 scripts/maintenance/ledger_corruption_audit.py --latest --json`
+* `python3 scripts/maintenance/ledger_corruption_audit.py --latest --strict`
 
 Operational guidance:
 
-- corruption audit is observational only
-- no automatic repair or mutation is performed
-- trace fallback remains available for compatibility and recovery
-- strict mode is intended for pre-cutover and CI enforcement
+* trace fallback remains available for compatibility and recovery
+* strict mode is intended for CI/staging enforcement
+* no automatic repair is performed
 
-## Phase 3.7E Operational Observability
+This audit follows the standard observational safety model.
 
-Phase 3.7E adds operator-facing ledger health reporting without changing runtime behavior.
+---
+
+# Phase 3.7E Operational Observability
+
+Phase 3.7E adds operator-facing ledger health reporting.
 
 Health coverage includes:
 
-- parity visibility (`parity_ok`)
-- drift visibility (from `runtime/ledger_drift.py`)
-- corruption visibility (from `runtime/ledger_corruption.py`)
-- replay/eval/registry ledger-read health checks
-- maintenance stamp visibility (`AI_MAINTENANCE_*`)
-- cutover-readiness integration (`ledger_cutover_readiness`)
+* parity visibility
+* drift visibility
+* corruption visibility
+* replay/eval/registry ledger-read health checks
+* maintenance stamp visibility
+* cutover-readiness integration
 
 Health status semantics:
 
-- `healthy`: parity/corruption/replay-eval-registry checks pass
-- `warning`: missing ledger/index, maintenance disabled/stale, cutover not ready, or drift with trace fallback intact
-- `unhealthy`: corruption, parity failure, strict validation failure, replay/eval/registry ledger failures, or required trace missing
+| Status      | Meaning                                                     |
+| ----------- | ----------------------------------------------------------- |
+| `healthy`   | parity/corruption/replay/eval/registry checks pass          |
+| `warning`   | compatibility-safe issues exist with replay fallback intact |
+| `unhealthy` | corruption/parity/strict runtime failures detected          |
 
 CLI usage:
 
-- `python3 scripts/maintenance/ledger_health_report.py --latest`
-- `python3 scripts/maintenance/ledger_health_report.py --summary`
-- `python3 scripts/maintenance/ledger_health_report.py --latest --json`
-- `python3 scripts/maintenance/ledger_health_report.py --latest --strict`
+* `python3 scripts/maintenance/ledger_health_report.py --latest`
+* `python3 scripts/maintenance/ledger_health_report.py --summary`
+* `python3 scripts/maintenance/ledger_health_report.py --latest --json`
+* `python3 scripts/maintenance/ledger_health_report.py --latest --strict`
 
-Operational notes:
+This observability layer follows the standard observational safety model.
 
-- observability is read-only and does not mutate artifacts
-- no auto-repair behavior is introduced
-- default trace compatibility and default-authority behavior remain unchanged
+---
 
-## Phase 3.7G Trace Compatibility Audit
+# Phase 3.7G Trace Compatibility Audit
 
 Phase 3.7G adds deterministic inventory and classification for remaining `trace.jsonl` dependencies.
 
 Categories:
 
-- `compatibility_only`
-- `cutover_blocker`
-- `legacy_runtime_dependency`
-- `test_only`
-- `documentation_only`
-- `operational_tooling`
+* `compatibility_only`
+* `cutover_blocker`
+* `legacy_runtime_dependency`
+* `test_only`
+* `documentation_only`
+* `operational_tooling`
 
 CLI:
 
-- `python3 scripts/maintenance/trace_compatibility_audit.py`
-- `python3 scripts/maintenance/trace_compatibility_audit.py --summary`
-- `python3 scripts/maintenance/trace_compatibility_audit.py --json`
-- `python3 scripts/maintenance/trace_compatibility_audit.py --strict`
+* `python3 scripts/maintenance/trace_compatibility_audit.py`
+* `python3 scripts/maintenance/trace_compatibility_audit.py --summary`
+* `python3 scripts/maintenance/trace_compatibility_audit.py --json`
+* `python3 scripts/maintenance/trace_compatibility_audit.py --strict`
 
-Strict mode exits nonzero only when `cutover_blocker` dependencies are present.
+Strict mode exits nonzero only when true `cutover_blocker` dependencies exist.
 
-This audit is observational-only and does not modify runtime behavior, schemas, or artifacts.
+This audit follows the standard observational safety model.
 
-## Phase 3.7H Trace Cutover Blocker Resolution
+---
 
-Phase 3.7H refines trace compatibility blocker semantics to reduce false positives.
+# Phase 3.7H Trace Cutover Blocker Resolution
 
-Cutover blocker definition (strict):
+Phase 3.7H refines blocker semantics to reduce compatibility false positives.
 
-- only dependencies that would fail operationally if trace were retired/default-ledger cutover were attempted
-- compatibility scaffolding, migration helpers, and dual-source readers are not blockers
+`cutover_blocker` means only:
 
-Reporting improvements:
+```text
+a runtime dependency that would operationally fail if trace were retired or ledger-default cutover were attempted
+```
 
-- audit output now includes `cutover_blockers` with:
-  - `path`
-  - `reason`
-  - `resolution_hint`
+Not blockers:
 
-Operational interpretation:
+* compatibility scaffolding
+* migration helpers
+* replay/eval/registry dual-source readers
+* audit systems
+* docs/tests/tooling references
+* legacy tracked runtime dependencies
 
-- `compatibility_only` references are allowed during migration
-- `legacy_runtime_dependency` references are tracked but do not fail strict blocker gates
-- strict mode fails only on true `cutover_blocker` items
+Audit output includes:
 
-## Phase 3.7I Ledger-Default Dry-Run Mode
+* `path`
+* `reason`
+* `resolution_hint`
 
-Phase 3.7I adds an observational dry-run gate for ledger-default readiness.
+for deterministic remediation guidance.
 
-- Flag: `RUNTIME_LEDGER_DRY_RUN_DEFAULT=1`
-- No authority switch is performed by this flag.
-- Trace remains emitted and default runtime behavior remains unchanged.
+---
+
+# Phase 3.7I Ledger-Default Dry-Run Mode
+
+Phase 3.7I adds observational ledger-default readiness simulation.
+
+Enable signaling:
+
+```text
+RUNTIME_LEDGER_DRY_RUN_DEFAULT=1
+```
 
 Dry-run readiness aggregates:
 
-- parity state
-- drift state
-- corruption state
-- health readiness (replay/eval/registry in ledger mode)
-- cutover blocker inventory
-- compatibility and maintenance warnings
+* parity state
+* drift state
+* corruption state
+* replay/eval/registry readiness
+* cutover blocker inventory
+* compatibility warnings
+* maintenance warnings
 
-Categories:
+Dry-run categories:
 
-- `drift_detected`
-- `corruption_detected`
-- `parity_failure`
-- `replay_not_ready`
-- `eval_not_ready`
-- `registry_not_ready`
-- `trace_blockers_present`
-- `compatibility_warning`
-- `maintenance_warning`
+* `drift_detected`
+* `corruption_detected`
+* `parity_failure`
+* `replay_not_ready`
+* `eval_not_ready`
+* `registry_not_ready`
+* `trace_blockers_present`
+* `compatibility_warning`
+* `maintenance_warning`
 
 CLI:
 
-- `python3 scripts/maintenance/ledger_default_dry_run.py --latest`
-- `python3 scripts/maintenance/ledger_default_dry_run.py --summary --recent 50`
-- `python3 scripts/maintenance/ledger_default_dry_run.py --json`
-- `python3 scripts/maintenance/ledger_default_dry_run.py --strict`
+* `python3 scripts/maintenance/ledger_default_dry_run.py --latest`
+* `python3 scripts/maintenance/ledger_default_dry_run.py --summary --recent 50`
+* `python3 scripts/maintenance/ledger_default_dry_run.py --json`
+* `python3 scripts/maintenance/ledger_default_dry_run.py --strict`
 
-Dry-run mode is warning/validation only and does not mutate artifacts or contracts.
+Dry-run mode:
+
+* does not switch authority
+* does not mutate artifacts
+* does not remove trace compatibility
+* does not change replay/eval/registry defaults
+
+Dry-run mode follows the standard observational safety model.
+
+---
+
+# Future Cutover Direction
+
+Future cutover phases may:
+
+* enable controlled ledger-authoritative rollout
+* reduce operational trace dependence
+* preserve replay compatibility guarantees
+* retain audit and observability enforcement
+
+No automatic trace retirement is currently performed.
+
+---
+
+# Architectural Guarantees
+
+The EventLedger architecture guarantees:
+
+* deterministic replay compatibility
+* additive migration safety
+* append-only runtime history
+* operational rollback safety
+* compatibility-preserving evolution
+* deterministic parity validation
+* audit-safe operational observability
+* replay-safe recovery behavior
+
+EventLedger is intentionally designed as:
+
+```text
+deterministic runtime migration and operational reliability infrastructure
+```
+
+—not merely a secondary trace format.

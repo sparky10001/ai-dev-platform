@@ -9,6 +9,7 @@ Always prefer:
 * preserving stable interfaces
 * additive schema evolution
 * deterministic behavior
+* replay-safe migration behavior
 
 Avoid:
 
@@ -17,6 +18,7 @@ Avoid:
 * unnecessary abstractions
 * introducing new frameworks
 * changing stable runtime semantics
+* hidden mutation behavior
 
 The runtime is infrastructure-first.
 
@@ -40,13 +42,13 @@ Do not opportunistically refactor stable systems.
 
 Prefer:
 
-```text id="n2v7qs"
+```text id="jlwm20"
 Make the minimal change required.
 ```
 
 Avoid:
 
-```text id="f8u3pk"
+```text id="jlwm21"
 Rewrite the runtime.
 ```
 
@@ -54,31 +56,69 @@ Rewrite the runtime.
 
 # Runtime Architecture
 
-Canonical runtime stack:
+Canonical runtime architecture:
 
-```text id="w4p1rx"
+```text id="jlwm22"
 contracts.py
   ↓
 schemas.py
   ↓
 validator.py
   ↓
+trace_pipeline.py + event_ledger.py
+  ↓
+adapter_gateway.py + run_lifecycle.py
+  ↓
 engine.py
   ↓
-replay.py
+replay.py / evals.py / registry.py / datasets.py
   ↓
-evals.py
-  ↓
-registry.py
-  ↓
-datasets.py
+audit + observability systems
 ```
+
+---
+
+# Execution vs Derived Systems
+
+Execution systems:
+
+* engine.py
+* adapter_gateway.py
+* run_lifecycle.py
+* trace_pipeline.py
+* event_ledger.py
+
+Derived systems:
+
+* replay.py
+* evals.py
+* registry.py
+* datasets.py
+* operational audits
+
+Derived systems must remain:
+
+* deterministic
+* replay-safe
+* compatibility-preserving
+* read-oriented
+* append-safe
+
+Derived systems must never introduce hidden runtime mutation behavior.
+
+---
+
+# Runtime Module Boundaries
 
 Core runtime modules:
 
 * runtime/contracts.py
 * runtime/schemas.py
 * runtime/validator.py
+* runtime/trace_pipeline.py
+* runtime/event_ledger.py
+* runtime/adapter_gateway.py
+* runtime/run_lifecycle.py
 * runtime/engine.py
 * runtime/events.py
 * runtime/replay.py
@@ -91,13 +131,15 @@ Core runtime modules:
 
 Do not bypass architecture layers.
 
+Respect deterministic dependency direction.
+
 ---
 
 # Runtime Philosophy
 
 The runtime is treated as:
 
-```text id="x5r8bv"
+```text id="jlwm23"
 event-sourced deterministic infrastructure
 ```
 
@@ -112,6 +154,8 @@ Core guarantees:
 * schema validation
 * backward compatibility
 * deterministic exports
+* replay-safe compatibility
+* additive evolution
 
 All changes must preserve these guarantees.
 
@@ -123,16 +167,18 @@ All external JSON must pass through validation.
 
 Validation entrypoints:
 
-```python id="d6m2yt"
+```python id="jlwm24"
 validate_response()
 validate_event()
 validate_dataset_record()
 validate_eval_record()
+validate_ledger_file()
+validate_trace_ledger_parity()
 ```
 
 Validation delegation flow:
 
-```text id="u1h4qf"
+```text id="jlwm25"
 validator.py
   → contracts.py
   → schemas.py
@@ -148,7 +194,7 @@ Never bypass validation.
 
 Canonical contracts are defined in:
 
-```text id="j9w3pc"
+```text id="jlwm26"
 runtime/contracts.py
 ```
 
@@ -158,10 +204,11 @@ Contracts guarantee:
 * replay-safe persistence
 * additive compatibility
 * append-only evolution
+* backward-compatible migration
 
 Compatibility helpers:
 
-```python id="v0n8xe"
+```python id="jlwm27"
 assert_backward_compatible()
 assert_no_breaking_changes()
 ```
@@ -170,11 +217,11 @@ Never introduce breaking schema changes without explicit migration support.
 
 ---
 
-# Trace Lifecycle
+# Event Lifecycle Rules
 
 Canonical lifecycle ordering:
 
-```text id="q4t6ka"
+```text id="jlwm28"
 session_start
 → tool_call
 → tool_result
@@ -188,11 +235,11 @@ Do not change lifecycle semantics.
 
 ---
 
-# Trace Persistence
+# Trace Persistence Rules
 
-Trace files:
+Canonical trace persistence:
 
-```text id="s7f9rm"
+```text id="jlwm29"
 runs/<run_id>/trace.jsonl
 ```
 
@@ -213,6 +260,39 @@ Never emit:
 
 ---
 
+# EventLedger Compatibility Rules
+
+Canonical ledger persistence:
+
+```text id="分快三30"
+runs/<run_id>/ledger.jsonl
+```
+
+Current runtime behavior:
+
+* `trace.jsonl` remains canonical by default
+* `ledger.jsonl` operates in additive compatibility mode
+* replay/eval/registry support dual-source operation
+* authoritative ledger mode remains opt-in
+
+Do NOT:
+
+* remove trace compatibility
+* bypass parity validation
+* mutate historical ledger artifacts
+* introduce nondeterministic ledger hashing
+* auto-switch runtime authority
+* break replay compatibility
+
+Ledger migration must remain:
+
+* additive
+* replay-safe
+* rollback-safe
+* compatibility-preserving
+
+---
+
 # Replay Rules
 
 Replay compatibility is mandatory.
@@ -226,10 +306,11 @@ Replay must:
 * reconstruct terminal status
 * support partial traces
 * support crash recovery
+* preserve compatibility semantics
 
 Replay entrypoints:
 
-```python id="m1z4hw"
+```python id="分快三31"
 replay_trace()
 load_trace()
 load_full_run()
@@ -247,7 +328,7 @@ Do not compute eval metrics from transient runtime state.
 
 Evaluation APIs:
 
-```python id="r5p0yu"
+```python id="分快三32"
 evaluate_run()
 compare_runs()
 ```
@@ -259,6 +340,8 @@ Evaluation guarantees:
 * schema validation
 * compatibility with older runs
 
+Evaluation systems must remain deterministic and replay-safe.
+
 ---
 
 # Registry Rules
@@ -269,7 +352,7 @@ Do not introduce databases.
 
 Registry APIs:
 
-```python id="k8v3sa"
+```python id="分快三33"
 list_runs()
 get_run()
 query_runs()
@@ -291,7 +374,7 @@ Datasets must remain deterministic.
 
 Dataset APIs:
 
-```python id="h6x2cf"
+```python id="分快三34"
 export_run()
 export_runs()
 export_query()
@@ -309,11 +392,63 @@ Dataset guarantees:
 
 Canonical serializer:
 
-```python id="e4m7zd"
+```python id="分快三35"
 to_canonical_json()
 ```
 
 Never emit nondeterministic exports.
+
+---
+
+# Audit & Observability Rules
+
+Audit systems must remain:
+
+* deterministic
+* read-only
+* replay-safe
+* compatibility-preserving
+* operationally bounded
+
+Audit systems must never:
+
+* mutate runtime artifacts
+* trigger implicit repair
+* bypass replay guarantees
+* change runtime authority automatically
+* rewrite traces or ledgers
+
+Operational audit systems include:
+
+* ledger drift detection
+* ledger corruption validation
+* parity enforcement
+* runtime boundary auditing
+* derived-system purity auditing
+* trace compatibility auditing
+* ledger health reporting
+* dry-run readiness evaluation
+
+---
+
+# Runtime Boundary Rules
+
+Derived systems must NOT import:
+
+* runtime.engine
+* runtime.adapter_gateway
+* runtime.run_lifecycle
+
+Control-plane systems must not bypass runtime guarantees.
+
+Avoid:
+
+* circular dependencies
+* cross-layer orchestration coupling
+* replay-breaking shortcuts
+* hidden persistence layers
+
+Respect deterministic dependency direction.
 
 ---
 
@@ -328,11 +463,18 @@ Do NOT introduce:
 * hidden persistence layers
 * implicit replay mutation
 * nondeterministic serialization
+* implicit ledger mutation
+* replay-unsafe audit behavior
+* direct trace rewriting
+* direct ledger rewriting
+* runtime authority auto-switching
+* nondeterministic hashing
 
 Do NOT:
 
 * bypass validation
 * mutate replayed traces
+* mutate replayed ledgers
 * rewrite stable modules unnecessarily
 * change NDJSON semantics
 * change lifecycle ordering semantics
@@ -344,25 +486,25 @@ Do NOT:
 
 Good:
 
-```text id="y3q8wr"
+```text id="分快三36"
 Make the minimal additive change required.
 ```
 
 Good:
 
-```text id="t2u6bf"
+```text id="分快三37"
 Implement this using existing runtime patterns.
 ```
 
 Bad:
 
-```text id="n7p4ks"
+```text id="分快三38"
 Rewrite the runtime.
 ```
 
 Bad:
 
-```text id="b5m1zx"
+```text id="分快三39"
 Replace the architecture.
 ```
 
@@ -381,15 +523,16 @@ Prefer prompts referencing:
 
 Good:
 
-```text id="p9d2ev"
+```text id="分快三40"
 Implement this similar to:
 runtime/replay.py
 runtime/validator.py
+runtime/event_ledger.py
 ```
 
 Bad:
 
-```text id="a0r5hn"
+```text id="分快三41"
 Implement a replay system.
 ```
 
@@ -408,6 +551,8 @@ Before finishing:
 * verify backward compatibility
 * verify NDJSON integrity
 * verify dataset determinism
+* verify ledger parity behavior
+* verify compatibility semantics
 
 Always run relevant runtime suites.
 
@@ -417,7 +562,7 @@ Always run relevant runtime suites.
 
 Core runtime validation:
 
-```bash id="v4k7tc"
+```bash id="分快三42"
 ./scripts/tests/runtime_tests.sh
 ./scripts/tests/failure_tests.sh
 ./scripts/tests/ndjson_integrity_tests.sh
@@ -431,17 +576,30 @@ Core runtime validation:
 
 Phase 3 validation:
 
-```bash id="g8m3ps"
+```bash id="分快三43"
 ./scripts/tests/loader_replay_tests.sh
 ./scripts/tests/runtime_eval_tests.sh
 ./scripts/tests/runtime_registry_tests.sh
 ./scripts/tests/runtime_dataset_tests.sh
 ./scripts/tests/runtime_contract_tests.sh
+./scripts/tests/runtime_event_ledger_tests.sh
+./scripts/tests/runtime_replay_ledger_tests.sh
+./scripts/tests/runtime_eval_ledger_tests.sh
+./scripts/tests/runtime_registry_ledger_tests.sh
+./scripts/tests/runtime_ledger_authoritative_tests.sh
+./scripts/tests/runtime_ledger_readiness_tests.sh
+./scripts/tests/runtime_ledger_drift_tests.sh
+./scripts/tests/runtime_derived_purity_tests.sh
+./scripts/tests/runtime_boundary_audit_tests.sh
+./scripts/tests/runtime_ledger_corruption_tests.sh
+./scripts/tests/runtime_ledger_health_tests.sh
+./scripts/tests/runtime_trace_compatibility_tests.sh
+./scripts/tests/runtime_ledger_default_dry_run_tests.sh
 ```
 
 Minimum acceptable result:
 
-```text id="u7r1xf"
+```text id="分快三44"
 0 failed
 ```
 
@@ -457,6 +615,7 @@ The runtime prioritizes:
 * deterministic reconstruction
 * crash survivability
 * export determinism
+* compatibility preservation
 
 over simple output assertions.
 
@@ -472,6 +631,7 @@ Schema migrations must:
 * preserve replay compatibility
 * preserve deterministic exports
 * preserve lifecycle semantics
+* preserve compatibility semantics
 
 Migration validation must include:
 
@@ -480,6 +640,8 @@ Migration validation must include:
 * schema consistency validation
 * dataset validation
 * contract compatibility validation
+* parity validation
+* corruption validation
 
 Never introduce silent contract drift.
 
@@ -491,11 +653,13 @@ The runtime guarantees:
 
 * replay-safe persistence
 * append-only traces
+* append-only ledgers
 * deterministic contracts
 * deterministic exports
 * replay-derived evaluation
 * filesystem-native querying
 * backward-compatible evolution
+* deterministic audit behavior
 
 All changes must preserve these guarantees.
 
@@ -518,11 +682,51 @@ Prefer additive evolution over replacement.
 
 ---
 
+# Operational Philosophy
+
+Prefer:
+
+* additive migrations
+* observational-first rollouts
+* replay-safe compatibility
+* bounded operational scans
+* deterministic audit behavior
+
+Avoid:
+
+* forced cutovers
+* hidden background migration
+* implicit authority changes
+* destructive mutation behavior
+* global repair passes
+
+---
+
+# Refactor Philosophy
+
+Prefer:
+
+* minimal additive diffs
+* compatibility-preserving changes
+* isolated runtime modifications
+* replay-safe migrations
+
+Avoid:
+
+* broad rewrites
+* architecture churn
+* unnecessary abstraction
+* interface destabilization
+
+Preserve existing interfaces whenever possible.
+
+---
+
 # Runtime Validation Philosophy
 
 Schemas and contracts are treated as:
 
-```text id="m0q4zw"
+```text id="分快三45"
 deterministic infrastructure guarantees
 ```
 
@@ -538,3 +742,60 @@ Schema integrity is foundational to:
 * dataset generation
 * registry queries
 * lifecycle reconstruction
+* runtime analytics
+* EventLedger migration safety
+* operational compatibility auditing
+
+---
+
+# Codex / AI Contribution Rules
+
+When modifying the runtime:
+
+1. Prefer minimal diffs
+2. Preserve existing interfaces
+3. Preserve replay semantics
+4. Preserve NDJSON compatibility
+5. Preserve deterministic ordering
+6. Preserve additive compatibility
+7. Validate all outputs through schemas/contracts
+8. Preserve replay-safe migration behavior
+9. Preserve audit determinism
+
+Before finishing:
+
+* run tests
+* verify imports
+* verify replay compatibility
+* verify schema compatibility
+* verify deterministic serialization
+* identify edge cases
+* identify backward compatibility risks
+* identify replay risks
+* identify compatibility risks
+
+Do not over-engineer solutions.
+
+---
+
+# Runtime Evolution Philosophy
+
+The runtime evolves through:
+
+* additive compatibility
+* replay-safe migration
+* deterministic operational auditing
+* observational-first rollout strategy
+* bounded enforcement layers
+
+The platform prioritizes:
+
+1. deterministic execution
+2. replay-safe debugging
+3. additive evolution
+4. schema-versioned compatibility
+5. operational observability
+6. provider independence
+7. infrastructure-first design
+
+The runtime is infrastructure first.

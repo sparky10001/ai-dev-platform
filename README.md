@@ -2,99 +2,210 @@
 
 > Stop managing AI tools. Start managing AI outcomes.
 
-**A portable, provider-agnostic AI runtime and orchestration platform for developers building serious AI systems.**
+**A portable, provider-agnostic AI runtime and orchestration platform for developers building deterministic, replay-safe AI systems.**
 
-One stable interface.  
-Any AI agent.  
-Any compute.  
+One stable interface.
+Any AI agent.
+Any compute.
 Anywhere.
-Now with deterministic orchestration experimentation,
-replay-safe evaluation,
-and adaptive strategy benchmarking.
-Plus deterministic replay-backed orchestration recommendations.
-And deterministic orchestration memory + historical recall.
-Plus deterministic orchestration lineage and relationship reconstruction.
-And deterministic replay-safe orchestration graph analytics.
-Plus deterministic bounded parallel DAG execution.
+
+Now with:
+
+* deterministic orchestration experimentation
+* replay-safe evaluation
+* adaptive strategy benchmarking
+* orchestration lineage reconstruction
+* graph analytics
+* bounded parallel DAG execution
+* additive EventLedger compatibility
+* operational ledger health auditing
 
 ---
 
 # 🧠 Core Principle
 
-> **Only one thing is stable: the AI interface.**  
-> Everything else can change, will change, should be replaceable.
-
-```text
-Developer
-    │
-    ▼
-./ai run "your task"              ← Stable runtime CLI
-./ai-orchestrate run "task"       ← Deterministic orchestration CLI
-    │
-    ▼
-scripts/runtime.sh                ← Runtime entrypoint
-    │
-    ▼
-runtime/engine.py                 ← Deterministic execution engine
-    │
-    ▼
-control-plane/                    ← DAG orchestration layer
-    │
-    ▼
-scripts/router.py                 ← Intent classification → model tier
-    │
-    ▼
-scripts/adapters/agent.sh         ← Active adapter
-    │
-    ▼
-scripts/agent.py                  ← LiteLLM tool-using agent
-    │
-    ▼
-runtime/events.py                 ← Canonical NDJSON persistence
-    │
-    ▼
-runtime/contracts.py              ← Schema compatibility guarantees
-    │
-    ▼
-LiteLLM                           ← Universal provider router
-    │
-    ▼
-Ollama │ OpenAI │ Claude │ NVIDIA NIM
-```
-
-Swap the adapter.  
-Swap the model.  
-Swap the compute.
-
-**Your workflow never changes.**
+> **Only one thing is stable: the AI interface.**
+> Everything else can change, will change, and should be replaceable.
 
 ---
 
-# ✨ Features
+# Architecture Status
 
-- **Provider Agnostic** — LiteLLM routes to Ollama, OpenAI, Claude, NVIDIA NIM, or offline mock providers
-- **Deterministic Runtime** — replay-safe NDJSON traces with schema-versioned contracts
-- **Control-Plane DAG Orchestration** — additive orchestration layer with deterministic execution
-- **Replay + Evaluation Engine** — reconstruct, score, compare, and export executions
-- **Deterministic Policy Layer** — governance and execution constraints before DAG execution
-- **Control-Plane Scenario Testing** — deterministic orchestration scenario validation
-- **Replay + Introspection Layer** — deterministic orchestration reconstruction, lineage, and export tooling
-- **Evaluation + Comparison Layer** — deterministic orchestration scoring, benchmarking, and replay comparison
-- **Experiment Tracking + Datasets** — deterministic replay-backed experiment manifests, datasets, and benchmark corpora
-- **Benchmark Suites** — deterministic planner/policy scenario-matrix benchmarking
-- **Multi-Strategy Experiments** — deterministic orchestration branching and A/B strategy comparison
-- **Adaptive Heuristics** — deterministic replay-backed orchestration ranking and recommendation
-- **Orchestration Memory** — deterministic replay-backed historical context and orchestration recall
-- **Knowledge Graph + Lineage** — deterministic orchestration relationship graphs and lineage reconstruction
-- **Graph Analytics** — deterministic orchestration graph metrics and lineage-depth analytics
-- **Parallel DAG Execution** — bounded deterministic parallel orchestration execution
-- **Tool-Using Agent Runtime** — native OpenAI function-calling loop with dynamic tool execution
-- **Dataset Export Layer** — deterministic NDJSON corpora generation
-- **Schema Compatibility Contracts** — backward-compatible runtime guarantees
-- **Scenario-Driven CI** — trace-based evaluation and scoring pipelines
-- **Portable** — Docker-first architecture that works locally or in the cloud
-- **Offline Mode** — mock adapter + mock OpenAI server support
-- **Extensively Validated** — runtime + control-plane validation ladders
+The platform currently operates in:
+
+* deterministic single-host mode
+* append-only NDJSON persistence
+* replay-safe execution mode
+* additive EventLedger compatibility mode
+
+Current defaults:
+
+* `trace.jsonl` remains canonical
+* `ledger.jsonl` operates in additive compatibility mode
+* orchestration remains deterministic and local-first
+* no autonomous planning is enabled by default
+
+---
+
+# What This Is NOT
+
+This platform is intentionally NOT:
+
+* a black-box autonomous agent framework
+* a prompt-chain orchestration toy
+* a vector-database memory system
+* an agent swarm platform
+* an opaque AI abstraction layer
+
+It IS:
+
+* deterministic infrastructure
+* replay-safe orchestration
+* schema-versioned runtime execution
+* provider-agnostic runtime tooling
+* additive orchestration experimentation
+
+---
+
+# 🧱 Current Runtime Architecture
+
+```text id="vkbw8r"
+Developer
+    │
+    ▼
+Stable CLI
+    │
+    ▼
+Runtime Engine
+    │
+    ▼
+Event Persistence
+    ├── trace.jsonl   (canonical)
+    └── ledger.jsonl  (additive compatibility)
+    │
+    ▼
+Replay / Eval / Registry / Datasets
+    │
+    ▼
+Control-Plane Orchestration
+```
+
+---
+
+# ⚡ Stable Runtime Interface
+
+Everything flows through one stable runtime interface:
+
+```bash id="lhf8v2"
+./ai run "your task"
+./ai fix "repair runtime issue"
+./ai explain "describe replay behavior"
+./ai refactor "simplify orchestration"
+./ai query "what should I build next"
+```
+
+Examples:
+
+```bash id="8tmjpb"
+./ai run "analyze the runtime" --trace
+
+./ai run "refactor the replay layer" \
+  --model=heavy
+
+./ai --adapter=mock run "offline validation"
+```
+
+---
+
+# 🧠 Runtime Philosophy
+
+The runtime is treated as:
+
+```text id="y1r0y0"
+deterministic infrastructure
+```
+
+—not merely an agent wrapper.
+
+This enables:
+
+* replayable executions
+* deterministic debugging
+* trace-driven evaluation
+* schema-safe evolution
+* orchestration experimentation
+* historical orchestration reconstruction
+* replay-backed analytics
+* deterministic parallel orchestration
+
+---
+
+# ✨ Core Features
+
+## Runtime
+
+* Provider-agnostic execution
+* Deterministic NDJSON persistence
+* Replay-safe lifecycle reconstruction
+* Schema-versioned contracts
+* Dataset export pipelines
+* Runtime replay + evaluation engine
+* Registry/query layer
+* Offline mock support
+* EventLedger compatibility layer
+
+---
+
+## Control-Plane Orchestration
+
+* Deterministic DAG orchestration
+* Policy-aware execution
+* Replay-safe orchestration traces
+* Scenario-driven orchestration testing
+* Strategy experimentation
+* Benchmark suites
+* Adaptive orchestration heuristics
+* Orchestration memory + recall
+* Knowledge graph lineage reconstruction
+* Graph analytics
+* Bounded deterministic parallel DAG execution
+
+---
+
+## Operational Observability
+
+Built-in operational audit tooling includes:
+
+* ledger drift detection
+* ledger corruption validation
+* parity enforcement
+* runtime boundary auditing
+* derived-system purity auditing
+* trace compatibility auditing
+* ledger health reporting
+* dry-run ledger readiness evaluation
+
+All observability tooling is:
+
+* deterministic
+* read-only
+* additive
+* replay-safe
+
+---
+
+# 🛡️ Stability Guarantees
+
+The platform guarantees:
+
+* append-only runtime persistence
+* deterministic replay reconstruction
+* schema-versioned compatibility
+* replay-safe orchestration
+* deterministic event ordering
+* bounded parallel execution
+* additive migration behavior
+* trace/ledger parity validation
 
 ---
 
@@ -102,20 +213,20 @@ Swap the compute.
 
 ## Option 1 — Dev Container (Recommended)
 
-```bash
+```bash id="uqs0fg"
 git clone https://github.com/sparky10001/ai-dev-platform.git
 cd ai-dev-platform
 ```
 
 Open in VS Code:
 
-```text
+```text id="l6cwgs"
 Reopen in Container
 ```
 
 Then:
 
-```bash
+```bash id="wpg49n"
 make health
 make validate
 
@@ -126,7 +237,7 @@ make validate
 
 ## Option 2 — Local Setup
 
-```bash
+```bash id="3phq6y"
 git clone https://github.com/sparky10001/ai-dev-platform.git
 cd ai-dev-platform
 
@@ -138,49 +249,25 @@ make litellm-fast
 
 ---
 
-# ⚡ Stable Runtime CLI
-
-Everything flows through one stable runtime interface:
-
-```bash
-ai run      "analyze the runtime"
-ai fix      "repair trace ordering"
-ai explain  "how replay reconstruction works"
-ai refactor "simplify the registry layer"
-ai query    "what should I build next"
-```
-
-Examples:
-
-```bash
-./ai run "task" --trace
-./ai run "task" --model=heavy
-./ai --adapter=mock run "offline test"
-```
-
----
-
 # 🕹️ Control-Plane CLI
 
-The control-plane CLI exposes deterministic orchestration behavior:
+The control-plane exposes deterministic orchestration behavior:
 
-```bash
+```bash id="e7l0t5"
 ./ai-orchestrate plan "list files"
 
 ./ai-orchestrate run "list files"
 
 ./ai-orchestrate run \
-  "Create a file called hello.txt with content 'hi' and then list files" \
+  "Create a file called tmp/hello.txt with content 'hi' and then list files" \
   --trace
 ```
 
-Supported commands:
+Supported execution:
 
-```bash
-./ai-orchestrate plan "task"
-./ai-orchestrate run "task"
-./ai-orchestrate validate-dag path/to/dag.json
+```bash id="t7a2o7"
 ./ai-orchestrate execute-dag path/to/dag.json
+
 ./ai-orchestrate execute-dag path/to/dag.json \
   --parallel \
   --max-workers=4
@@ -188,52 +275,139 @@ Supported commands:
 
 Policy-aware orchestration:
 
-```bash
+```bash id="q4lqso"
 ./ai-orchestrate run "list files" \
   --policy=safe-readonly
 ```
 
-Features:
+The orchestration layer is intentionally separate:
 
-- deterministic planner
-- deterministic policy validation
-- validated DAG generation
-- deterministic executor
-- replayable DAG traces
-- JSON-only command output
-- isolated orchestration pipeline
-
-The orchestration CLI is intentionally separate from the existing runtime CLI:
-
-```text
+```text id="hixjsv"
 ./ai
-  = runtime execution path
+  = runtime execution substrate
 
 ./ai-orchestrate
-  = deterministic orchestration path
+  = orchestration substrate
 ```
 
 ---
 
-# 🧠 Model Tiers
+# 🧩 Runtime Architecture
 
-| Tier       | Purpose           | Example          |
-|------------|-------------------|------------------|
-| `fast`     | low latency       | tinyllama        |
-| `balanced` | reasoning         | NVIDIA NIM       |
-| `heavy`    | complex execution | GPT-4.1 / Claude |
+Core runtime modules:
 
-Override manually:
-
-```bash
-./ai run "task" --model=heavy
+```text id="lkk96k"
+runtime/
+├── engine.py
+├── trace_pipeline.py
+├── event_ledger.py
+├── replay.py
+├── evals.py
+├── registry.py
+├── datasets.py
+├── contracts.py
+├── validator.py
+├── loader.py
+├── run.py
+├── schemas.py
+└── audits/
 ```
+
+Core guarantees:
+
+* append-only persistence
+* deterministic ordering
+* replay-safe reconstruction
+* schema-first validation
+* compatibility-safe evolution
+
+Runtime lifecycle:
+
+```text id="4mvjgx"
+session_start
+→ tool_call
+→ tool_result
+→ agent_output
+→ session_end
+```
+
+---
+
+# 🔄 EventLedger Migration
+
+The platform currently operates in additive EventLedger compatibility mode.
+
+Current behavior:
+
+* `trace.jsonl` remains canonical by default
+* `ledger.jsonl` mirrors validated runtime events
+* replay/eval/registry support dual-source operation
+* parity/drift/corruption audits validate cutover readiness
+
+The migration remains:
+
+* additive
+* replay-safe
+* rollback-safe
+* non-destructive
+
+No authority switch occurs unless explicitly enabled.
+
+---
+
+# 🧪 Runtime Validation
+
+Core runtime validation:
+
+```bash id="9vt3mj"
+make validate
+```
+
+Core runtime suites include:
+
+```bash id="ajywyw"
+./scripts/tests/runtime_tests.sh
+./scripts/tests/failure_tests.sh
+./scripts/tests/replayability_smoke_test.sh
+./scripts/tests/runtime_eval_tests.sh
+./scripts/tests/runtime_registry_tests.sh
+./scripts/tests/runtime_dataset_tests.sh
+./scripts/tests/runtime_contract_tests.sh
+./scripts/tests/runtime_event_ledger_tests.sh
+./scripts/tests/runtime_ledger_health_tests.sh
+./scripts/tests/runtime_trace_compatibility_tests.sh
+```
+
+---
+
+# 🧪 Control-Plane Validation
+
+Control-plane validation remains additive:
+
+```bash id="p5d3rl"
+make control-plane-tests
+```
+
+Major suites:
+
+```bash id="ql9mwr"
+make control-plane-dag-tests
+make control-plane-orchestrator-tests
+make control-plane-policy-tests
+make control-plane-scenario-tests
+make control-plane-replay-tests
+make control-plane-eval-tests
+make control-plane-benchmark-tests
+make control-plane-parallel-tests
+```
+
+Stage 4 validation remains intentionally isolated from the core runtime validation ladder.
 
 ---
 
 # 🔄 Switching Providers
 
-```bash
+```bash id="f7bgp1"
 make litellm-fast
 make litellm-balanced
 make litellm-heavy
@@ -244,1058 +418,78 @@ make mock-local
 make colab
 ```
 
+Supported providers:
+
+* Ollama
+* OpenAI
+* Claude
+* NVIDIA NIM
+* Offline mock adapters
+
 ---
 
-# 🧱 Deterministic Runtime Architecture
+# 🧪 Scenario-Driven Evaluation
 
-The runtime is built as a replay-safe, schema-versioned execution system.
+Run structured deterministic evaluations:
 
-Core guarantees:
-
-- deterministic NDJSON traces
-- append-only persistence
-- replay-safe lifecycle reconstruction
-- crash-safe event durability
-- schema-first validation
-- backward compatibility
-
-Runtime lifecycle:
-
-```text
-session_start
-→ tool_call
-→ tool_result
-→ agent_output
-→ session_end
+```bash id="9jjlwm"
+AI_ADAPTER=mock \
+./scripts/runtime_run_scenario.sh \
+  scenarios/tests/test_list_files_v3.json \
+  --model=balanced
 ```
 
-Core runtime modules:
+Optional timeout:
 
-```text
-runtime/
-├── engine.py
-├── events.py
-├── replay.py
-├── evals.py
-├── registry.py
-├── datasets.py
-├── contracts.py
-├── validator.py
-├── loader.py
-├── run.py
-├── runner.py
-└── schemas.py
+```bash id="h3k5sq"
+AI_ADAPTER=mock \
+SCENARIO_TIMEOUT=60 \
+./scripts/runtime_run_scenario.sh \
+  scenarios/tests/test_list_files_v3.json \
+  --model=fast
 ```
 
 ---
 
-# 🧩 Control-Plane Architecture
+# 🧠 Model Tiers
 
-Stage 4 introduces an additive orchestration layer built on top of the deterministic runtime.
+| Tier       | Purpose           | Example          |
+| ---------- | ----------------- | ---------------- |
+| `fast`     | low latency       | tinyllama        |
+| `balanced` | reasoning         | NVIDIA NIM       |
+| `heavy`    | complex execution | GPT-4.1 / Claude |
 
-Both sequential and bounded parallel orchestration execution modes are supported while preserving deterministic replay semantics.
+Override manually:
 
-The control-plane is intentionally separate from the runtime execution substrate.
-
-```text
-Phase 3E runtime
-    = execution + persistence substrate
-
-Stage 4 control-plane
-    = orchestration + DAG planning substrate
-```
-
-Control-plane components:
-
-```text
-control-plane/
-├── cli/
-├── core/
-│   ├── dag/
-│   │   ├── models.py
-│   │   ├── validator.py
-│   │   ├── executor.py
-│   │   ├── parallel_executor.py
-│   │   └── observability/
-│   │       └── trace.py
-│   ├── planner/
-│   │   ├── planner.py
-│   │   └── prompts.py
-│   ├── policy/
-│   │   ├── models.py
-│   │   ├── defaults.py
-│   │   └── validator.py
-│   ├── orchestrator/
-│   │   └── orchestrator.py
-│   ├── scenarios/
-│   │   ├── models.py
-│   │   ├── runner.py
-│   │   └── evaluator.py
-│   ├── replay/
-│   │   ├── models.py
-│   │   ├── loader.py
-│   │   ├── introspection.py
-│   │   └── exporter.py
-│   ├── evals/
-│   │   ├── models.py
-│   │   ├── evaluator.py
-│   │   ├── comparator.py
-│   │   ├── benchmarks.py
-│   │   └── exporter.py
-│   ├── experiments/
-│   │   ├── models.py
-│   │   ├── manifests.py
-│   │   ├── tracker.py
-│   │   ├── datasets.py
-│   │   └── exporter.py
-│   ├── benchmarks/
-│   │   ├── models.py
-│   │   ├── matrices.py
-│   │   ├── runner.py
-│   │   ├── evaluator.py
-│   │   └── exporter.py
-│   ├── strategies/
-│   │   ├── models.py
-│   │   ├── planner_variants.py
-│   │   ├── branching.py
-│   │   ├── evaluator.py
-│   │   └── exporter.py
-│   ├── heuristics/
-│   │   ├── models.py
-│   │   ├── ranking.py
-│   │   ├── recommender.py
-│   │   ├── corpora.py
-│   │   └── exporter.py
-│   ├── memory/
-│   │   ├── models.py
-│   │   ├── history.py
-│   │   ├── retrieval.py
-│   │   ├── timelines.py
-│   │   ├── corpora.py
-│   │   └── exporter.py
-│   ├── knowledge/
-│   │   ├── models.py
-│   │   ├── lineage.py
-│   │   ├── relationships.py
-│   │   ├── traversal.py
-│   │   ├── corpora.py
-│   │   └── exporter.py
-│   └── graph_analytics/
-│       ├── models.py
-│       ├── metrics.py
-│       ├── analyzer.py
-│       └── exporter.py
-├── tools/
-│   ├── contracts.py
-│   └── registry.py
-├── dags/
-│   ├── schemas/
-│   └── examples/
-├── scenarios/
-│   ├── tests/
-│   └── README.md
-└── tests/
+```bash id="8rj6di"
+./ai run "task" --model=heavy
 ```
 
 ---
 
-# 🔄 Control-Plane Execution Flow
-
-```
-task
-  ↓
-planner
-  ↓
-policy validation
-  ↓
-validated DAG
-  ↓
-tool registry validation
-  ↓
-deterministic executor
-  ↓
-runtime trace bridge
-  ↓
-replay/eval-compatible artifacts
-  ↓
-scenario evaluation
-  ↓
-replay + introspection
-  ↓
-evaluation + comparison
-  ↓
-experiment tracking + datasets
-  ↓
-benchmark suites + matrices
-  ↓
-multi-strategy experiments
-  ↓
-adaptive heuristics
-  ↓
-orchestration memory
-  ↓
-knowledge graph + lineage
-  ↓
-graph analytics
-```
-
-The control-plane currently supports:
-
-- deterministic DAG validation
-- deterministic planner scaffolding
-- deterministic policy/governance validation
-- tool registry integration
-- deterministic single-threaded DAG execution
-- replayable DAG traces
-- runtime-compatible execution artifacts
-- orchestration request/result pipelines
-- orchestration replay reconstruction
-- orchestration lineage + export tooling
-- orchestration scenario validation
-- orchestration replay comparison
-- orchestration benchmarking
-- deterministic orchestration scoring
-- orchestration experiment manifests
-- replay-backed dataset generation
-- orchestration benchmark corpora
-- deterministic experiment exports
-- planner strategy benchmark suites
-- policy benchmark suites
-- orchestration scenario matrices
-- deterministic benchmark aggregation
-- orchestration strategy branching
-- planner/policy A/B experimentation
-- deterministic best-strategy selection
-- replay-safe strategy corpora
-- orchestration graph variation testing
-- orchestration strategy corpora
-- replay-safe orchestration branching
-- deterministic orchestration strategy evaluation
-- deterministic orchestration heuristics
-- replay-backed strategy ranking
-- adaptive planner recommendation
-- adaptive policy recommendation
-- replay-safe heuristic corpora
-- orchestration recommendation engine
-- orchestration historical memory
-- replay-backed orchestration recall
-- deterministic orchestration timelines
-- orchestration memory corpora
-- orchestration historical retrieval
-- orchestration evolution tracking
-- orchestration lineage graphs
-- orchestration ancestry tracking
-- orchestration relationship indexing
-- orchestration dependency chains
-- replay-safe orchestration graph reconstruction
-- deterministic orchestration relationship traversal
-- orchestration relationship corpora
-- orchestration graph analytics
-- deterministic graph metrics
-- relationship frequency analysis
-- lineage depth analysis
-- isolated node detection
-- replay-safe graph summaries
-- orchestration dependency analytics
-- deterministic dependency-level DAG batching
-- bounded local parallel DAG execution
-- deterministic parallel execution ordering
-- deterministic parallel DAG scheduling
-- replay-safe parallel orchestration execution
-- bounded worker-pool orchestration execution
-
----
-
-# 🛡️ Policy Layer
-
-Stage 4I introduces deterministic governance rules before execution.
-
-Policies validate DAGs and orchestration requests before execution begins.
-
-Current policy capabilities:
-
-- tool allowlists
-- tool denylists
-- max DAG node limits
-- dependency fanout limits
-- LLM node restrictions
-- workspace path boundaries
-- traversal protection
-
-Execution flow:
-
-```text
-planner
-→ policy validation
-→ executor
-```
-
-Included policies:
-
-| Policy          | Purpose                         |
-|-----------------|---------------------------------|
-| `default`       | permissive deterministic policy |
-| `safe-readonly` | read-only orchestration policy  |
-
-Example:
-
-```bash
-./ai-orchestrate run "list files" \
-  --policy=safe-readonly
-```
-
----
-
-# 🧪 Control-Plane Scenario Testing
-
-Stage 4J introduces deterministic orchestration scenario validation.
-
-Control-plane scenarios validate the complete orchestration path:
-
-```text
-task
-→ planner
-→ policy validation
-→ executor
-→ optional trace
-→ replay/eval-compatible result
-```
-
-Scenarios are JSON-defined and replay-safe.
-
-Scenario capabilities:
-
-- orchestration result validation
-- DAG validation
-- policy violation validation
-- trace artifact validation
-- replay compatibility checks
-- deterministic scoring
-- end-to-end orchestration evaluation
-
-Scenario files live in:
-
-```text
-control-plane/scenarios/tests/
-```
-
-Example:
-
-```bash
-python3 -m control-plane/core/scenarios/runner.py \
-  control-plane/scenarios/tests/write_then_list.json
-```
-
-Example scenario categories:
-
-| Scenario                          | Purpose                     |
-|-----------------------------------|-----------------------------|
-| `list_files.json`                 | deterministic read workflow |
-| `write_then_list.json`            | multi-node orchestration    |
-| `safe_readonly_blocks_write.json` | policy enforcement          |
-| `traced_write_then_list.json`     | replayable orchestration    |
-| `unsupported_task_noop.json`      | noop fallback behavior      |
-
-Scenario tests are included in:
-
-```bash
-make control-plane-tests
-```
-
-# 🔍 Replay + Introspection Layer
-
-Stage 4K introduces deterministic orchestration replay and introspection.
-
-Replay reconstructs orchestration DAG executions directly from replay-safe traces.
-
-Replay capabilities:
-
-- orchestration reconstruction
-- DAG replay summaries
-- execution lineage graphs
-- execution ordering reconstruction
-- failed/skipped node analysis
-- replay-safe orchestration exports
-- deterministic orchestration introspection
-
-Replay reconstruction flow:
-
-```text
-trace.jsonl
-→ orchestration replay loader
-→ DAG reconstruction
-→ introspection helpers
-→ export/report generation
-```
-
-Replay CLI commands:
-
-```bash
-./ai-orchestrate replay runs/<run_id>
-
-./ai-orchestrate summarize-run runs/<run_id>
-
-./ai-orchestrate export-run runs/<run_id> report.md
-
-./ai-orchestrate export-run runs/<run_id> report.json
-```
-
-Replay exports support:
-
-- JSON summaries
-- Markdown orchestration reports
-- deterministic lineage reconstruction
-- replay-safe orchestration inspection
-
-Replay validation is included in:
-
-```bash
-make control-plane-tests
-```
-
-# 📊 Evaluation + Comparison Layer
-
-Stage 4L introduces deterministic orchestration evaluation, benchmarking, and replay comparison.
-
-The evaluation layer operates entirely on replay-safe orchestration artifacts.
-
-Evaluation capabilities:
-
-- orchestration scoring
-- replay comparison
-- DAG diffing
-- orchestration benchmarking
-- execution quality analysis
-- execution completeness metrics
-- replay-safe benchmark exports
-
-Evaluation flow:
-
-```text
-ReplayDag
-→ evaluation engine
-→ comparison engine
-→ benchmark aggregation
-→ deterministic exports
-```
-
-Supported evaluation CLI commands:
-
-```bash
-./ai-orchestrate evaluate-run runs/<run_id>
-
-./ai-orchestrate compare-runs runs/<run_a> runs/<run_b>
-
-./ai-orchestrate benchmark-runs runs/a runs/b runs/c
-```
-
-Evaluation features:
-
-- deterministic orchestration scoring
-- replay-safe comparison
-- execution-order diffing
-- tool usage comparison
-- benchmark aggregation
-- markdown benchmark exports
-- JSON evaluation exports
-
-Evaluation validation is included in:
-
-```bash
-make control-plane-tests
-```
-
-# 🧪 Experiment Tracking + Datasets
-
-Stage 4M introduces deterministic orchestration experiment tracking and replay-backed dataset generation.
-
-The experiment layer operates entirely on replay-safe orchestration artifacts.
-
-Experiment capabilities:
-
-- orchestration experiment manifests
-- replay dataset generation
-- benchmark corpora construction
-- orchestration lineage metadata
-- evaluation history aggregation
-- deterministic experiment exports
-- replay-safe dataset construction
-
-Experiment flow:
-
-```text
-ReplayDag
-→ evaluation
-→ experiment tracker
-→ dataset builder
-→ manifest aggregation
-→ deterministic exports
-```
-
-Supported experiment CLI commands:
-
-```bash
-./ai-orchestrate track-run runs/<run_id>
-
-./ai-orchestrate track-experiment runs/a runs/b runs/c
-
-./ai-orchestrate build-dataset runs/a runs/b runs/c
-
-./ai-orchestrate export-experiment runs/a runs/b report.md
-```
-
-Experiment features:
-
-- deterministic experiment manifests
-- replay-backed datasets
-- benchmark corpus generation
-- evaluation lineage tracking
-- markdown experiment exports
-- JSON dataset exports
-
-Experiment validation is included in:
-
-```bash
-make control-plane-tests
-```
-
-# 🧮 Benchmark Suites
-
-Stage 4N introduces deterministic planner and policy benchmark suites.
-
-Benchmark suites execute orchestration scenario matrices across planner strategies and policy configurations.
-
-Benchmark capabilities:
-
-- planner strategy benchmarking
-- policy benchmarking
-- orchestration scenario matrices
-- deterministic benchmark manifests
-- benchmark corpus generation
-- orchestration experiment matrices
-- replay-safe benchmark exports
-
-Benchmark flow:
-
-```text
-scenario matrix
-→ orchestration execution
-→ replay/evaluation
-→ benchmark aggregation
-→ deterministic exports
-```
-
-Supported benchmark CLI commands:
-
-```bash
-./ai-orchestrate benchmark-suite \
-  control-plane/scenarios/tests
-
-./ai-orchestrate benchmark-matrix \
-  control-plane/scenarios/tests \
-  --planner=deterministic \
-  --policy=default
-
-./ai-orchestrate export-benchmark-suite \
-  control-plane/scenarios/tests \
-  report.md
-```
-
-Benchmark features:
-
-- deterministic scenario matrix execution
-- planner strategy comparison
-- policy comparison
-- benchmark suite aggregation
-- markdown benchmark reports
-- replay-safe benchmark exports
-
-Benchmark validation is included in:
-
-```bash
-make control-plane-tests
-```
-
-# 🌿 Multi-Strategy Experiments
-
-Stage 4O introduces deterministic orchestration branching and multi-strategy experimentation.
-
-The strategy layer enables orchestration A/B testing across planner and policy variants while preserving replay-safe execution semantics.
-
-Strategy capabilities:
-
-- orchestration branching
-- planner strategy comparison
-- policy strategy comparison
-- orchestration A/B experimentation
-- orchestration graph variation testing
-- deterministic best-strategy selection
-- replay-safe strategy corpora
-
-Strategy flow:
-
-```text
-task
-→ planner/policy variants
-→ orchestration branching
-→ replay/evaluation
-→ strategy comparison
-→ best-strategy selection
-→ deterministic exports
-```
-
-Supported strategy CLI commands:
-
-```bash
-./ai-orchestrate strategy-experiment \
-  "Create a file and list files" \
-  --planner=deterministic \
-  --planner=baseline \
-  --policy=default
-
-./ai-orchestrate compare-strategies \
-  "Create a file and list files" \
-  --planner=deterministic \
-  --planner=baseline
-
-./ai-orchestrate export-strategy-experiment \
-  "Create a file and list files" \
-  report.md
-```
-
-Strategy features:
-
-- deterministic orchestration branching
-- replay-safe strategy comparison
-- orchestration A/B testing
-- planner/policy variant evaluation
-- deterministic tie-breaking
-- markdown strategy reports
-- JSON strategy exports
-
-Strategy validation is included in:
-
-```bash
-make control-plane-tests
-```
-
-# 🧠 Adaptive Heuristics
-
-Stage 4P introduces deterministic orchestration heuristics and replay-backed recommendation systems.
-
-The heuristic layer aggregates historical orchestration outcomes into replay-safe recommendation signals.
-
-Important:
-
-```text
-This is NOT machine learning.
-This is NOT autonomous planning.
-This is deterministic orchestration guidance.
-```
-
-Heuristic capabilities:
-
-- deterministic strategy ranking
-- replay-backed heuristic aggregation
-- adaptive planner recommendation
-- adaptive policy recommendation
-- historical orchestration scoring
-- heuristic corpus generation
-- orchestration recommendation engine
-
-Heuristic flow:
-
-```text
-strategy experiments
-→ replay/evaluation
-→ heuristic signal generation
-→ deterministic ranking
-→ recommendation engine
-→ adaptive orchestration guidance
-```
-
-Supported heuristic CLI commands:
-
-```bash
-./ai-orchestrate recommend-strategy \
-  "Create a file and list files"
-
-./ai-orchestrate rank-strategies \
-  "Create a file and list files" \
-  --planner=deterministic \
-  --planner=baseline
-
-./ai-orchestrate build-heuristic-corpus \
-  "Create a file and list files"
-
-./ai-orchestrate export-heuristic-corpus \
-  "Create a file and list files" \
-  corpus.md
-```
-
-Heuristic features:
-
-- deterministic orchestration ranking
-- replay-safe recommendation generation
-- adaptive planner selection
-- adaptive policy selection
-- weighted historical scoring
-- markdown heuristic reports
-- JSON heuristic exports
-
-Heuristic validation is included in:
-
-```bash
-make control-plane-tests
-```
-
-# 🗂️ Orchestration Memory
-
-Stage 4Q introduces deterministic orchestration memory and replay-backed historical context reconstruction.
-
-The memory layer enables replay-safe orchestration recall and deterministic timeline reconstruction.
-
-Important:
-
-```text
-This is NOT vector search.
-This is NOT embeddings.
-This is NOT autonomous memory.
-This is deterministic orchestration history.
-```
-
-Memory capabilities:
-
-- orchestration historical memory
-- deterministic orchestration timelines
-- replay-backed orchestration recall
-- orchestration historical retrieval
-- orchestration evolution tracking
-- orchestration memory corpora
-- replay-safe historical context reconstruction
-
-Memory flow:
-
-```text
-replay artifacts
-→ memory records
-→ timeline reconstruction
-→ deterministic retrieval
-→ orchestration recall
-→ historical context exports
-```
-
-Supported memory CLI commands:
-
-```bash
-./ai-orchestrate memory-timeline runs/
-
-./ai-orchestrate retrieve-memory \
-  runs/ \
-  "write file"
-
-./ai-orchestrate build-memory-corpus runs/
-
-./ai-orchestrate export-memory-timeline \
-  runs/ \
-  timeline.md
-```
-
-Memory features:
-
-- deterministic orchestration recall
-- replay-safe historical retrieval
-- orchestration timeline reconstruction
-- orchestration session lineage
-- deterministic retrieval ordering
-- markdown memory reports
-- JSON memory exports
-
-Memory validation is included in:
-
-```bash
-make control-plane-tests
-```
-
-# 🕸️ Knowledge Graph + Lineage
-
-Stage 4R introduces deterministic orchestration knowledge graphs and replay-backed lineage reconstruction.
-
-The knowledge layer models orchestration relationships, ancestry chains, and DAG evolution while preserving deterministic replay semantics.
-
-Important:
-
-```text
-This is NOT Neo4j.
-This is NOT graph AI.
-This is NOT autonomous reasoning.
-This is deterministic orchestration lineage reconstruction.
-```
-
-Knowledge graph capabilities:
-
-- orchestration lineage graphs
-- orchestration ancestry tracking
-- orchestration relationship indexing
-- orchestration dependency chains
-- DAG evolution tracking
-- orchestration relationship corpora
-- replay-safe orchestration graph reconstruction
-
-Relationship types:
-
-- `same_planner`
-- `same_policy`
-- `same_task`
-- `precedes`
-
-Knowledge graph flow:
-
-```text
-replay artifacts
-→ memory records
-→ knowledge graph reconstruction
-→ relationship indexing
-→ lineage traversal
-→ deterministic graph exports
-```
-
-Supported knowledge graph CLI commands:
-
-```bash
-./ai-orchestrate build-knowledge-graph runs/
-
-./ai-orchestrate compute-lineage \
-  runs/ \
-  <node_id>
-
-./ai-orchestrate export-knowledge-graph \
-  runs/ \
-  graph.md
-```
-
-Knowledge graph features:
-
-- deterministic graph reconstruction
-- replay-safe lineage traversal
-- orchestration relationship indexing
-- deterministic ancestry traversal
-- cycle-safe graph traversal
-- markdown graph reports
-- JSON graph exports
-
-Knowledge graph validation is included in:
-
-```bash
-make control-plane-tests
-```
-
-# 📈 Graph Analytics
-
-Stage 4S introduces deterministic orchestration graph analytics built on top of replay-safe orchestration knowledge graphs.
-
-The analytics layer computes deterministic graph metrics, lineage depth analysis, and orchestration relationship summaries while preserving replay-safe execution semantics.
-
-Important:
-
-```text
-This is NOT graph AI.
-This is NOT graph machine learning.
-This is NOT autonomous reasoning.
-This is deterministic orchestration graph analytics.
-```
-
-Graph analytics capabilities:
-
-- orchestration graph metrics
-- deterministic node metrics
-- relationship frequency analysis
-- lineage depth analysis
-- isolated node detection
-- orchestration dependency analytics
-- replay-safe graph summaries
-
-Graph analytics flow:
-
-```text
-replay artifacts
-→ memory reconstruction
-→ knowledge graph reconstruction
-→ graph analytics engine
-→ deterministic graph metrics
-→ analytics exports
-```
-
-Supported graph analytics CLI commands:
-
-```bash
-./ai-orchestrate analyze-knowledge-graph runs/
-
-./ai-orchestrate export-graph-analytics \
-  runs/ \
-  report.md
-```
-
-Graph analytics features:
-
-- deterministic graph metric generation
-- replay-safe analytics reconstruction
-- deterministic node ranking
-- cycle-safe lineage analysis
-- markdown analytics reports
-- JSON analytics exports
-- bounded replay-safe graph analysis
-
-Large orchestration corpora are bounded deterministically:
-
-```text
---max-records=<N>
-```
-
-Example:
-
-```bash
-./ai-orchestrate analyze-knowledge-graph \
-  runs/ \
-  --max-records=25
-```
-
-Graph analytics validation is included in:
-
-```bash
-make control-plane-tests
-```
-
-# ⚡ Parallel DAG Execution
-
-Stage 4T introduces bounded deterministic parallel DAG execution.
-
-The parallel execution layer executes independent DAG nodes concurrently while preserving deterministic orchestration semantics and replay-safe ordering guarantees.
-
-trace=True is intentionally deferred for parallel execution in Stage 4T to preserve deterministic NDJSON guarantees.
-
-Important:
-
-```text
-This is NOT distributed execution.
-This is NOT Celery.
-This is NOT async orchestration APIs.
-This is bounded deterministic local execution.
-```
-
-Parallel execution capabilities:
-
-- dependency-level DAG batching
-- bounded local worker pools
-- deterministic execution ordering
-- deterministic parallel scheduling
-- replay-safe parallel orchestration
-- deterministic skipped-node handling
-- bounded thread-based execution
-
-Parallel execution flow:
-
-```text
-validated DAG
-→ dependency batching
-→ deterministic batch ordering
-→ bounded worker execution
-→ deterministic result ordering
-→ replay/eval-compatible artifacts
-```
-
-Supported CLI commands:
-
-```bash
-./ai-orchestrate execute-dag \
-  path/to/dag.json \
-  --parallel
-
-./ai-orchestrate execute-dag \
-  path/to/dag.json \
-  --parallel \
-  --max-workers=4
-```
-
-Parallel execution guarantees:
-
-- sequential executor remains default
-- deterministic dependency scheduling
-- deterministic result ordering
-- deterministic execution_order output
-- bounded worker pool execution
-- cycle-safe dependency traversal
-- deterministic skipped-node propagation
-
-Parallel execution validation is included in:
-
-```bash
-make control-plane-tests
-```
-
----
-
-# 🧠 Runtime Philosophy
-
-The runtime is treated as:
-
-```text
-deterministic infrastructure
-```
-
-—not merely an agent wrapper.
-
-This enables:
-
-- replayable executions
-- reproducible debugging
-- trace-driven evaluation
-- deterministic dataset generation
-- execution introspection
-- contract-safe evolution
-- adaptive orchestration guidance
-- replay-backed strategy recommendation
-- deterministic orchestration heuristics
-- orchestration historical reconstruction
-- replay-backed orchestration recall
-- deterministic orchestration memory
-- orchestration lineage reconstruction
-- replay-backed orchestration ancestry analysis
-- deterministic orchestration relationship graphs
-- deterministic orchestration graph analytics
-- replay-safe orchestration dependency analysis
-- deterministic lineage-depth metrics
-- deterministic bounded parallel orchestration
-- replay-safe parallel DAG execution
-- deterministic dependency-level execution batching
-
-All runtime artifacts are schema-versioned and replay-safe by default.
-
----
-
-# 🌍 Environment Scenarios
+# 🌍 Environment Modes
 
 ## 🏠 Local AI
 
-```bash
+```bash id="c63lki"
 make litellm-fast
-./ai run "review the convergence issue"
+./ai run "review the replay issue"
 ```
 
 ---
 
 ## ☁️ Cloud Intelligence
 
-```bash
+```bash id="qj8o5t"
 make litellm-heavy
-./ai run "refactor the runtime engine"
+./ai run "refactor orchestration planner"
 ```
 
 ---
 
 ## ✈️ Offline Mode
 
-```bash
+```bash id="4bn5m7"
 make mock
 ./ai run "plan next sprint"
 ```
@@ -1304,64 +498,42 @@ make mock
 
 ## 🖥️ GPU Compute
 
-```bash
+```bash id="6jlwmu"
 make colab
-./ai run "train policy agent"
+./ai run "train orchestration heuristics"
 ```
+
+---
+
+# 🧰 Runtime Tool System
+
+The platform supports runtime-discovered tools.
+
+| Tool              | Purpose                |
+| ----------------- | ---------------------- |
+| `read_file`       | read workspace files   |
+| `write_file`      | write files safely     |
+| `list_files`      | enumerate directories  |
+| `run_bash`        | execute shell commands |
+| `http_get`        | HTTP requests          |
+| `read_trace`      | replay inspection      |
+| `run_scenario`    | scenario execution     |
+| `evaluate_trace`  | runtime evaluation     |
+| `compare_results` | replay comparison      |
+
+Tools export automatically as OpenAI-compatible function schemas.
 
 ---
 
 # 📁 Project Structure
 
-```text
+```text id="jjlwmv"
 ai-dev-platform/
 ├── ai
 ├── ai-orchestrate
-├── ai-eval
 ├── runtime/
-│   ├── engine.py
-│   ├── events.py
-│   ├── replay.py
-│   ├── evals.py
-│   ├── registry.py
-│   ├── datasets.py
-│   ├── contracts.py
-│   ├── validator.py
-│   ├── loader.py
-│   ├── run.py
-│   ├── runner.py
-│   └── schemas.py
 ├── control-plane/
-│   ├── cli/
-│   ├── core/
-│   │   ├── dag/
-│   │   ├── planner/
-│   │   ├── policy/
-│   │   ├── orchestrator/
-│   │   ├── observability/
-│   │   ├── scenarios/
-│   │   ├── replay/
-│   │   ├── evals/
-│   │   ├── experiments/
-│   │   ├── benchmarks/
-│   │   ├── strategies/
-│   │   ├── heuristics/
-│   │   ├── memory/
-│   │   ├── knowledge/
-│   │   └── graph_analytics/
-│   ├── tools/
-│   ├── dags/
-│   ├── scenarios/
-│   └── tests/
 ├── scripts/
-│   ├── runtime.sh
-│   ├── router.py
-│   ├── agent.py
-│   ├── tool_executor.py
-│   ├── adapters/
-│   ├── tools/
-│   ├── tests/
-│   └── mock-server/
 ├── scenarios/
 ├── runs/
 ├── evals/
@@ -1373,220 +545,76 @@ ai-dev-platform/
 
 ---
 
-# 🧰 Tool System
+# 🧠 Production Philosophy
 
-The platform supports runtime-discovered tools.
+The platform prioritizes:
 
-| Tool              | Purpose                 |
-|-------------------|-------------------------|
-| `read_file`       | read workspace files    |
-| `write_file`      | write files safely      |
-| `list_files`      | enumerate directories   |
-| `run_bash`        | execute shell commands  |
-| `http_get`        | HTTP GET requests       |
-| `read_trace`      | replay trace inspection |
-| `run_scenario`    | scenario execution      |
-| `evaluate_trace`  | runtime evaluation      |
-| `compare_results` | compare evaluation runs |
-
-Tools are exported automatically as OpenAI-compatible function schemas.
-
----
-
-# 🧪 Scenario-Driven Evaluation
-
-Run structured evaluations:
-
-```bash
-AI_ADAPTER=mock ./scripts/runtime_run_scenario.sh \
-  scenarios/tests/test_list_files_v3.json \
-  --model=balanced
-
-# Optional bounded runtime/eval timeout (seconds)
-AI_ADAPTER=mock SCENARIO_TIMEOUT=60 ./scripts/runtime_run_scenario.sh \
-  scenarios/tests/test_list_files_v3.json \
-  --model=fast
-```
-
-Example:
-
-```text
-🔍 Tools called: write_file, list_files
-🎯 SCORE: 1
-✅ Scenario passed
-```
-
-`AI_ADAPTER=mock` now includes deterministic, side-effect-isolated simulation for a small tool subset (`write_file`, `list_files`, `read_file`) for basic scenario compatibility. Real tool execution remains under `AI_ADAPTER=agent`.
-
----
-
-# 🧪 Runtime Validation Ladder
-
-Phase 3E runtime validation:
-
-```bash
-make validate
-```
-
-Core runtime suites:
-
-```bash
-./scripts/tests/runtime_tests.sh
-./scripts/tests/failure_tests.sh
-./scripts/tests/replayability_smoke_test.sh
-./scripts/tests/runtime_eval_tests.sh
-./scripts/tests/runtime_registry_tests.sh
-./scripts/tests/runtime_dataset_tests.sh
-./scripts/tests/runtime_contract_tests.sh
-./scripts/tests/test_adapters.sh
-./scripts/tests/tool_test_v2.sh
-```
-
----
-
-# 🧪 Control-Plane Validation Ladder
-
-Stage 4 additive validation:
-
-```bash
-make control-plane-tests
-```
-
-Control-plane suites:
-
-```bash
-make control-plane-dag-tests
-make control-plane-tool-tests
-make control-plane-executor-tests
-make control-plane-trace-tests
-make control-plane-planner-tests
-make control-plane-orchestrator-tests
-make control-plane-cli-tests
-make control-plane-policy-tests
-make control-plane-scenario-tests
-make control-plane-replay-tests
-make control-plane-eval-tests
-make control-plane-experiment-tests
-make control-plane-benchmark-tests
-make control-plane-strategy-tests
-make control-plane-heuristic-tests
-make control-plane-memory-tests
-make control-plane-knowledge-tests
-make control-plane-graph-analytics-tests
-make control-plane-parallel-tests
-```
-
-Important:
-
-```text
-Stage 4 tests are additive and intentionally
-NOT part of make validate yet.
-```
-
-This keeps the deterministic runtime substrate stable while the orchestration layer evolves independently.
-
----
-
-# 🔌 Adding Your Own Adapter
-
-```bash
-#!/bin/bash
-
-ADAPTER_NAME="my-agent"
-
-source "$(dirname "$0")/_base.sh"
-
-COMMAND="${1:-}"
-INPUT="${2:-}"
-
-case "$COMMAND" in
-  run)
-    RESPONSE=$(my_agent "$INPUT")
-    ;;
-  *)
-    build_response "error" "Unknown command"
-    adapter_exit
-    ;;
-esac
-
-build_response "done" "$RESPONSE"
-adapter_exit
-```
-
-Enable:
-
-```bash
-chmod +x scripts/adapters/my-agent.sh
-
-AI_ADAPTER=my-agent ./ai run "test"
-```
+1. deterministic execution
+2. replay-safe debugging
+3. additive evolution
+4. schema-versioned compatibility
+5. operational observability
+6. provider independence
+7. infrastructure-first design
 
 ---
 
 # 🗺️ Roadmap
 
-## Phase 3E Runtime
+## Runtime
 
-- [x] Stable CLI
-- [x] Deterministic runtime architecture
-- [x] Replay-safe NDJSON persistence
-- [x] Runtime replay engine
-- [x] Runtime evaluation engine
-- [x] Registry/query layer
-- [x] Dataset export pipelines
-- [x] Schema compatibility contracts
-- [x] Runtime validation ladder
+* [x] Stable CLI
+* [x] Deterministic runtime architecture
+* [x] Replay-safe NDJSON persistence
+* [x] Runtime replay engine
+* [x] Runtime evaluation engine
+* [x] Registry/query layer
+* [x] Dataset export pipelines
+* [x] EventLedger compatibility layer
+* [x] Runtime observability audits
+* [ ] Persistent sessions
+* [ ] Multi-project registry
 
-## Stage 4 Control-Plane
+---
 
-- [x] DAG schema + validator
-- [x] Tool registry bridge
-- [x] Deterministic DAG executor
-- [x] Replayable DAG traces
-- [x] Control-plane validation ladder
-- [x] Deterministic DAG planner
-- [x] Planner/executor orchestration pipeline
-- [x] Control-plane CLI
-- [x] Planner policy layer
-- [x] Control-plane scenario testing
-- [x] Orchestration replay/introspection
-- [x] Orchestration evaluation/comparison
-- [x] Orchestration datasets/experiment tracking
-- [x] Policy/planner benchmark suites
-- [x] Multi-strategy orchestration experiments
-- [x] Adaptive orchestration heuristics
-- [x] Orchestration memory + historical context
-- [x] Orchestration knowledge graph + lineage relationships
-- [x] Orchestration graph analytics
-- [x] Parallel DAG execution
-- [ ] Orchestration API
-- [ ] Web UI
-- [ ] LLM-assisted planner
-- [ ] Distributed orchestration execution
+## Control-Plane
+
+* [x] Deterministic DAG executor
+* [x] Policy validation
+* [x] Replay/introspection
+* [x] Benchmark suites
+* [x] Multi-strategy experimentation
+* [x] Orchestration memory
+* [x] Knowledge graph lineage
+* [x] Graph analytics
+* [x] Parallel DAG execution
+* [ ] Orchestration API
+* [ ] Distributed orchestration execution
+* [ ] Web UI
+* [ ] LLM-assisted planner
+
+---
 
 ## Platform
 
-- [x] LiteLLM routing
-- [x] Native tool-calling agent loop
-- [x] Scenario-driven evaluation
-- [x] Unified Docker stack
-- [x] Offline mock adapter
-- [ ] Persistent sessions
-- [ ] Multi-project registry
-- [ ] CI/CD integration guide
+* [x] LiteLLM routing
+* [x] Scenario-driven evaluation
+* [x] Unified Docker stack
+* [x] Offline mock adapters
+* [ ] CI/CD integration guide
 
 ---
 
 # 🙏 Acknowledgments
 
-- LiteLLM
-- Ollama
-- Goose
-- NVIDIA NIM
-- OpenAI
-- Anthropic
-- agent-sim
-- private-ai-stack
+* LiteLLM
+* Ollama
+* Goose
+* NVIDIA NIM
+* OpenAI
+* Anthropic
+* agent-sim
+* private-ai-stack
 
 ---
 

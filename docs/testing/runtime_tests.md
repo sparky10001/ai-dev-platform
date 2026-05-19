@@ -8,7 +8,7 @@ The runtime is treated as:
 
 ```text
 event-sourced deterministic infrastructure
-````
+```
 
 —not merely a command wrapper.
 
@@ -29,6 +29,9 @@ The test system validates:
 * adapter gateway boundary correctness
 * lifecycle orchestration boundary correctness
 * trace pipeline correctness
+* EventLedger parity guarantees
+* audit and observability correctness
+* cutover readiness behavior
 
 ---
 
@@ -58,9 +61,39 @@ evals
 registry
   ↓
 datasets
+  ↓
+audit + observability
 ```
 
 Tests verify each layer independently and together.
+
+---
+
+# Runtime Audit & Observability Model
+
+Beginning with Phase 3.7, the runtime includes operational audit and observability infrastructure in addition to deterministic replay guarantees.
+
+The runtime now continuously validates:
+
+* ledger/trace parity
+* corruption detection
+* drift detection
+* runtime boundary enforcement
+* derived-system purity
+* ledger health observability
+* trace compatibility readiness
+* cutover readiness
+* ledger-default dry-run simulation
+
+These systems are intentionally:
+
+* observational-first
+* replay-centric
+* compatibility-preserving
+* non-destructive
+* deterministic
+
+No audit system may bypass runtime validation guarantees.
 
 ---
 
@@ -368,15 +401,6 @@ Expected result:
 
 This suite is intentionally lightweight and exists to lock runtime behavior prior to runtime substrate refactors.
 
-It serves as a regression guard for:
-
-* runtime decomposition
-* lifecycle extraction
-* adapter gateway extraction
-* replay pipeline refactors
-* trace persistence changes
-* deterministic serialization guarantees
-
 ---
 
 ## runtime_adapter_gateway_tests.sh
@@ -397,14 +421,6 @@ Expected result:
 ```
 
 This suite validates the Phase 3.5 Step 1 adapter gateway extraction boundary.
-
-It serves as a regression guard for:
-
-* adapter subprocess execution
-* adapter stdout parsing
-* adapter contract validation
-* adapter timeout behavior
-* adapter gateway refactors
 
 ---
 
@@ -427,14 +443,6 @@ Expected result:
 ```
 
 This suite validates the Phase 3.5 Step 2 lifecycle extraction boundary.
-
-It serves as a regression guard for:
-
-* lifecycle transition sequencing
-* session_start/session_end ordering
-* failure lifecycle behavior
-* response envelope construction
-* lifecycle orchestration refactors
 
 ---
 
@@ -465,21 +473,7 @@ unit test pass / 0 failed
 
 This suite validates the Phase 3.5 Step 3 trace pipeline extraction boundary.
 
-It serves as a regression guard for:
-
-* append-only NDJSON persistence
-* event normalization and validation
-* replay loading behavior
-* strict trace validation behavior
-* tolerant runtime ingestion behavior
-* lifecycle ordering checks
-* trace corruption detection
-* trace pipeline refactors
-
 Default behavior remains tolerant for runtime compatibility.
-
-Tolerant ingestion now returns deterministic corruption diagnostics for invalid ingested fragments.
-Strict ingestion raises typed trace errors for invalid fragments.
 
 Strict validation is opt-in via:
 
@@ -488,6 +482,9 @@ RUNTIME_TRACE_STRICT=1
 ```
 
 ---
+
+# Phase 3.6 EventLedger Migration Suites
+
 ## runtime_event_ledger_tests.sh
 
 Validates:
@@ -502,9 +499,13 @@ Validates:
 
 Expected result:
 
+```text
 unit test pass / 0 failed
+```
 
 This suite validates Phase 3.6B additive EventLedger validation/index/parity behavior.
+
+---
 
 ## runtime_replay_ledger_tests.sh
 
@@ -517,9 +518,13 @@ Validates:
 
 Expected result:
 
+```text
 unit test pass / 0 failed
+```
 
 This suite validates Phase 3.6C replay-from-ledger behavior behind opt-in source selection.
+
+---
 
 ## runtime_eval_ledger_tests.sh
 
@@ -532,9 +537,13 @@ Validates:
 
 Expected result:
 
+```text
 unit test pass / 0 failed
+```
 
 This suite validates Phase 3.6D eval-from-ledger behavior behind opt-in source selection.
+
+---
 
 ## runtime_registry_ledger_tests.sh
 
@@ -547,9 +556,13 @@ Validates:
 
 Expected result:
 
+```text
 unit test pass / 0 failed
+```
 
 This suite validates Phase 3.6E registry-from-ledger behavior behind opt-in source selection.
+
+---
 
 ## runtime_ledger_authoritative_tests.sh
 
@@ -562,9 +575,13 @@ Validates:
 
 Expected result:
 
+```text
 unit test pass / 0 failed
+```
 
 This suite validates Phase 3.6F ledger-authoritative cutover behind explicit flags.
+
+---
 
 ## runtime_ledger_readiness_tests.sh
 
@@ -577,10 +594,151 @@ Validates:
 
 Expected result:
 
+```text
 unit test pass / 0 failed
+```
 
 This suite validates Phase 3.6G ledger cutover readiness auditing and migration-readiness reporting.
 
+---
+
+# Phase 3.7 Runtime Hardening & Audit Suites
+
+## runtime_ledger_drift_tests.sh
+
+Validates:
+
+* cutover drift reporting
+* parity drift category classification
+* replay/eval/registry parity dimensions
+* strict no-drift enforcement semantics
+* audit CLI deterministic output and exit codes
+
+Expected result:
+
+```text
+unit test pass / 0 failed
+```
+
+This suite validates Phase 3.7A ledger/trace drift detection as observational verification tooling.
+
+---
+
+## runtime_derived_purity_tests.sh
+
+Validates:
+
+* derived projection modules remain read-only
+* forbidden write/import/subprocess detection
+* dataset projection-writer classification
+* strict derived purity audit behavior
+
+Expected result:
+
+```text
+unit test pass / 0 failed
+```
+
+This suite validates Phase 3.7B derived-system purity audit guardrails.
+
+---
+
+## runtime_boundary_audit_tests.sh
+
+Validates:
+
+* runtime import-boundary model enforcement
+* forbidden cross-layer import detection
+* control-plane runtime.engine import prohibition
+* boundary audit CLI strict/json behavior
+
+Expected result:
+
+```text
+unit test pass / 0 failed
+```
+
+This suite validates Phase 3.7C runtime boundary enforcement guardrails.
+
+---
+
+## runtime_ledger_corruption_tests.sh
+
+Validates:
+
+* ledger corruption category detection
+* strict vs tolerant corruption handling
+* parity/index mismatch detection
+* ledger-mode replay/eval/registry failure categorization
+* corruption audit CLI strict/json behavior
+
+Expected result:
+
+```text
+unit test pass / 0 failed
+```
+
+This suite validates Phase 3.7D ledger corruption and recovery-readiness guardrails.
+
+---
+
+## runtime_ledger_health_tests.sh
+
+Validates:
+
+* single-run ledger health classification
+* aggregate ledger health metrics
+* maintenance visibility + stale-stamp detection
+* cutover-readiness integration
+* health CLI strict/json/latest/summary behavior
+
+Expected result:
+
+```text
+unit test pass / 0 failed
+```
+
+This suite validates Phase 3.7E operational observability for ledger health.
+
+---
+
+## runtime_trace_compatibility_tests.sh
+
+Validates:
+
+* deterministic trace dependency inventory
+* compatibility/blocker/legacy/test/docs/tooling classification
+* cutover blocker readiness validator semantics
+* trace compatibility audit CLI strict/json behavior
+
+Expected result:
+
+```text
+unit test pass / 0 failed
+```
+
+This suite validates Phase 3.7G trace compatibility audit guardrails.
+
+---
+
+## runtime_ledger_default_dry_run_tests.sh
+
+Validates:
+
+* dry-run mode enablement and default-disabled behavior
+* ledger-default readiness aggregation and categories
+* strict CLI behavior and deterministic summary output
+* no authority/default switching side effects
+
+Expected result:
+
+```text
+unit test pass / 0 failed
+```
+
+This suite validates Phase 3.7I ledger-default dry-run observability without changing runtime authority.
+
+---
 
 # Running Tests
 
@@ -611,6 +769,13 @@ Run all runtime suites individually:
 ./scripts/tests/runtime_registry_ledger_tests.sh
 ./scripts/tests/runtime_ledger_authoritative_tests.sh
 ./scripts/tests/runtime_ledger_readiness_tests.sh
+./scripts/tests/runtime_ledger_drift_tests.sh
+./scripts/tests/runtime_derived_purity_tests.sh
+./scripts/tests/runtime_boundary_audit_tests.sh
+./scripts/tests/runtime_ledger_corruption_tests.sh
+./scripts/tests/runtime_ledger_health_tests.sh
+./scripts/tests/runtime_trace_compatibility_tests.sh
+./scripts/tests/runtime_ledger_default_dry_run_tests.sh
 ```
 
 Run the full runtime ladder:
@@ -629,30 +794,37 @@ make validate
 
 # Validation Coverage Matrix
 
-| Capability                       | Covered By                            |
-| -------------------------------- | ------------------------------------- |
-| response contracts               | runtime_tests.sh                      |
-| replay safety                    | replayability_smoke_test.sh           |
-| lifecycle ordering               | event_ordering_tests.sh               |
-| crash durability                 | failure_tests.sh                      |
-| NDJSON integrity                 | ndjson_integrity_tests.sh             |
-| replay reconstruction            | resume_from_trace_tests.sh            |
-| loader correctness               | loader_replay_tests.sh                |
-| evaluation correctness           | runtime_eval_tests.sh                 |
-| registry correctness             | runtime_registry_tests.sh             |
-| dataset determinism              | runtime_dataset_tests.sh              |
-| contract enforcement             | runtime_contract_tests.sh             |
-| isolation guarantees             | parallel_run_isolation_test.sh        |
-| runtime snapshot stability       | runtime_snapshot_tests.sh             |
-| adapter gateway boundary         | runtime_adapter_gateway_tests.sh      |
-| lifecycle orchestration boundary | runtime_run_lifecycle_tests.sh        |
-| trace pipeline boundary          | runtime_trace_pipeline_tests.sh       |
-| event ledger boundary            | runtime_event_ledger_tests.sh         |
-| replay ledger boundary           | runtime_replay_ledger_tests.sh        |
-| eval ledger boundary             | runtime_eval_ledger_tests.sh          |
-| registry ledger boundary         | runtime_registry_ledger_tests.sh      |
-| ledger authoritative boundary    | runtime_ledger_authoritative_tests.sh |
-| ledger readiness boundary        | runtime_ledger_readiness_tests.sh     |
+| Capability                       | Covered By                              |
+| -------------------------------- | --------------------------------------- |
+| response contracts               | runtime_tests.sh                        |
+| replay safety                    | replayability_smoke_test.sh             |
+| lifecycle ordering               | event_ordering_tests.sh                 |
+| crash durability                 | failure_tests.sh                        |
+| NDJSON integrity                 | ndjson_integrity_tests.sh               |
+| replay reconstruction            | resume_from_trace_tests.sh              |
+| loader correctness               | loader_replay_tests.sh                  |
+| evaluation correctness           | runtime_eval_tests.sh                   |
+| registry correctness             | runtime_registry_tests.sh               |
+| dataset determinism              | runtime_dataset_tests.sh                |
+| contract enforcement             | runtime_contract_tests.sh               |
+| isolation guarantees             | parallel_run_isolation_test.sh          |
+| runtime snapshot stability       | runtime_snapshot_tests.sh               |
+| adapter gateway boundary         | runtime_adapter_gateway_tests.sh        |
+| lifecycle orchestration boundary | runtime_run_lifecycle_tests.sh          |
+| trace pipeline boundary          | runtime_trace_pipeline_tests.sh         |
+| event ledger boundary            | runtime_event_ledger_tests.sh           |
+| replay ledger boundary           | runtime_replay_ledger_tests.sh          |
+| eval ledger boundary             | runtime_eval_ledger_tests.sh            |
+| registry ledger boundary         | runtime_registry_ledger_tests.sh        |
+| ledger authoritative boundary    | runtime_ledger_authoritative_tests.sh   |
+| ledger readiness boundary        | runtime_ledger_readiness_tests.sh       |
+| ledger/trace drift auditing      | runtime_ledger_drift_tests.sh           |
+| derived-system purity            | runtime_derived_purity_tests.sh         |
+| runtime boundary enforcement     | runtime_boundary_audit_tests.sh         |
+| ledger corruption detection      | runtime_ledger_corruption_tests.sh      |
+| ledger health observability      | runtime_ledger_health_tests.sh          |
+| trace compatibility auditing     | runtime_trace_compatibility_tests.sh    |
+| ledger-default dry-run readiness | runtime_ledger_default_dry_run_tests.sh |
 
 ---
 
@@ -684,6 +856,13 @@ No schema-breaking changes should be merged without:
 * registry source selection validation
 * ledger authoritative mode validation
 * ledger cutover readiness audit validation
+* ledger drift audit validation
+* ledger corruption validation
+* runtime boundary audit validation
+* derived purity audit validation
+* ledger health observability validation
+* trace compatibility validation
+* ledger-default dry-run validation
 
 ---
 
@@ -703,37 +882,44 @@ The runtime guarantees:
 * deterministic lifecycle transition orchestration
 * validated trace pipeline behavior
 * additive event ledger dual-write parity
+* deterministic audit and observability reporting
 
 Tests are designed to continuously validate these guarantees.
 
 ---
 
-# Adding New Tests
+# Verification Requirements
 
-New tests should validate deterministic guarantees whenever possible.
+Before completing runtime changes:
 
-Preferred categories:
+* run all runtime suites
+* verify replay compatibility
+* verify schema consistency
+* verify imports
+* verify backward compatibility
+* verify deterministic serialization
+* verify dataset exports
+* verify replay reconstruction
+* verify contract compatibility
+* verify snapshot stability
+* verify adapter gateway behavior
+* verify lifecycle orchestration behavior
+* verify trace pipeline behavior
+* verify event ledger dual-write behavior
+* verify replay source selection behavior
+* verify eval source selection behavior
+* verify registry source selection behavior
+* verify ledger authoritative mode behavior
+* verify ledger cutover readiness behavior
+* verify ledger drift auditing
+* verify ledger corruption auditing
+* verify ledger health reporting
+* verify trace compatibility auditing
+* verify ledger-default dry-run readiness
+* verify runtime boundary audit behavior
+* verify derived purity audit behavior
 
-* replay correctness
-* crash recovery
-* schema migration
-* lifecycle integrity
-* concurrency isolation
-* malformed input handling
-* dataset determinism
-* contract compatibility
-* replay-derived evaluation correctness
-* snapshot regression stability
-* adapter gateway boundary behavior
-* lifecycle orchestration boundary behavior
-* trace pipeline boundary behavior
-
-Avoid:
-
-* brittle timing assumptions
-* non-deterministic assertions
-* environment-specific dependencies
-* hidden external state
+No runtime refactor should bypass the validation layer.
 
 ---
 
@@ -774,6 +960,8 @@ Validation is mandatory for:
 * registry results
 * replay loading
 * trace pipeline persistence
+* EventLedger parity behavior
+* audit and observability outputs
 
 No runtime component may bypass validation.
 
@@ -909,31 +1097,49 @@ Likely causes:
 
 ---
 
-# Verification Requirements
+## Ledger drift audit failure
 
-Before completing runtime changes:
+Likely causes:
 
-* run all runtime suites
-* verify replay compatibility
-* verify schema consistency
-* verify imports
-* verify backward compatibility
-* verify deterministic serialization
-* verify dataset exports
-* verify replay reconstruction
-* verify contract compatibility
-* verify snapshot stability
-* verify adapter gateway behavior
-* verify lifecycle orchestration behavior
-* verify trace pipeline behavior
-* verify event ledger dual-write behavior
-* verify replay source selection behavior
-* verify eval source selection behavior
-* verify registry source selection behavior
-* verify ledger authoritative mode behavior
-* verify ledger cutover readiness behavior
+* trace/ledger divergence
+* replay/eval/registry projection mismatch
+* lifecycle parity corruption
+* incompatible ledger reconstruction
 
-No runtime refactor should bypass the validation layer.
+---
+
+## Ledger corruption audit failure
+
+Likely causes:
+
+* malformed ledger NDJSON
+* mixed run_id ledger corruption
+* timestamp regression
+* duplicate lifecycle events
+* parity/index mismatch
+
+---
+
+## Ledger health degradation
+
+Likely causes:
+
+* stale maintenance state
+* missing ledger/index artifacts
+* historical corruption backlog
+* parity instability
+* incomplete cutover readiness
+
+---
+
+## Trace compatibility blocker
+
+Likely causes:
+
+* trace-only runtime assumptions
+* hardcoded replay dependencies
+* legacy runtime coupling
+* incomplete compatibility abstraction
 
 ---
 
@@ -951,6 +1157,9 @@ The runtime prioritizes:
 * lifecycle transition correctness
 * trace pipeline correctness
 * snapshot-stable behavior
+* operational observability
+* migration safety
+* cutover readiness validation
 
 over simple output assertions.
 
@@ -963,239 +1172,5 @@ The runtime test system exists to guarantee that every run remains:
 * deterministic
 * backward compatible
 * contract validated
-
-## runtime_ledger_drift_tests.sh
-
-Validates:
-
-- cutover drift reporting
-- parity drift category classification
-- replay/eval/registry parity dimensions
-- strict no-drift enforcement semantics
-- audit CLI deterministic output and exit codes
-
-Expected result:
-
-unit test pass / 0 failed
-
-This suite validates Phase 3.7A ledger/trace drift detection as observational verification tooling.
-
-## Phase 3.7A Additions
-
-Running Tests list additions:
-
-- `./scripts/tests/runtime_ledger_drift_tests.sh`
-
-Make targets:
-
-- `make runtime-ledger-drift-tests`
-- `make ledger-drift-audit`
-
-Coverage Matrix additions:
-
-- ledger/trace drift auditing → `runtime_ledger_drift_tests.sh`
-- strict drift enforcement → `runtime_ledger_drift_tests.sh`
-
-CI Expectations additions:
-
-- run drift suite before cutover changes
-- treat drift in strict mode as a blocking signal
-
-Verification Requirements additions:
-
-- `python3 scripts/maintenance/ledger_drift_audit.py --latest`
-- `python3 scripts/maintenance/ledger_drift_audit.py --latest --json`
-- `python3 scripts/maintenance/ledger_drift_audit.py --latest --strict`
-
-## runtime_derived_purity_tests.sh
-
-Validates:
-
-- derived projection modules remain read-only
-- forbidden write/import/subprocess detection
-- dataset projection-writer classification
-- strict derived purity audit behavior
-
-Expected result:
-
-unit test pass / 0 failed
-
-This suite validates Phase 3.7B derived-system purity audit guardrails.
-
-## Phase 3.7B Additions
-
-Running Tests list additions:
-
-- `./scripts/tests/runtime_derived_purity_tests.sh`
-
-Make targets:
-
-- `make runtime-derived-purity-tests`
-- `make derived-purity-audit`
-
-Coverage Matrix additions:
-
-- derived-system purity audit → `runtime_derived_purity_tests.sh`
-
-CI usage:
-
-- `python3 scripts/maintenance/derived_purity_audit.py --strict`
-
-## runtime_boundary_audit_tests.sh
-
-Validates:
-
-- runtime import-boundary model enforcement
-- forbidden cross-layer import detection
-- control-plane `runtime.engine` import prohibition
-- boundary audit CLI strict/json behavior
-
-Expected result:
-
-unit test pass / 0 failed
-
-This suite validates Phase 3.7C runtime boundary enforcement guardrails.
-
-## Phase 3.7C Additions
-
-Running Tests list additions:
-
-- `./scripts/tests/runtime_boundary_audit_tests.sh`
-
-Make targets:
-
-- `make runtime-boundary-audit-tests`
-- `make runtime-boundary-audit`
-
-CI usage:
-
-- `python3 scripts/maintenance/runtime_boundary_audit.py --strict`
-
-Relationship to purity audit:
-
-- purity audit checks read/write side effects
-- boundary audit checks import direction and layering ownership
-
-## runtime_ledger_corruption_tests.sh
-
-Validates:
-
-- ledger corruption category detection
-- strict vs tolerant corruption handling
-- parity/index mismatch detection
-- ledger-mode replay/eval/registry failure categorization
-- corruption audit CLI strict/json behavior
-
-Expected result:
-
-unit test pass / 0 failed
-
-This suite validates Phase 3.7D ledger corruption and recovery-readiness guardrails.
-
-## Phase 3.7D Additions
-
-Running Tests list additions:
-
-- `./scripts/tests/runtime_ledger_corruption_tests.sh`
-
-Make targets:
-
-- `make runtime-ledger-corruption-tests`
-- `make ledger-corruption-audit`
-
-Pre-cutover workflow:
-
-- run `ledger-corruption-audit --latest --strict` on representative runs
-- investigate categories before enabling authority mode
-- do not auto-repair; preserve trace compatibility fallback
-
-## runtime_ledger_health_tests.sh
-
-Validates:
-
-- single-run ledger health classification
-- aggregate ledger health metrics
-- maintenance visibility + stale-stamp detection
-- cutover-readiness integration
-- health CLI strict/json/latest/summary behavior
-
-Expected result:
-
-unit test pass / 0 failed
-
-This suite validates Phase 3.7E operational observability for ledger health.
-
-## Phase 3.7E Additions
-
-Running Tests list additions:
-
-- `./scripts/tests/runtime_ledger_health_tests.sh`
-
-Make targets:
-
-- `make runtime-ledger-health-tests`
-- `make ledger-health-report`
-
-Coverage Matrix additions:
-
-- ledger health observability reporting → `runtime_ledger_health_tests.sh`
-
-Verification Requirements additions:
-
-- `python3 scripts/maintenance/ledger_health_report.py --latest`
-- `python3 scripts/maintenance/ledger_health_report.py --summary`
-- `python3 scripts/maintenance/ledger_health_report.py --latest --json`
-- `python3 scripts/maintenance/ledger_health_report.py --latest --strict`
-
-## runtime_trace_compatibility_tests.sh
-
-Validates:
-
-- deterministic trace dependency inventory
-- compatibility/blocker/legacy/test/docs/tooling classification
-- cutover blocker readiness validator semantics
-- trace compatibility audit CLI strict/json behavior
-
-Expected result:
-
-unit test pass / 0 failed
-
-This suite validates Phase 3.7G trace compatibility audit guardrails.
-
-## Phase 3.7G Additions
-
-Running Tests list additions:
-
-- `./scripts/tests/runtime_trace_compatibility_tests.sh`
-
-Make targets:
-
-- `make runtime-trace-compatibility-tests`
-- `make trace-compatibility-audit`
-
-Verification Requirements additions:
-
-- `python3 scripts/maintenance/trace_compatibility_audit.py`
-- `python3 scripts/maintenance/trace_compatibility_audit.py --summary`
-- `python3 scripts/maintenance/trace_compatibility_audit.py --json`
-- `python3 scripts/maintenance/trace_compatibility_audit.py --strict`
-
-## runtime_ledger_default_dry_run_tests.sh
-
-Validates:
-
-- dry-run mode enablement and default-disabled behavior
-- ledger-default readiness aggregation and categories
-- strict CLI behavior and deterministic summary output
-- no authority/default switching side effects
-
-Expected result:
-
-unit test pass / 0 failed
-
-This suite validates Phase 3.7I ledger-default dry-run observability without changing runtime authority.
-
-Make targets:
-
-- `make runtime-ledger-default-dry-run-tests`
-- `make ledger-default-dry-run` (uses `--summary --recent 50`)
+* operationally observable
+* migration-safe

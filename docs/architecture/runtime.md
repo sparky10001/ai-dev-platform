@@ -13,8 +13,90 @@ The AI Runtime Platform is a deterministic, schema-first execution system design
 * filesystem-native runtime indexing
 * deterministic dataset export
 * parallel run isolation
+* compatibility-preserving EventLedger migration
+* operational auditability
+* replay-safe observability
 
-The runtime is event-driven and persists canonical NDJSON traces for all execution activity.
+The runtime is event-driven and persists canonical NDJSON traces for all execution activity. 
+
+The runtime is intentionally designed as:
+
+```text id="ij89eh"
+event-sourced deterministic execution infrastructure
+```
+
+—not merely a command wrapper or orchestration shell.
+
+---
+
+# Runtime Layer Model
+
+The runtime is intentionally layered:
+
+```text id="zwshha"
+contracts / schemas / validator
+                ↓
+trace_pipeline + event_ledger
+                ↓
+adapter_gateway + run_lifecycle
+                ↓
+engine
+                ↓
+replay / evals / registry / datasets
+                ↓
+audit + observability systems
+```
+
+The runtime preserves one-way dependency direction toward lower-level infrastructure layers.
+
+Replay, evals, registry, datasets, and audit systems are treated as derived systems and must remain replay-safe and compatibility-preserving.
+
+---
+
+# Execution vs Derived Systems
+
+## Execution Systems
+
+Execution systems coordinate canonical runtime behavior and persistence.
+
+Execution systems include:
+
+* `runtime.engine`
+* `runtime.adapter_gateway`
+* `runtime.run_lifecycle`
+* `runtime.trace_pipeline`
+* `runtime.event_ledger`
+
+Execution systems:
+
+* produce canonical runtime artifacts
+* coordinate runtime execution
+* validate runtime contracts
+* preserve lifecycle guarantees
+* maintain replay-safe persistence
+
+---
+
+## Derived Systems
+
+Derived systems consume runtime artifacts and remain replay-safe projections.
+
+Derived systems include:
+
+* `runtime.replay`
+* `runtime.evals`
+* `runtime.registry`
+* `runtime.datasets`
+* audit and observability tooling
+
+Derived systems must remain:
+
+* replay-safe
+* read-oriented
+* compatibility-preserving
+* deterministic
+
+Derived systems must never mutate canonical runtime history.
 
 ---
 
@@ -22,13 +104,14 @@ The runtime is event-driven and persists canonical NDJSON traces for all executi
 
 ## Deterministic Execution
 
-Runtime behavior should be reproducible from persisted traces.
+Runtime behavior should be reproducible from persisted runtime artifacts.
 
-The system avoids:
+The runtime avoids:
 
 * hidden mutable state
 * implicit side effects
 * non-replayable execution paths
+* implicit background mutation
 
 ---
 
@@ -39,9 +122,9 @@ All external runtime contracts use JSON.
 All internal validation uses:
 
 * Pydantic v2
-* runtime.contracts
-* runtime.schemas
-* runtime.validator
+* `runtime.contracts`
+* `runtime.schemas`
+* `runtime.validator`
 
 No adapter output is trusted without validation.
 
@@ -49,7 +132,7 @@ No adapter output is trusted without validation.
 
 ## Replay Safety
 
-All traces must remain:
+All traces and ledger artifacts must remain:
 
 * append-only
 * truncation-safe
@@ -71,8 +154,31 @@ The runtime intentionally avoids:
 * hidden queues
 * external orchestration systems
 * databases
+* implicit schedulers
 
-The current runtime is single-process and deterministic by design.
+The runtime remains single-process and deterministic by design.
+
+---
+
+# EventLedger Compatibility Model
+
+The runtime currently operates in compatibility mode.
+
+Current behavior:
+
+* `trace.jsonl` remains canonical
+* `ledger.jsonl` remains additive
+* replay/eval/registry support dual-source operation
+* authoritative ledger mode remains opt-in
+* operational audits remain observational-only
+
+EventLedger provides:
+
+* deterministic parity validation
+* migration readiness
+* operational observability
+* future ledger-authoritative support
+* replay-safe cutover tooling
 
 ---
 
@@ -80,7 +186,7 @@ The current runtime is single-process and deterministic by design.
 
 Canonical lifecycle:
 
-```text
+```text id="mglv5s"
 session_start
   → tool_call
   → tool_result
@@ -90,35 +196,45 @@ session_start
 
 Lifecycle ordering is validated by:
 
-* event_ordering_tests.sh
-* replayability_smoke_test.sh
-* resume_from_trace_tests.sh
+* `event_ordering_tests.sh`
+* `replayability_smoke_test.sh`
+* `resume_from_trace_tests.sh`
 
 ---
 
 # Runtime Flow
 
-## 1. Runtime Entry
+## 1. Runtime Coordination
 
 Entrypoint:
 
-```text
+```text id="9nmbhh"
 scripts/runtime.sh
 ```
 
-Primary orchestrator:
+Primary coordinator:
 
-```text
+```text id="v3h5jg"
 runtime/engine.py
 ```
+
+Delegated execution systems:
+
+* `runtime/adapter_gateway.py`
+* `runtime/run_lifecycle.py`
+* `runtime/trace_pipeline.py`
+* `runtime/event_ledger.py`
 
 Responsibilities:
 
 * create runs
-* resolve adapters
+* coordinate lifecycle orchestration
+* invoke adapters
 * validate responses
-* persist traces
+* persist canonical runtime artifacts
 * finalize runtime state
+
+The engine remains coordinator-only infrastructure.
 
 ---
 
@@ -126,52 +242,82 @@ Responsibilities:
 
 Module:
 
-```text
+```text id="ffm76z"
 runtime/run.py
 ```
 
 Responsibilities:
 
-* generate run_id
+* generate `run_id`
 * create canonical run directory
-* initialize run metadata
-* persist run.json
+* initialize runtime metadata
+* persist `run.json`
 
 Canonical structure:
 
-```text
+```text id="votfuk"
 runs/<run_id>/
   run.json
   trace.jsonl
+  ledger.jsonl
   result.json
+  ledger.index.json
 ```
 
 ---
 
 ## 3. Adapter Execution
 
-Module:
+Primary module:
 
-```text
+```text id="6x6r6e"
+runtime/adapter_gateway.py
+```
+
+Legacy execution helper:
+
+```text id="xdv5p3"
 runtime/runner.py
 ```
 
 Responsibilities:
 
 * invoke adapters
+* normalize adapter behavior
 * enforce timeout boundaries
 * capture stdout/stderr
 * preserve deterministic execution
+* validate adapter responses
 
-Adapters communicate strictly through JSON.
+Adapters communicate strictly through validated JSON contracts.
 
 ---
 
-## 4. Schema Validation
+## 4. Lifecycle Orchestration
+
+Module:
+
+```text id="ucxxkg"
+runtime/run_lifecycle.py
+```
+
+Responsibilities:
+
+* lifecycle orchestration
+* canonical event sequencing
+* terminal lifecycle handling
+* failure lifecycle handling
+* deterministic response envelopes
+
+Lifecycle ordering is replay-critical infrastructure.
+
+---
+
+## 5. Schema Validation
 
 Modules:
 
-```text
+```text id="rmtbfx"
 runtime/contracts.py
 runtime/schemas.py
 runtime/validator.py
@@ -195,18 +341,20 @@ The contracts layer is the single source of truth for:
 * dataset exports
 * evaluation records
 * registry/query structures
+* audit system outputs
 
-Validation boundary:
+Validation boundary includes:
 
 * all external JSON
 * all replayed events
 * all persisted traces
 * all exported datasets
 * all eval summaries
+* all ledger-derived artifacts
 
 Validation delegation flow:
 
-```text
+```text id="9g79j3"
 validator.py
   → contracts.py
   → schemas.py
@@ -214,36 +362,44 @@ validator.py
 
 Compatibility helpers:
 
-```text
+```text id="gq17vh"
 assert_backward_compatible()
 assert_no_breaking_changes()
 ```
 
 Canonical serialization helper:
 
-```text
+```text id="w9q1r4"
 to_canonical_json()
 ```
 
 ---
 
-## 5. Event Persistence
+## 6. Trace Persistence
 
-Module:
+Primary module:
 
-```text
+```text id="u1ibzq"
+runtime/trace_pipeline.py
+```
+
+Legacy compatibility helper:
+
+```text id="p2wr2y"
 runtime/events.py
 ```
 
 Responsibilities:
 
-* canonical event creation
+* canonical event normalization
 * schema validation
-* NDJSON persistence
+* append-only NDJSON persistence
+* replay-safe ingestion
+* strict/tolerant validation behavior
 
 Trace format:
 
-```text
+```text id="m63uq9"
 runs/<run_id>/trace.jsonl
 ```
 
@@ -253,14 +409,43 @@ Requirements:
 * one JSON object per line
 * replay-safe
 * crash-safe
+* schema-validated
 
 ---
 
-## 6. Replay System
+## 7. EventLedger Persistence
+
+Module:
+
+```text id="ajv8av"
+runtime/event_ledger.py
+```
+
+Responsibilities:
+
+* additive ledger persistence
+* deterministic event hashing
+* parity validation
+* migration readiness
+* ledger indexing
+* future authority support
+
+Ledger artifacts:
+
+```text id="pw6gse"
+runs/<run_id>/ledger.jsonl
+runs/<run_id>/ledger.index.json
+```
+
+EventLedger remains additive unless authoritative mode is explicitly enabled.
+
+---
+
+## 8. Replay System
 
 Modules:
 
-```text
+```text id="x3mf80"
 runtime/replay.py
 runtime/loader.py
 ```
@@ -268,6 +453,7 @@ runtime/loader.py
 Responsibilities:
 
 * replay trace loading
+* ledger replay loading
 * schema-safe event reconstruction
 * lifecycle reconstruction
 * incomplete run detection
@@ -278,6 +464,9 @@ Replay guarantees:
 * preserves ordering
 * preserves timestamps
 * reconstructs terminal state
+* preserves compatibility behavior
+
+Replay remains authoritative runtime infrastructure.
 
 ---
 
@@ -285,7 +474,7 @@ Replay guarantees:
 
 Module:
 
-```text
+```text id="tij8l5"
 runtime/evals.py
 ```
 
@@ -298,20 +487,22 @@ Responsibilities:
 
 Core APIs:
 
-```text
+```text id="1u7mev"
 evaluate_run(run_id)
 compare_runs(run_a, run_b)
 ```
 
 Evaluation metrics include:
 
-* runtime_seconds
-* total_events
-* tool_calls
-* tool_results
-* replay_valid
-* schema_valid
-* completed
+* `runtime_seconds`
+* `total_events`
+* `tool_calls`
+* `tool_results`
+* `replay_valid`
+* `schema_valid`
+* `completed`
+
+Evaluation remains replay-derived infrastructure.
 
 ---
 
@@ -319,7 +510,7 @@ Evaluation metrics include:
 
 Module:
 
-```text
+```text id="7o6czn"
 runtime/registry.py
 ```
 
@@ -332,7 +523,7 @@ Responsibilities:
 
 Core APIs:
 
-```text
+```text id="0j1c2r"
 list_runs()
 get_run(run_id)
 get_latest_run()
@@ -349,13 +540,15 @@ Supported query dimensions:
 * timestamp ordering
 * result limits
 
+Registry behavior remains compatibility-preserving.
+
 ---
 
 # Dataset Export System
 
 Module:
 
-```text
+```text id="u8h6z0"
 runtime/datasets.py
 ```
 
@@ -368,7 +561,7 @@ Responsibilities:
 
 Supported exports:
 
-```text
+```text id="w4w3o5"
 export_run(...)
 export_runs(...)
 export_query(...)
@@ -384,15 +577,60 @@ Export guarantees:
 * schema-validated
 * NDJSON compliant
 
+`runtime.datasets` is classified as a projection writer and must not mutate runtime source artifacts.
+
+---
+
+# Audit & Observability Systems
+
+Operational audit systems provide:
+
+* drift detection
+* corruption auditing
+* ledger health reporting
+* trace compatibility auditing
+* runtime boundary auditing
+* derived-system purity auditing
+* ledger-default dry-run readiness
+
+Core modules include:
+
+```text id="ikq7f7"
+runtime/ledger_drift.py
+runtime/ledger_corruption.py
+runtime/ledger_health.py
+runtime/derived_purity.py
+runtime/boundary_audit.py
+runtime/trace_compatibility.py
+```
+
+Audit systems are intentionally:
+
+* read-only
+* deterministic
+* observational-first
+* compatibility-preserving
+
+Audit systems must never:
+
+* mutate runtime history
+* bypass replay guarantees
+* force authority changes
+* perform implicit repair
+
 ---
 
 # Core Runtime Modules
 
-```text
+```text id="bh4av2"
 runtime/
   engine.py
   run.py
   runner.py
+  adapter_gateway.py
+  run_lifecycle.py
+  trace_pipeline.py
+  event_ledger.py
   events.py
   replay.py
   loader.py
@@ -402,6 +640,12 @@ runtime/
   contracts.py
   validator.py
   schemas.py
+  ledger_drift.py
+  ledger_corruption.py
+  ledger_health.py
+  derived_purity.py
+  boundary_audit.py
+  trace_compatibility.py
 ```
 
 ---
@@ -410,7 +654,7 @@ runtime/
 
 Canonical event fields:
 
-```json
+```json id="t7o8j6"
 {
   "schema_version": 1,
   "timestamp": 1778367094.181,
@@ -424,13 +668,13 @@ Canonical event fields:
 
 # Supported Event Types
 
-| Event         | Purpose                  |
-| ------------- | ------------------------ |
-| session_start | lifecycle initialization |
-| tool_call     | tool execution request   |
-| tool_result   | tool execution result    |
-| agent_output  | final runtime output     |
-| session_end   | lifecycle completion     |
+| Event           | Purpose                  |
+| --------------- | ------------------------ |
+| `session_start` | lifecycle initialization |
+| `tool_call`     | tool execution request   |
+| `tool_result`   | tool execution result    |
+| `agent_output`  | final runtime output     |
+| `session_end`   | lifecycle completion     |
 
 ---
 
@@ -442,6 +686,7 @@ Trace files are:
 * immutable after write
 * line-oriented
 * replay-derived
+* compatibility-preserving
 
 No event mutation is permitted after persistence.
 
@@ -452,13 +697,14 @@ No event mutation is permitted after persistence.
 Failure paths must still emit:
 
 * valid JSON
-* valid schema_version
+* valid `schema_version`
 * valid lifecycle termination
 * replay-safe traces
+* compatibility-safe artifacts
 
 Failure guarantees are validated by:
 
-```text
+```text id="az4uy8"
 failure_tests.sh
 crash_recovery_tests.sh
 ```
@@ -474,10 +720,11 @@ Isolation guarantees:
 * unique run directories
 * unique trace files
 * independent lifecycle persistence
+* independent ledger artifacts
 
 Validated by:
 
-```text
+```text id="1o9m4w"
 parallel_run_isolation_test.sh
 ```
 
@@ -487,25 +734,26 @@ parallel_run_isolation_test.sh
 
 The runtime uses a layered contract system:
 
-```text
+```text id="yspkdp"
 contracts.py
   ↓
 schemas.py
   ↓
 validator.py
   ↓
-engine.py / replay.py / datasets.py
+execution + replay + datasets + audit systems
 ```
 
 Responsibilities:
 
-| Layer        | Responsibility                 |
-| ------------ | ------------------------------ |
-| contracts.py | canonical contract definitions |
-| schemas.py   | typed runtime schema layer     |
-| validator.py | runtime validation entrypoints |
-| replay.py    | replay-safe reconstruction     |
-| datasets.py  | canonical export generation    |
+| Layer          | Responsibility                 |
+| -------------- | ------------------------------ |
+| `contracts.py` | canonical contract definitions |
+| `schemas.py`   | typed runtime schema layer     |
+| `validator.py` | runtime validation entrypoints |
+| `replay.py`    | replay-safe reconstruction     |
+| `datasets.py`  | canonical export generation    |
+| audit systems  | deterministic observability    |
 
 Contract guarantees:
 
@@ -517,11 +765,29 @@ Contract guarantees:
 
 ---
 
+# Runtime Architectural Guarantees
+
+The runtime guarantees:
+
+* append-only persistence
+* deterministic replay
+* replay-safe reconstruction
+* schema-validated contracts
+* compatibility-preserving migration
+* deterministic audit behavior
+* additive EventLedger migration
+* operational rollback safety
+* replay-safe observability
+
+These guarantees are considered core runtime invariants.
+
+---
+
 # Testing Guarantees
 
 Current runtime guarantees are validated through:
 
-```text
+```text id="a2hscm"
 runtime_tests.sh
 failure_tests.sh
 ndjson_integrity_tests.sh
@@ -536,45 +802,76 @@ runtime_eval_tests.sh
 runtime_registry_tests.sh
 runtime_dataset_tests.sh
 runtime_contract_tests.sh
+runtime_snapshot_tests.sh
+runtime_adapter_gateway_tests.sh
+runtime_run_lifecycle_tests.sh
+runtime_trace_pipeline_tests.sh
+runtime_event_ledger_tests.sh
+runtime_replay_ledger_tests.sh
+runtime_eval_ledger_tests.sh
+runtime_registry_ledger_tests.sh
+runtime_ledger_authoritative_tests.sh
+runtime_ledger_readiness_tests.sh
+runtime_ledger_drift_tests.sh
+runtime_derived_purity_tests.sh
+runtime_boundary_audit_tests.sh
+runtime_ledger_corruption_tests.sh
+runtime_ledger_health_tests.sh
+runtime_trace_compatibility_tests.sh
+runtime_ledger_default_dry_run_tests.sh
 ```
 
 ---
 
-# Current Limitations
+# Current Operational Constraints
 
-Current runtime intentionally avoids:
+The runtime intentionally remains:
 
-* distributed orchestration
-* resumable execution continuation
-* background scheduling
-* cross-process coordination
-* remote persistence
-* distributed state management
+* single-process
+* filesystem-native
+* append-only
+* replay-centric
+* compatibility-preserving
 
-These may be introduced in later phases.
+The runtime intentionally avoids:
+
+* distributed schedulers
+* hidden queues
+* implicit background mutation
+* non-replayable orchestration
+* distributed mutable state
+
+These constraints are intentional architectural guarantees.
 
 ---
 
 # Phase 4 Direction
 
-Planned evolution areas:
+Future runtime evolution areas include:
 
-```text
+```text id="vrv4we"
 runtime/state.py
 runtime/reconstructor.py
 runtime/observability.py
 runtime/orchestrator.py
 ```
 
-Future capabilities:
+Future capabilities may include:
 
 * deterministic state reconstruction
-* replay-derived evals
+* replay-derived orchestration analytics
 * resumable execution
-* runtime analytics
-* trace inspection APIs
 * structured observability
 * orchestration primitives
-* multi-agent execution
+* multi-agent coordination
 * evaluation pipelines
 * runtime dashboards
+* orchestration-aware replay tooling
+
+Future phases must preserve:
+
+* deterministic replay guarantees
+* append-only persistence
+* compatibility-safe migration
+* replay-safe observability
+* runtime contract validation
