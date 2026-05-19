@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Iterable, Literal
 import os
 import re
 
@@ -56,6 +56,55 @@ def _source_path_for_replay(path_or_run: str | Path, source: ReplaySource) -> Pa
     return path
 
 
+def replay_events(events: Iterable[TraceEvent], *, run_id: str | None = None) -> ReplayState:
+    state = ReplayState()
+    if run_id:
+        state.run_id = run_id
+
+    for evt in events:
+        state.events.append(evt)
+        state.event_count += 1
+
+        if not state.run_id:
+            state.run_id = getattr(evt, "run_id", None)
+
+        event_name = getattr(evt, "event", None)
+        event_data = getattr(evt, "data", None)
+
+        if event_name == "session_start":
+            state.started = True
+        elif event_name == "session_end":
+            state.completed = True
+            if isinstance(event_data, dict):
+                state.status = event_data.get("status")
+        elif event_name == "tool_call":
+            state.tool_calls += 1
+        elif event_name == "tool_result":
+            state.tool_results += 1
+        elif event_name == "agent_output":
+            if isinstance(event_data, dict):
+                state.status = event_data.get("status")
+                state.output = event_data.get("output")
+
+    return state
+
+
+def summarize_events(events: Iterable[TraceEvent], *, run_id: str | None = None) -> dict[str, Any]:
+    replay = replay_events(events, run_id=run_id)
+    return {
+        "run_id": replay.run_id,
+        "events": replay.event_count,
+        "tool_calls": replay.tool_calls,
+        "tool_results": replay.tool_results,
+        "started": replay.started,
+        "completed": replay.completed,
+        "incomplete": replay.incomplete,
+        "status": replay.status,
+        "successful": replay.successful,
+        "output": replay.output,
+    }
+
+
 def load_replay_events(
     path_or_run: str | Path,
     *,
@@ -98,30 +147,8 @@ def replay_trace(
     strict: bool = False,
     source: ReplaySource | None = None,
 ) -> ReplayState:
-    state = ReplayState()
     events = load_trace(trace_path, strict=strict, source=source)
-    state.events = events
-
-    for evt in events:
-        state.event_count += 1
-        if not state.run_id:
-            state.run_id = evt.run_id
-        if evt.event == "session_start":
-            state.started = True
-        elif evt.event == "session_end":
-            state.completed = True
-            if isinstance(evt.data, dict):
-                state.status = evt.data.get("status")
-        elif evt.event == "tool_call":
-            state.tool_calls += 1
-        elif evt.event == "tool_result":
-            state.tool_results += 1
-        elif evt.event == "agent_output":
-            if isinstance(evt.data, dict):
-                state.status = evt.data.get("status")
-                state.output = evt.data.get("output")
-
-    return state
+    return replay_events(events)
 
 
 def summarize_trace(
@@ -129,16 +156,5 @@ def summarize_trace(
     *,
     source: ReplaySource | None = None,
 ) -> dict:
-    replay = replay_trace(trace_path, source=source)
-    return {
-        "run_id": replay.run_id,
-        "events": replay.event_count,
-        "tool_calls": replay.tool_calls,
-        "tool_results": replay.tool_results,
-        "started": replay.started,
-        "completed": replay.completed,
-        "incomplete": replay.incomplete,
-        "status": replay.status,
-        "successful": replay.successful,
-        "output": replay.output,
-    }
+    events = load_trace(trace_path, source=source)
+    return summarize_events(events)

@@ -621,27 +621,27 @@ Phase 3.8A adds explicit canary mode for authoritative-ledger operation without 
 
 Flags:
 
-- `RUNTIME_LEDGER_CANARY=1`
-- `RUNTIME_LEDGER_CANARY_PARITY_REQUIRED=1` (optional strict parity in canary)
+* `RUNTIME_LEDGER_CANARY=1`
+* `RUNTIME_LEDGER_CANARY_PARITY_REQUIRED=1` (optional strict parity in canary)
 
 Canary semantics:
 
-- opt-in only
-- replay/eval/registry default to ledger during canary
-- trace emission remains preserved
-- explicit `source="trace"` remains supported
-- rollback is immediate by unsetting canary/authoritative/parity flags
+* opt-in only
+* replay/eval/registry default to ledger during canary
+* trace emission remains preserved
+* explicit `source="trace"` remains supported
+* rollback is immediate by unsetting canary/authoritative/parity flags
 
 Canary readiness helper:
 
-- `evaluate_ledger_canary_readiness(...)`
+* `evaluate_ledger_canary_readiness(...)`
 
 CLI:
 
-- `python3 scripts/maintenance/ledger_canary.py --latest`
-- `python3 scripts/maintenance/ledger_canary.py --summary --recent 50`
-- `python3 scripts/maintenance/ledger_canary.py --print-env`
-- `python3 scripts/maintenance/ledger_canary.py --latest --strict`
+* `python3 scripts/maintenance/ledger_canary.py --latest`
+* `python3 scripts/maintenance/ledger_canary.py --summary --recent 50`
+* `python3 scripts/maintenance/ledger_canary.py --print-env`
+* `python3 scripts/maintenance/ledger_canary.py --latest --strict`
 
 This phase is operational guardrail work only and does not perform default cutover.
 
@@ -653,19 +653,32 @@ Phase 3.8B centralizes runtime event source resolution and event loading into `r
 
 Canonical APIs:
 
-- `resolve_runtime_event_source(source=None, default="trace")`
-- `runtime_event_source(default="trace")`
-- `iter_runtime_events(run_or_path, source=None, strict=False)`
-- `load_runtime_events(run_or_path, source=None, strict=False)`
+* `resolve_runtime_event_source(source=None, default="trace")`
+* `runtime_event_source(default="trace")`
+* `iter_runtime_events(run_or_path, source=None, strict=False)`
+* `load_runtime_events(run_or_path, source=None, strict=False)`
 
 Semantics remain unchanged:
 
-- default remains trace-first unless authoritative/canary flags are enabled
-- explicit `source="trace"` still overrides canary/authoritative defaults
-- missing `ledger.jsonl` in ledger mode still fails deterministically
-- trace emission and compatibility remain preserved
+* default remains trace-first unless authoritative/canary flags are enabled
+* explicit `source="trace"` still overrides canary/authoritative defaults
+* missing `ledger.jsonl` in ledger mode still fails deterministically
+* trace emission and compatibility remain preserved
 
 This is an internal deduplication step only and does not change contracts or NDJSON formats.
+
+---
+
+## Phase 3.8C Projection Purity Refactor
+
+Phase 3.8C keeps runtime behavior unchanged while clarifying boundaries:
+
+* `runtime/event_loader.py` remains the canonical source resolver/loader
+* replay/eval/registry now expose pure event-projection helpers over in-memory event sequences
+* public run-based APIs remain backward-compatible and source-aware
+* no default cutover, no trace removal, no schema changes
+
+Projection helpers are file-I/O free and consume already-loaded canonical events.
 
 ---
 

@@ -4,12 +4,12 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Iterable, Literal
 
-from runtime.evals import evaluate_run
+from runtime.evals import evaluate_events
 from runtime.event_loader import load_runtime_events, resolve_runtime_event_source, runtime_event_source
-from runtime.loader import get_run_path, list_runs as list_run_ids, load_run
-from runtime.schemas import RunQueryResult, RunSummary
+from runtime.loader import get_run_path, list_runs as list_run_ids, load_result, load_run
+from runtime.schemas import EvalSummary, RunQueryResult, RunSummary, TraceEvent
 
 RegistrySource = Literal["trace", "ledger"]
 
@@ -38,6 +38,38 @@ def load_registry_events(run_or_path: str | Path, *, source: RegistrySource = "t
         raise RuntimeError(f"Registry source ledger missing file: {event_path}")
 
     return load_runtime_events(event_path, source=source, strict=True)
+
+
+def registry_summary_from_evals(evals: Iterable[EvalSummary]) -> RunSummary:
+    collected = list(evals)
+    total_runs = len(collected)
+    completed_runs = sum(1 for item in collected if item.completed)
+    successful_runs = sum(1 for item in collected if item.status == "done")
+    runtimes = [item.runtime_seconds for item in collected if item.runtime_seconds is not None]
+
+    average_runtime = (sum(runtimes) / len(runtimes)) if runtimes else None
+    success_rate = (successful_runs / total_runs) if total_runs else 0.0
+
+    return RunSummary(
+        total_runs=total_runs,
+        completed_runs=completed_runs,
+        success_rate=success_rate,
+        average_runtime=average_runtime,
+        total_tool_calls=sum(item.tool_calls for item in collected),
+        replay_valid_runs=sum(1 for item in collected if item.replay_valid),
+        schema_valid_runs=sum(1 for item in collected if item.schema_valid),
+    )
+
+
+def registry_summary_from_events(
+    events: Iterable[TraceEvent],
+    *,
+    run_id: str | None = None,
+    run: dict[str, Any] | None = None,
+    result: dict[str, Any] | None = None,
+) -> RunSummary:
+    eval_summary = evaluate_events(events, run_id=run_id, run=run, result=result)
+    return registry_summary_from_evals([eval_summary])
 
 
 def list_runs() -> list[str]:
@@ -135,32 +167,24 @@ def summarize_runs(
         limit=limit,
     )
 
-    evals = []
+    evals: list[EvalSummary] = []
     for run in query.runs:
         run_id = run.get("id")
         if not isinstance(run_id, str):
             continue
         try:
-            if selected_source == "ledger":
-                load_registry_events(get_run_path(run_id), source="ledger")
-            evals.append(evaluate_run(run_id, source=selected_source))
+            run_path = get_run_path(run_id)
+            result_payload = load_result(run_id)
+            events = load_registry_events(run_path, source=selected_source)
+            evals.append(
+                evaluate_events(
+                    events,
+                    run_id=run_id,
+                    run=run,
+                    result=result_payload,
+                )
+            )
         except (FileNotFoundError, RuntimeError, json.JSONDecodeError, TypeError, ValueError):
             continue
 
-    total_runs = len(evals)
-    completed_runs = sum(1 for item in evals if item.completed)
-    successful_runs = sum(1 for item in evals if item.status == "done")
-    runtimes = [item.runtime_seconds for item in evals if item.runtime_seconds is not None]
-
-    average_runtime = (sum(runtimes) / len(runtimes)) if runtimes else None
-    success_rate = (successful_runs / total_runs) if total_runs else 0.0
-
-    return RunSummary(
-        total_runs=total_runs,
-        completed_runs=completed_runs,
-        success_rate=success_rate,
-        average_runtime=average_runtime,
-        total_tool_calls=sum(item.tool_calls for item in evals),
-        replay_valid_runs=sum(1 for item in evals if item.replay_valid),
-        schema_valid_runs=sum(1 for item in evals if item.schema_valid),
-    )
+    return registry_summary_from_evals(evals)

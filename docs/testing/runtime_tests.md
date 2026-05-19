@@ -774,12 +774,29 @@ Validates:
 * explicit source override behavior
 * trace and ledger loading/iteration parity
 * deterministic missing-ledger failure semantics
-*replay/eval/registry helper consistency against the shared loader
+* replay/eval/registry helper consistency against the shared loader
 
 Run:
 
 * `./scripts/tests/runtime_event_loader_tests.sh`
 * `make runtime-event-loader-tests`
+
+---
+
+## runtime_projection_purity_tests.sh
+
+Validates:
+
+* replay/eval/registry projection helpers over in-memory events
+* projection helpers remain file-I/O free
+* projection outputs match run-based public APIs on fixture runs
+* public APIs continue loading via canonical event loader
+* source behavior remains unchanged under trace/ledger/canary/authoritative paths
+
+Run:
+
+* `./scripts/tests/runtime_projection_purity_tests.sh`
+* `make runtime-projection-purity-tests`
 
 ---
 
@@ -821,6 +838,7 @@ Run all runtime suites individually:
 ./scripts/tests/runtime_ledger_default_dry_run_tests.sh
 ./scripts/tests/runtime_ledger_canary_tests.sh
 ./scripts/tests/runtime_event_loader_tests.sh
+./scripts/tests/runtime_projection_purity_tests.sh
 ```
 
 Run the full runtime ladder:
@@ -872,6 +890,7 @@ make validate
 | ledger-default dry-run readiness | runtime_ledger_default_dry_run_tests.sh |
 | ledger authoritative canary      | runtime_ledger_canary_tests.sh          |
 | canonical runtime event loader   | runtime_event_loader_tests.sh           |
+| runtime projection purity        |runtime_projection_purity_tests.sh       |
 ---
 
 # CI Expectations

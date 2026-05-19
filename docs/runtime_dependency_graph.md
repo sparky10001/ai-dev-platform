@@ -436,10 +436,10 @@ unless authoritative mode is explicitly enabled separately.
 
 Canary helpers are layered as operational wrappers around existing replay/eval/registry source-selection behavior.
 
-- canary flag enables ledger-default behavior in derived readers
-- explicit trace source overrides continue to bypass canary defaults
-- trace/ledger artifact emission boundaries remain unchanged
-- canary readiness is observational aggregation (health/drift/corruption/compatibility)
+* canary flag enables ledger-default behavior in derived readers
+* explicit trace source overrides continue to bypass canary defaults
+* trace/ledger artifact emission boundaries remain unchanged
+* canary readiness is observational aggregation (health/drift/corruption/compatibility)
 
 ---
 
@@ -449,12 +449,23 @@ Canary helpers are layered as operational wrappers around existing replay/eval/r
 
 Layering intent:
 
-- `event_loader` depends on trace and ledger read paths
-- replay/eval/registry depend on `event_loader` for source resolution and dispatch
-- source default behavior remains trace-first unless authoritative/canary flags are enabled
-- explicit trace overrides remain supported
+* `event_loader` depends on trace and ledger read paths
+* replay/eval/registry depend on `event_loader` for source resolution and dispatch
+* source default behavior remains trace-first unless authoritative/canary flags are enabled
+* explicit trace overrides remain supported
 
 This layer reduces duplicated source-selection logic and preserves compatibility behavior.
+
+---
+
+## Phase 3.8C Projection Purity Layering
+
+Runtime layering is now explicit:
+
+* `event_loader` owns source selection and event loading
+* `replay`, `evals`, and `registry` own deterministic projection logic over loaded events
+* projection helpers operate on in-memory event sequences
+* public APIs preserve existing behavior and compatibility semantics
 
 ---
 
