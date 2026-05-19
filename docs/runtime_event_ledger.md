@@ -322,3 +322,27 @@ Operational notes:
 - observability is read-only and does not mutate artifacts
 - no auto-repair behavior is introduced
 - default trace compatibility and default-authority behavior remain unchanged
+
+## Phase 3.7G Trace Compatibility Audit
+
+Phase 3.7G adds deterministic inventory and classification for remaining `trace.jsonl` dependencies.
+
+Categories:
+
+- `compatibility_only`
+- `cutover_blocker`
+- `legacy_runtime_dependency`
+- `test_only`
+- `documentation_only`
+- `operational_tooling`
+
+CLI:
+
+- `python3 scripts/maintenance/trace_compatibility_audit.py`
+- `python3 scripts/maintenance/trace_compatibility_audit.py --summary`
+- `python3 scripts/maintenance/trace_compatibility_audit.py --json`
+- `python3 scripts/maintenance/trace_compatibility_audit.py --strict`
+
+Strict mode exits nonzero only when `cutover_blocker` dependencies are present.
+
+This audit is observational-only and does not modify runtime behavior, schemas, or artifacts.

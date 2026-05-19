@@ -18,7 +18,7 @@
         profile-fast profile-agent profile-offline profile-local profile \
         litellm-fast litellm-code litellm-claude \
         health status validate \
-        runtime-tests runtime-test-core runtime-test-phase3 runtime-test-all runtime-snapshot-tests runtime-adapter-gateway-tests runtime-run-lifecycle-tests runtime-trace-pipeline-tests runtime-replay-ledger-tests runtime-eval-ledger-tests runtime-registry-ledger-tests runtime-ledger-authoritative-tests runtime-ledger-readiness-tests runtime-ledger-drift-tests runtime-derived-purity-tests runtime-boundary-audit-tests runtime-ledger-corruption-tests runtime-ledger-health-tests runtime-scenario-runner-tests mock-adapter-tool-tests log-maintenance-tests log-maintenance log-maintenance-dry-run ledger-drift-audit derived-purity-audit runtime-boundary-audit ledger-corruption-audit ledger-health-report \
+        runtime-tests runtime-test-core runtime-test-phase3 runtime-test-all runtime-snapshot-tests runtime-adapter-gateway-tests runtime-run-lifecycle-tests runtime-trace-pipeline-tests runtime-replay-ledger-tests runtime-eval-ledger-tests runtime-registry-ledger-tests runtime-ledger-authoritative-tests runtime-ledger-readiness-tests runtime-ledger-drift-tests runtime-derived-purity-tests runtime-boundary-audit-tests runtime-ledger-corruption-tests runtime-ledger-health-tests runtime-trace-compatibility-tests runtime-scenario-runner-tests mock-adapter-tool-tests log-maintenance-tests log-maintenance log-maintenance-dry-run ledger-drift-audit derived-purity-audit runtime-boundary-audit ledger-corruption-audit ledger-health-report trace-compatibility-audit \
         control-plane-dag-tests control-plane-tool-tests control-plane-executor-tests control-plane-trace-tests control-plane-planner-tests control-plane-orchestrator-tests control-plane-cli-tests control-plane-policy-tests control-plane-scenario-tests control-plane-replay-tests control-plane-eval-tests control-plane-experiment-tests control-plane-benchmark-tests control-plane-strategy-tests control-plane-heuristic-tests control-plane-memory-tests control-plane-tests \
         ai-run ai-fix ai-explain ai-refactor ai-query \
         ctx-agent-sim ctx-arb ctx-ai-stack \
@@ -266,6 +266,8 @@ runtime-ledger-corruption-tests:
 	@AI_ADAPTER=agent ./scripts/tests/runtime_ledger_corruption_tests.sh
 runtime-ledger-health-tests:
 	@AI_ADAPTER=agent ./scripts/tests/runtime_ledger_health_tests.sh
+runtime-trace-compatibility-tests:
+	@AI_ADAPTER=agent ./scripts/tests/runtime_trace_compatibility_tests.sh
 runtime-scenario-runner-tests:
 	@./scripts/tests/runtime_scenario_runner_tests.sh
 mock-adapter-tool-tests:
@@ -286,6 +288,8 @@ ledger-corruption-audit:
 	@python3 scripts/maintenance/ledger_corruption_audit.py --latest
 ledger-health-report:
 	@python3 scripts/maintenance/ledger_health_report.py --summary
+trace-compatibility-audit:
+	@python3 scripts/maintenance/trace_compatibility_audit.py --summary
 
 
 runtime-test-phase3:
@@ -310,6 +314,7 @@ runtime-test-phase3:
 	@$(MAKE) runtime-boundary-audit-tests --no-print-directory
 	@$(MAKE) runtime-ledger-corruption-tests --no-print-directory
 	@$(MAKE) runtime-ledger-health-tests --no-print-directory
+	@$(MAKE) runtime-trace-compatibility-tests --no-print-directory
 	@$(MAKE) runtime-adapter-gateway-tests --no-print-directory
 	@$(MAKE) runtime-run-lifecycle-tests --no-print-directory
 

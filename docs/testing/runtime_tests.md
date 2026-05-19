@@ -1146,3 +1146,36 @@ Verification Requirements additions:
 - `python3 scripts/maintenance/ledger_health_report.py --summary`
 - `python3 scripts/maintenance/ledger_health_report.py --latest --json`
 - `python3 scripts/maintenance/ledger_health_report.py --latest --strict`
+
+## runtime_trace_compatibility_tests.sh
+
+Validates:
+
+- deterministic trace dependency inventory
+- compatibility/blocker/legacy/test/docs/tooling classification
+- cutover blocker readiness validator semantics
+- trace compatibility audit CLI strict/json behavior
+
+Expected result:
+
+unit test pass / 0 failed
+
+This suite validates Phase 3.7G trace compatibility audit guardrails.
+
+## Phase 3.7G Additions
+
+Running Tests list additions:
+
+- `./scripts/tests/runtime_trace_compatibility_tests.sh`
+
+Make targets:
+
+- `make runtime-trace-compatibility-tests`
+- `make trace-compatibility-audit`
+
+Verification Requirements additions:
+
+- `python3 scripts/maintenance/trace_compatibility_audit.py`
+- `python3 scripts/maintenance/trace_compatibility_audit.py --summary`
+- `python3 scripts/maintenance/trace_compatibility_audit.py --json`
+- `python3 scripts/maintenance/trace_compatibility_audit.py --strict`

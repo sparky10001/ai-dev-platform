@@ -46,3 +46,22 @@ Audit command:
 - `python3 scripts/maintenance/runtime_boundary_audit.py --strict`
 
 Strict mode is enforcement-only for CI/staging and performs no runtime mutation or behavior cutover.
+
+## Phase 3.7G Trace Compatibility Categories
+
+Trace dependency inventory is now tracked with deterministic classifications:
+
+- `compatibility_only`: temporary compatibility references for dual-source runtime operation
+- `cutover_blocker`: trace assumptions that block default-ledger cutover
+- `legacy_runtime_dependency`: legacy runtime modules with direct trace coupling
+- `test_only`: trace usage limited to test coverage
+- `documentation_only`: docs/examples mentioning trace compatibility
+- `operational_tooling`: maintenance/audit scripts using trace intentionally
+
+Audit command:
+
+- `python3 scripts/maintenance/trace_compatibility_audit.py --summary`
+
+Strict command (cutover-blocker gate only):
+
+- `python3 scripts/maintenance/trace_compatibility_audit.py --strict`
