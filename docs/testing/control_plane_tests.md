@@ -426,6 +426,32 @@ Validates:
 
 ---
 
+# Runtime Event Bridge
+
+Control-plane replay/introspection now consumes canonical runtime events via `control-plane/core/runtime_events.py`.
+
+Bridge APIs:
+
+* `control_plane_runtime_event_source(source=None, default="trace")`
+* `load_control_plane_runtime_events(run_or_path, source=None, strict=False)`
+* `iter_control_plane_runtime_events(run_or_path, source=None, strict=False)`
+
+Behavior guarantees:
+
+* trace-first default remains unchanged
+* explicit `source="trace"` remains supported
+* ledger/canary/authoritative source selection is supported through `runtime.event_loader`
+* control-plane CLI outputs and schema behavior remain unchanged
+* control-plane remains forbidden from importing `runtime.engine`
+
+Validation suite:
+
+```bash
+./scripts/tests/control_plane_runtime_event_bridge_tests.sh
+```
+
+---
+
 # Operational Expectations
 
 Control-plane systems must:

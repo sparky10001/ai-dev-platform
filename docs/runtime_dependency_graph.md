@@ -469,6 +469,24 @@ Runtime layering is now explicit:
 
 ---
 
+# Phase 3.8D Control-Plane Runtime Event Decoupling
+
+Control-plane replay/introspection now reads runtime events through a compatibility bridge:
+
+* `control-plane/core/runtime_events.py`
+* delegates source resolution and loading to `runtime.event_loader`
+
+This preserves:
+
+* trace-first default behavior
+* explicit trace override behavior
+* ledger/canary/authoritative compatibility modes
+* control-plane prohibition on importing `runtime.engine`
+
+The decoupling is behavior-preserving and does not change runtime schemas or CLI output shapes.
+
+---
+
 # Future Cutover Model
 
 The runtime currently operates in compatibility mode.

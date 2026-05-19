@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 from core.replay.models import ReplayDag
 from core.replay.models import ReplayDagSummary
 from core.replay.models import ReplayNodeResult
+from core.runtime_events import load_control_plane_runtime_events
 
 
 def _to_float(value):
@@ -21,21 +21,7 @@ def _to_float(value):
 def load_orchestration_trace(run_path: str | Path) -> ReplayDag:
 
     run_dir = Path(run_path)
-    trace_path = run_dir / 'trace.jsonl'
-
-    events: list[dict] = []
-
-    with open(trace_path, 'r', encoding='utf-8') as f:
-        for raw in f:
-            line = raw.strip()
-            if not line:
-                continue
-            try:
-                payload = json.loads(line)
-                if isinstance(payload, dict):
-                    events.append(payload)
-            except Exception:
-                continue
+    events: list[dict] = load_control_plane_runtime_events(run_dir, strict=False)
 
     run_id = run_dir.name
     for evt in events:

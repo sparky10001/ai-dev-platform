@@ -19,7 +19,7 @@
         litellm-fast litellm-code litellm-claude \
         health status validate \
         runtime-tests runtime-test-core runtime-test-phase3 runtime-test-all runtime-snapshot-tests runtime-adapter-gateway-tests runtime-run-lifecycle-tests runtime-trace-pipeline-tests runtime-replay-ledger-tests runtime-eval-ledger-tests runtime-registry-ledger-tests runtime-ledger-authoritative-tests runtime-ledger-readiness-tests runtime-ledger-drift-tests runtime-derived-purity-tests runtime-boundary-audit-tests runtime-ledger-corruption-tests runtime-ledger-health-tests runtime-trace-compatibility-tests runtime-ledger-default-dry-run-tests runtime-ledger-canary-tests runtime-event-loader-tests runtime-projection-purity-tests runtime-scenario-runner-tests mock-adapter-tool-tests log-maintenance-tests log-maintenance log-maintenance-dry-run ledger-drift-audit derived-purity-audit runtime-boundary-audit ledger-corruption-audit ledger-health-report trace-compatibility-audit ledger-default-dry-run ledger-canary ledger-canary-summary ledger-canary-env \
-        control-plane-dag-tests control-plane-tool-tests control-plane-executor-tests control-plane-trace-tests control-plane-planner-tests control-plane-orchestrator-tests control-plane-cli-tests control-plane-policy-tests control-plane-scenario-tests control-plane-replay-tests control-plane-eval-tests control-plane-experiment-tests control-plane-benchmark-tests control-plane-strategy-tests control-plane-heuristic-tests control-plane-memory-tests control-plane-tests \
+        control-plane-dag-tests control-plane-tool-tests control-plane-executor-tests control-plane-trace-tests control-plane-runtime-event-bridge-tests control-plane-planner-tests control-plane-orchestrator-tests control-plane-cli-tests control-plane-policy-tests control-plane-scenario-tests control-plane-replay-tests control-plane-eval-tests control-plane-experiment-tests control-plane-benchmark-tests control-plane-strategy-tests control-plane-heuristic-tests control-plane-memory-tests control-plane-tests \
         ai-run ai-fix ai-explain ai-refactor ai-query \
         ctx-agent-sim ctx-arb ctx-ai-stack \
         help _set-env
@@ -358,6 +358,9 @@ control-plane-executor-tests:
 control-plane-trace-tests:
 	@./scripts/tests/control_plane_trace_bridge_tests.sh
 
+control-plane-runtime-event-bridge-tests:
+	@./scripts/tests/control_plane_runtime_event_bridge_tests.sh
+
 control-plane-planner-tests:
 	@./scripts/tests/control_plane_planner_tests.sh
 
@@ -408,6 +411,7 @@ control-plane-tests:
 	@$(MAKE) control-plane-tool-tests --no-print-directory
 	@$(MAKE) control-plane-executor-tests --no-print-directory
 	@$(MAKE) control-plane-trace-tests --no-print-directory
+	@$(MAKE) control-plane-runtime-event-bridge-tests --no-print-directory
 	@$(MAKE) control-plane-planner-tests --no-print-directory
 	@$(MAKE) control-plane-orchestrator-tests --no-print-directory
 	@$(MAKE) control-plane-cli-tests --no-print-directory

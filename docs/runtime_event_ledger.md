@@ -682,6 +682,26 @@ Projection helpers are file-I/O free and consume already-loaded canonical events
 
 ---
 
+# Phase 3.8D Control-Plane Runtime Event Bridge
+
+Control-plane consumers now load canonical runtime events through a bridge layer that delegates to `runtime.event_loader`.
+
+Bridge APIs:
+
+* `control_plane_runtime_event_source(...)`
+* `load_control_plane_runtime_events(...)`
+* `iter_control_plane_runtime_events(...)`
+
+Compatibility guarantees remain unchanged:
+
+* default source remains trace
+* canary/authoritative behavior remains opt-in
+* explicit trace source override remains supported
+* trace artifacts continue to be emitted for compatibility
+* no NDJSON/EventLedger schema changes were introduced
+
+---
+
 # Future Cutover Direction
 
 Future cutover phases may:

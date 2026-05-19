@@ -7,6 +7,7 @@ from pathlib import Path
 from core.orchestrator.models import OrchestrationResult
 from core.scenarios.models import ControlPlaneScenario
 from core.scenarios.models import ControlPlaneScenarioResult
+from core.runtime_events import load_control_plane_runtime_events
 
 
 def _json_text(obj: dict) -> str:
@@ -69,11 +70,14 @@ def evaluate_scenario(
     if expect.requires_run_artifact:
         run_id = payload.get('run_id')
         run_path = payload.get('run_path')
-        trace_exists = False
+        runtime_events_available = False
         if isinstance(run_path, str) and run_path:
-            trace_exists = (Path(run_path) / 'trace.jsonl').exists()
-        ok = bool(run_id) and bool(run_path) and trace_exists
-        add_check('requires_run_artifact', ok, {'run_id': run_id, 'run_path': run_path, 'trace_exists': trace_exists})
+            try:
+                runtime_events_available = len(load_control_plane_runtime_events(Path(run_path), strict=False)) > 0
+            except Exception:
+                runtime_events_available = False
+        ok = bool(run_id) and bool(run_path) and runtime_events_available
+        add_check('requires_run_artifact', ok, {'run_id': run_id, 'run_path': run_path, 'runtime_events_available': runtime_events_available})
 
     if expect.output_contains:
         full_text = _json_text(payload)
