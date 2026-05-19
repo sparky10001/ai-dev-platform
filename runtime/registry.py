@@ -7,14 +7,8 @@ from pathlib import Path
 from typing import Any, Literal
 
 from runtime.evals import evaluate_run
-from runtime.event_ledger import (
-    enforce_trace_ledger_parity_if_required,
-    ledger_authoritative_enabled,
-    ledger_canary_enabled,
-    load_ledger,
-)
+from runtime.event_loader import load_runtime_events, resolve_runtime_event_source, runtime_event_source
 from runtime.loader import get_run_path, list_runs as list_run_ids, load_run
-from runtime.replay import load_replay_events
 from runtime.schemas import RunQueryResult, RunSummary
 
 RegistrySource = Literal["trace", "ledger"]
@@ -23,12 +17,8 @@ RegistrySource = Literal["trace", "ledger"]
 def registry_source(default: RegistrySource = "trace") -> RegistrySource:
     raw = os.getenv("RUNTIME_REGISTRY_SOURCE")
     if raw:
-        normalized = raw.strip().lower()
-        if normalized in ("trace", "ledger"):
-            return normalized  # type: ignore[return-value]
-    if ledger_authoritative_enabled() or ledger_canary_enabled():
-        return "ledger"
-    return default
+        return resolve_runtime_event_source(raw, default=default)  # type: ignore[return-value]
+    return runtime_event_source(default=default)  # type: ignore[return-value]
 
 
 def _registry_path_for_source(run_path: Path, source: RegistrySource) -> Path:
@@ -44,13 +34,10 @@ def load_registry_events(run_or_path: str | Path, *, source: RegistrySource = "t
     else:
         event_path = path
 
-    if source == "ledger":
-        if not event_path.exists():
-            raise RuntimeError(f"Registry source ledger missing file: {event_path}")
-        enforce_trace_ledger_parity_if_required(run_or_path)
-        return load_ledger(event_path, strict=True)
+    if source == "ledger" and not event_path.exists():
+        raise RuntimeError(f"Registry source ledger missing file: {event_path}")
 
-    return load_replay_events(event_path, strict=True, source="trace")
+    return load_runtime_events(event_path, source=source, strict=True)
 
 
 def list_runs() -> list[str]:

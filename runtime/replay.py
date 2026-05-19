@@ -10,13 +10,7 @@ from typing import Any, Literal
 import os
 import re
 
-from runtime.event_ledger import (
-    enforce_trace_ledger_parity_if_required,
-    ledger_authoritative_enabled,
-    ledger_canary_enabled,
-    load_ledger,
-)
-from runtime.trace_pipeline import load_trace as load_trace_events
+from runtime.event_loader import load_runtime_events, resolve_runtime_event_source, runtime_event_source
 from runtime.schemas import TraceEvent
 
 ReplaySource = Literal["trace", "ledger"]
@@ -47,12 +41,8 @@ class ReplayState:
 def replay_source(default: ReplaySource = "trace") -> ReplaySource:
     raw = os.getenv("RUNTIME_REPLAY_SOURCE")
     if raw:
-        normalized = raw.strip().lower()
-        if normalized in ("trace", "ledger"):
-            return normalized  # type: ignore[return-value]
-    if ledger_authoritative_enabled() or ledger_canary_enabled():
-        return "ledger"
-    return default
+        return resolve_runtime_event_source(raw, default=default)  # type: ignore[return-value]
+    return runtime_event_source(default=default)  # type: ignore[return-value]
 
 
 def _source_path_for_replay(path_or_run: str | Path, source: ReplaySource) -> Path:
@@ -74,22 +64,21 @@ def load_replay_events(
 ) -> list[TraceEvent]:
     resolved_path = _source_path_for_replay(path_or_run, source)
 
-    if source == "ledger":
-        if not resolved_path.exists():
-            raise RuntimeError(f"Replay source ledger missing file: {resolved_path}")
-        enforce_trace_ledger_parity_if_required(path_or_run)
-        return load_ledger(resolved_path, strict=strict)
+    if source == "ledger" and not resolved_path.exists():
+        raise RuntimeError(f"Replay source ledger missing file: {resolved_path}")
 
     try:
-        return load_trace_events(resolved_path, strict=strict)
+        return load_runtime_events(resolved_path, source=source, strict=strict)
     except Exception as e:
-        if strict:
+        if strict and source == "trace":
             msg = str(e)
             line_no = "1"
             matches = re.findall(r":(\d+):", msg)
             if matches:
                 line_no = matches[0]
             raise RuntimeError(f"Replay failed at line {line_no}: {e}") from e
+        if strict:
+            raise
         return []
 
 

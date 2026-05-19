@@ -647,6 +647,28 @@ This phase is operational guardrail work only and does not perform default cutov
 
 ---
 
+## Phase 3.8B Canonical Runtime Event Loader
+
+Phase 3.8B centralizes runtime event source resolution and event loading into `runtime/event_loader.py`.
+
+Canonical APIs:
+
+- `resolve_runtime_event_source(source=None, default="trace")`
+- `runtime_event_source(default="trace")`
+- `iter_runtime_events(run_or_path, source=None, strict=False)`
+- `load_runtime_events(run_or_path, source=None, strict=False)`
+
+Semantics remain unchanged:
+
+- default remains trace-first unless authoritative/canary flags are enabled
+- explicit `source="trace"` still overrides canary/authoritative defaults
+- missing `ledger.jsonl` in ledger mode still fails deterministically
+- trace emission and compatibility remain preserved
+
+This is an internal deduplication step only and does not change contracts or NDJSON formats.
+
+---
+
 # Future Cutover Direction
 
 Future cutover phases may:

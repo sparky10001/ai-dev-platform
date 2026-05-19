@@ -5,14 +5,9 @@ from pathlib import Path
 from typing import Any, Literal
 import os
 
-from runtime.event_ledger import (
-    enforce_trace_ledger_parity_if_required,
-    ledger_authoritative_enabled,
-    ledger_canary_enabled,
-    load_ledger,
-)
+from runtime.event_loader import load_runtime_events, resolve_runtime_event_source, runtime_event_source
 from runtime.loader import get_run_path, load_result, load_run
-from runtime.replay import load_replay_events, replay_trace
+from runtime.replay import replay_trace
 from runtime.schemas import EvalComparison, EvalSummary
 
 EvalSource = Literal["trace", "ledger"]
@@ -21,12 +16,8 @@ EvalSource = Literal["trace", "ledger"]
 def eval_source(default: EvalSource = "trace") -> EvalSource:
     raw = os.getenv("RUNTIME_EVAL_SOURCE")
     if raw:
-        normalized = raw.strip().lower()
-        if normalized in ("trace", "ledger"):
-            return normalized  # type: ignore[return-value]
-    if ledger_authoritative_enabled() or ledger_canary_enabled():
-        return "ledger"
-    return default
+        return resolve_runtime_event_source(raw, default=default)  # type: ignore[return-value]
+    return runtime_event_source(default=default)  # type: ignore[return-value]
 
 
 def _eval_path_for_source(run_path: Path, source: EvalSource) -> Path:
@@ -42,13 +33,10 @@ def load_eval_events(run_or_path: str | Path, *, source: EvalSource = "trace") -
     else:
         event_path = path
 
-    if source == "ledger":
-        if not event_path.exists():
-            raise RuntimeError(f"Eval source ledger missing file: {event_path}")
-        enforce_trace_ledger_parity_if_required(run_or_path)
-        return load_ledger(event_path, strict=True)
+    if source == "ledger" and not event_path.exists():
+        raise RuntimeError(f"Eval source ledger missing file: {event_path}")
 
-    return load_replay_events(event_path, strict=True, source="trace")
+    return load_runtime_events(event_path, source=source, strict=True)
 
 
 def _runtime_seconds(run: dict, trace) -> float | None:

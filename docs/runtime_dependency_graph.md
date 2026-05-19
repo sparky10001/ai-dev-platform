@@ -443,6 +443,21 @@ Canary helpers are layered as operational wrappers around existing replay/eval/r
 
 ---
 
+## Phase 3.8B Canonical Event Loader Layer
+
+`runtime/event_loader.py` is the canonical projection loader used by replay/eval/registry source-aware reads.
+
+Layering intent:
+
+- `event_loader` depends on trace and ledger read paths
+- replay/eval/registry depend on `event_loader` for source resolution and dispatch
+- source default behavior remains trace-first unless authoritative/canary flags are enabled
+- explicit trace overrides remain supported
+
+This layer reduces duplicated source-selection logic and preserves compatibility behavior.
+
+---
+
 # Future Cutover Model
 
 The runtime currently operates in compatibility mode.

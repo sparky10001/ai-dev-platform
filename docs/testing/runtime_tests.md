@@ -50,10 +50,10 @@ adapter gateway
   ↓
 run lifecycle
   ↓
-trace pipeline
-  ↓
+trace pipeline + event loader
+↓
 runtime engine
-  ↓
+↓
 replay
   ↓
 evals
@@ -744,11 +744,11 @@ This suite validates Phase 3.7I ledger-default dry-run observability without cha
 
 Validates:
 
-- explicit canary flag behavior
-- canary source-default switching (replay/eval/registry)
-- explicit trace source override safety
-- canary readiness status aggregation
-- canary CLI strict/json/print-env/recent behavior
+* explicit canary flag behavior
+* canary source-default switching (replay/eval/registry)
+* explicit trace source override safety
+* canary readiness status aggregation
+* canary CLI strict/json/print-env/recent behavior
 
 Expected result:
 
@@ -756,10 +756,30 @@ unit test pass / 0 failed
 
 Make targets:
 
-- `make runtime-ledger-canary-tests`
-- `make ledger-canary`
-- `make ledger-canary-summary`
-- `make ledger-canary-env`
+* `make runtime-ledger-canary-tests`
+* `make ledger-canary`
+* `make ledger-canary-summary`
+* `make ledger-canary-env`
+
+Canary mode remains explicit opt-in and does not change global runtime defaults.
+
+---
+
+## runtime_event_loader_tests.sh
+
+Validates:
+
+* canonical source resolution (`trace` / `ledger`)
+* authoritative/canary default switching behavior
+* explicit source override behavior
+* trace and ledger loading/iteration parity
+* deterministic missing-ledger failure semantics
+*replay/eval/registry helper consistency against the shared loader
+
+Run:
+
+* `./scripts/tests/runtime_event_loader_tests.sh`
+* `make runtime-event-loader-tests`
 
 ---
 
@@ -800,6 +820,7 @@ Run all runtime suites individually:
 ./scripts/tests/runtime_trace_compatibility_tests.sh
 ./scripts/tests/runtime_ledger_default_dry_run_tests.sh
 ./scripts/tests/runtime_ledger_canary_tests.sh
+./scripts/tests/runtime_event_loader_tests.sh
 ```
 
 Run the full runtime ladder:
@@ -850,7 +871,7 @@ make validate
 | trace compatibility auditing     | runtime_trace_compatibility_tests.sh    |
 | ledger-default dry-run readiness | runtime_ledger_default_dry_run_tests.sh |
 | ledger authoritative canary      | runtime_ledger_canary_tests.sh          |
-
+| canonical runtime event loader   | runtime_event_loader_tests.sh           |
 ---
 
 # CI Expectations
@@ -888,6 +909,7 @@ No schema-breaking changes should be merged without:
 * ledger health observability validation
 * trace compatibility validation
 * ledger-default dry-run validation
+* canonical runtime event loader validation
 
 ---
 
@@ -906,6 +928,7 @@ The runtime guarantees:
 * snapshot-stable runtime structure
 * deterministic lifecycle transition orchestration
 * validated trace pipeline behavior
+* canonical runtime event source resolution
 * additive event ledger dual-write parity
 * deterministic audit and observability reporting
 
