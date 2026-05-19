@@ -290,3 +290,35 @@ Operational guidance:
 - no automatic repair or mutation is performed
 - trace fallback remains available for compatibility and recovery
 - strict mode is intended for pre-cutover and CI enforcement
+
+## Phase 3.7E Operational Observability
+
+Phase 3.7E adds operator-facing ledger health reporting without changing runtime behavior.
+
+Health coverage includes:
+
+- parity visibility (`parity_ok`)
+- drift visibility (from `runtime/ledger_drift.py`)
+- corruption visibility (from `runtime/ledger_corruption.py`)
+- replay/eval/registry ledger-read health checks
+- maintenance stamp visibility (`AI_MAINTENANCE_*`)
+- cutover-readiness integration (`ledger_cutover_readiness`)
+
+Health status semantics:
+
+- `healthy`: parity/corruption/replay-eval-registry checks pass
+- `warning`: missing ledger/index, maintenance disabled/stale, cutover not ready, or drift with trace fallback intact
+- `unhealthy`: corruption, parity failure, strict validation failure, replay/eval/registry ledger failures, or required trace missing
+
+CLI usage:
+
+- `python3 scripts/maintenance/ledger_health_report.py --latest`
+- `python3 scripts/maintenance/ledger_health_report.py --summary`
+- `python3 scripts/maintenance/ledger_health_report.py --latest --json`
+- `python3 scripts/maintenance/ledger_health_report.py --latest --strict`
+
+Operational notes:
+
+- observability is read-only and does not mutate artifacts
+- no auto-repair behavior is introduced
+- default trace compatibility and default-authority behavior remain unchanged

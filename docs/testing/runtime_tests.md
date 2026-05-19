@@ -1108,3 +1108,41 @@ Pre-cutover workflow:
 - run `ledger-corruption-audit --latest --strict` on representative runs
 - investigate categories before enabling authority mode
 - do not auto-repair; preserve trace compatibility fallback
+
+## runtime_ledger_health_tests.sh
+
+Validates:
+
+- single-run ledger health classification
+- aggregate ledger health metrics
+- maintenance visibility + stale-stamp detection
+- cutover-readiness integration
+- health CLI strict/json/latest/summary behavior
+
+Expected result:
+
+unit test pass / 0 failed
+
+This suite validates Phase 3.7E operational observability for ledger health.
+
+## Phase 3.7E Additions
+
+Running Tests list additions:
+
+- `./scripts/tests/runtime_ledger_health_tests.sh`
+
+Make targets:
+
+- `make runtime-ledger-health-tests`
+- `make ledger-health-report`
+
+Coverage Matrix additions:
+
+- ledger health observability reporting → `runtime_ledger_health_tests.sh`
+
+Verification Requirements additions:
+
+- `python3 scripts/maintenance/ledger_health_report.py --latest`
+- `python3 scripts/maintenance/ledger_health_report.py --summary`
+- `python3 scripts/maintenance/ledger_health_report.py --latest --json`
+- `python3 scripts/maintenance/ledger_health_report.py --latest --strict`

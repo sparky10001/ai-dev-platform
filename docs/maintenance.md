@@ -53,3 +53,13 @@ Maintenance gate:
 - `AI_MAINTENANCE_INTERVAL_SEC`
 - `AI_MAINTENANCE_TIMEOUT_SEC`
 - `AI_MAINTENANCE_STAMP_PATH`
+
+## Ledger Health Observability
+
+Operational health reporting is available via:
+
+- `python3 scripts/maintenance/ledger_health_report.py --latest`
+- `python3 scripts/maintenance/ledger_health_report.py --summary`
+- `python3 scripts/maintenance/ledger_health_report.py --latest --strict`
+
+This reporting is read-only and does not mutate runtime artifacts.
