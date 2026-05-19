@@ -22,12 +22,32 @@ def ledger_default_dry_run_enabled() -> bool:
     return os.getenv("RUNTIME_LEDGER_DRY_RUN_DEFAULT") == "1"
 
 
+def ledger_canary_enabled() -> bool:
+    return os.getenv("RUNTIME_LEDGER_CANARY") == "1"
+
+
+def ledger_canary_parity_required() -> bool:
+    return os.getenv("RUNTIME_LEDGER_CANARY_PARITY_REQUIRED") == "1"
+
+
+def ledger_canary_environment() -> dict[str, str]:
+    parity = "1" if ledger_canary_parity_required() else "0"
+    return {
+        "RUNTIME_LEDGER_CANARY": "1",
+        "RUNTIME_LEDGER_AUTHORITATIVE": "1",
+        "RUNTIME_LEDGER_PARITY_REQUIRED": parity,
+        "RUNTIME_LEDGER_CANARY_PARITY_REQUIRED": parity,
+    }
+
+
 def ledger_parity_required() -> bool:
     return os.getenv("RUNTIME_LEDGER_PARITY_REQUIRED") == "1"
 
 
 def enforce_trace_ledger_parity_if_required(run_or_path: str | Path | dict[str, Any]) -> None:
-    if ledger_authoritative_enabled() and ledger_parity_required():
+    authoritative_effective = ledger_authoritative_enabled() or ledger_canary_enabled()
+    parity_effective = ledger_parity_required() or (ledger_canary_enabled() and ledger_canary_parity_required())
+    if authoritative_effective and parity_effective:
         validate_trace_ledger_parity(run_or_path, strict=True)
 
 
@@ -472,4 +492,109 @@ def evaluate_ledger_default_readiness(run_or_path: str | Path | dict[str, Any]) 
         "warnings": sorted(set(warnings)),
         "blocking_reasons": sorted(set(blocking_reasons)),
         "details": details,
+    }
+
+
+def evaluate_ledger_canary_readiness(run_or_path: str | Path | dict[str, Any]) -> dict[str, Any]:
+    run_dir = _resolve_run_dir(run_or_path)
+
+    from runtime.ledger_corruption import classify_ledger_corruption
+    from runtime.ledger_drift import compare_trace_and_ledger, drift_detected
+    from runtime.ledger_health import ledger_health_report
+    from runtime.trace_compatibility import audit_trace_compatibility
+
+    dry_run_report = evaluate_ledger_default_readiness(run_dir)
+    health_report = ledger_health_report(run_dir)
+    drift_report = compare_trace_and_ledger(run_dir, strict=False)
+    corruption_report = classify_ledger_corruption(run_dir)
+    trace_compat_report = audit_trace_compatibility()
+
+    canary_enabled = ledger_canary_enabled()
+    authoritative_effective = ledger_authoritative_enabled() or canary_enabled
+    parity_required = ledger_parity_required() or (canary_enabled and ledger_canary_parity_required())
+
+    categories: list[str] = []
+    warnings: list[str] = []
+    blocking_reasons: list[str] = []
+
+    if not canary_enabled:
+        categories.append("canary_disabled")
+        warnings.append("ledger canary mode is disabled")
+
+    if dry_run_report.get("drift_detected") or drift_detected(drift_report):
+        categories.append("drift_detected")
+        blocking_reasons.append("active ledger/trace drift detected")
+
+    if dry_run_report.get("corruption_detected") or corruption_report.get("corruption_categories"):
+        categories.append("corruption_detected")
+        blocking_reasons.append("active ledger corruption categories detected")
+
+    if not dry_run_report.get("parity_ok", False):
+        categories.append("parity_failure")
+        blocking_reasons.append("parity validation failed")
+
+    if not dry_run_report.get("replay_ledger_ready", False):
+        categories.append("replay_not_ready")
+        blocking_reasons.append("replay ledger readiness failed")
+    if not dry_run_report.get("eval_ledger_ready", False):
+        categories.append("eval_not_ready")
+        blocking_reasons.append("eval ledger readiness failed")
+    if not dry_run_report.get("registry_ledger_ready", False):
+        categories.append("registry_not_ready")
+        blocking_reasons.append("registry ledger readiness failed")
+
+    cutover_blockers = int(trace_compat_report.get("summary", {}).get("cutover_blocker_count", 0))
+    if cutover_blockers > 0:
+        categories.append("trace_blockers_present")
+        blocking_reasons.append(f"trace cutover blockers present: {cutover_blockers}")
+
+    if health_report.get("status") == "warning":
+        warnings.append("ledger health has warning status")
+    if health_report.get("status") in {"unhealthy", "error"}:
+        blocking_reasons.append("ledger health is unhealthy")
+
+    maintenance = health_report.get("maintenance", {})
+    if not maintenance.get("maintenance_enabled", False) or maintenance.get("stale", False):
+        categories.append("maintenance_warning")
+        warnings.append("maintenance is disabled or stale")
+
+    if dry_run_report.get("trace_compatibility_status") == "warning":
+        categories.append("compatibility_warning")
+        warnings.append("trace compatibility audit reports warnings")
+
+    status = "ready"
+    if blocking_reasons:
+        status = "blocked"
+    elif warnings:
+        status = "warning"
+
+    rollback = {
+        "unset": [
+            "RUNTIME_LEDGER_CANARY",
+            "RUNTIME_LEDGER_AUTHORITATIVE",
+            "RUNTIME_LEDGER_PARITY_REQUIRED",
+            "RUNTIME_LEDGER_CANARY_PARITY_REQUIRED",
+        ]
+    }
+
+    return {
+        "status": status,
+        "canary_enabled": canary_enabled,
+        "authoritative_effective": authoritative_effective,
+        "parity_required": parity_required,
+        "trace_emission_preserved": True,
+        "explicit_trace_override_supported": True,
+        "categories": sorted(set(categories)),
+        "warnings": sorted(set(warnings)),
+        "blocking_reasons": sorted(set(blocking_reasons)),
+        "rollback": rollback,
+        "details": {
+            "dry_run_readiness": dry_run_report,
+            "ledger_health_report": health_report,
+            "drift_report": drift_report,
+            "corruption_report": corruption_report,
+            "trace_compatibility_report": trace_compat_report,
+            "run_path": str(run_dir),
+            "cutover_blockers": cutover_blockers,
+        },
     }

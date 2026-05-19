@@ -10,6 +10,7 @@ from runtime.evals import evaluate_run
 from runtime.event_ledger import (
     enforce_trace_ledger_parity_if_required,
     ledger_authoritative_enabled,
+    ledger_canary_enabled,
     load_ledger,
 )
 from runtime.loader import get_run_path, list_runs as list_run_ids, load_run
@@ -25,7 +26,7 @@ def registry_source(default: RegistrySource = "trace") -> RegistrySource:
         normalized = raw.strip().lower()
         if normalized in ("trace", "ledger"):
             return normalized  # type: ignore[return-value]
-    if ledger_authoritative_enabled():
+    if ledger_authoritative_enabled() or ledger_canary_enabled():
         return "ledger"
     return default
 

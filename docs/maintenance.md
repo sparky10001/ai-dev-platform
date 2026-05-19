@@ -273,6 +273,70 @@ Dry-run mode is intentionally:
 
 ---
 
+# Ledger Canary Mode
+
+Controlled canary mode allows operators to validate ledger-authoritative behavior without performing a global runtime cutover.
+
+Canary mode is:
+
+- explicit opt-in
+- rollback-safe
+- compatibility-preserving
+- replay-safe
+- additive
+
+Canary mode does NOT:
+- remove trace emission
+- remove trace compatibility
+- mutate runtime artifacts
+- perform automatic authority cutover
+
+## Commands
+
+```bash
+make ledger-canary
+make ledger-canary-summary
+make ledger-canary-env
+````
+
+## Environment Flags
+
+* `RUNTIME_LEDGER_CANARY=1`
+* `RUNTIME_LEDGER_AUTHORITATIVE=1`
+* `RUNTIME_LEDGER_PARITY_REQUIRED=1`
+* `RUNTIME_LEDGER_CANARY_PARITY_REQUIRED=1`
+
+## Example
+
+```bash
+eval "$(python3 scripts/maintenance/ledger_canary.py --print-env)"
+
+AI_ADAPTER=mock ./ai run "hello"
+
+python3 scripts/maintenance/ledger_canary.py --latest --strict
+```
+
+## Rollback
+
+```bash
+unset RUNTIME_LEDGER_CANARY
+unset RUNTIME_LEDGER_AUTHORITATIVE
+unset RUNTIME_LEDGER_PARITY_REQUIRED
+unset RUNTIME_LEDGER_CANARY_PARITY_REQUIRED
+```
+
+## Guarantees
+
+Canary mode preserves:
+
+* trace emission
+* explicit trace override support
+* replay compatibility
+* NDJSON compatibility
+* EventLedger compatibility semantics
+
+---
+
 ## Recommended Operational Commands
 
 Current runtime health:

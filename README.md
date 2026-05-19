@@ -353,6 +353,14 @@ The migration remains:
 
 No authority switch occurs unless explicitly enabled.
 
+Controlled canary mode for ledger-authoritative validation is available via:
+
+- `make ledger-canary`
+- `make ledger-canary-summary`
+
+See:
+- `docs/maintenance.md`
+
 ---
 
 # 🧪 Runtime Validation

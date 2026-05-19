@@ -615,6 +615,38 @@ Dry-run mode follows the standard observational safety model.
 
 ---
 
+## Phase 3.8A Controlled Ledger-Authoritative Canary
+
+Phase 3.8A adds explicit canary mode for authoritative-ledger operation without changing global defaults.
+
+Flags:
+
+- `RUNTIME_LEDGER_CANARY=1`
+- `RUNTIME_LEDGER_CANARY_PARITY_REQUIRED=1` (optional strict parity in canary)
+
+Canary semantics:
+
+- opt-in only
+- replay/eval/registry default to ledger during canary
+- trace emission remains preserved
+- explicit `source="trace"` remains supported
+- rollback is immediate by unsetting canary/authoritative/parity flags
+
+Canary readiness helper:
+
+- `evaluate_ledger_canary_readiness(...)`
+
+CLI:
+
+- `python3 scripts/maintenance/ledger_canary.py --latest`
+- `python3 scripts/maintenance/ledger_canary.py --summary --recent 50`
+- `python3 scripts/maintenance/ledger_canary.py --print-env`
+- `python3 scripts/maintenance/ledger_canary.py --latest --strict`
+
+This phase is operational guardrail work only and does not perform default cutover.
+
+---
+
 # Future Cutover Direction
 
 Future cutover phases may:

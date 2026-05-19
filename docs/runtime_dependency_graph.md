@@ -432,6 +432,17 @@ unless authoritative mode is explicitly enabled separately.
 
 ---
 
+## Phase 3.8A Canary Layer
+
+Canary helpers are layered as operational wrappers around existing replay/eval/registry source-selection behavior.
+
+- canary flag enables ledger-default behavior in derived readers
+- explicit trace source overrides continue to bypass canary defaults
+- trace/ledger artifact emission boundaries remain unchanged
+- canary readiness is observational aggregation (health/drift/corruption/compatibility)
+
+---
+
 # Future Cutover Model
 
 The runtime currently operates in compatibility mode.

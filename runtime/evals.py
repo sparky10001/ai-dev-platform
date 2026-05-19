@@ -8,6 +8,7 @@ import os
 from runtime.event_ledger import (
     enforce_trace_ledger_parity_if_required,
     ledger_authoritative_enabled,
+    ledger_canary_enabled,
     load_ledger,
 )
 from runtime.loader import get_run_path, load_result, load_run
@@ -23,7 +24,7 @@ def eval_source(default: EvalSource = "trace") -> EvalSource:
         normalized = raw.strip().lower()
         if normalized in ("trace", "ledger"):
             return normalized  # type: ignore[return-value]
-    if ledger_authoritative_enabled():
+    if ledger_authoritative_enabled() or ledger_canary_enabled():
         return "ledger"
     return default
 

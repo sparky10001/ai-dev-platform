@@ -740,6 +740,29 @@ This suite validates Phase 3.7I ledger-default dry-run observability without cha
 
 ---
 
+## runtime_ledger_canary_tests.sh
+
+Validates:
+
+- explicit canary flag behavior
+- canary source-default switching (replay/eval/registry)
+- explicit trace source override safety
+- canary readiness status aggregation
+- canary CLI strict/json/print-env/recent behavior
+
+Expected result:
+
+unit test pass / 0 failed
+
+Make targets:
+
+- `make runtime-ledger-canary-tests`
+- `make ledger-canary`
+- `make ledger-canary-summary`
+- `make ledger-canary-env`
+
+---
+
 # Running Tests
 
 Run all runtime suites individually:
@@ -776,6 +799,7 @@ Run all runtime suites individually:
 ./scripts/tests/runtime_ledger_health_tests.sh
 ./scripts/tests/runtime_trace_compatibility_tests.sh
 ./scripts/tests/runtime_ledger_default_dry_run_tests.sh
+./scripts/tests/runtime_ledger_canary_tests.sh
 ```
 
 Run the full runtime ladder:
@@ -825,6 +849,7 @@ make validate
 | ledger health observability      | runtime_ledger_health_tests.sh          |
 | trace compatibility auditing     | runtime_trace_compatibility_tests.sh    |
 | ledger-default dry-run readiness | runtime_ledger_default_dry_run_tests.sh |
+| ledger authoritative canary      | runtime_ledger_canary_tests.sh          |
 
 ---
 

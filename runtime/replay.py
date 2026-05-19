@@ -13,6 +13,7 @@ import re
 from runtime.event_ledger import (
     enforce_trace_ledger_parity_if_required,
     ledger_authoritative_enabled,
+    ledger_canary_enabled,
     load_ledger,
 )
 from runtime.trace_pipeline import load_trace as load_trace_events
@@ -49,7 +50,7 @@ def replay_source(default: ReplaySource = "trace") -> ReplaySource:
         normalized = raw.strip().lower()
         if normalized in ("trace", "ledger"):
             return normalized  # type: ignore[return-value]
-    if ledger_authoritative_enabled():
+    if ledger_authoritative_enabled() or ledger_canary_enabled():
         return "ledger"
     return default
 
