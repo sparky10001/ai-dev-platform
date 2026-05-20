@@ -7,6 +7,7 @@ from typing import Any
 
 from runtime.boundary_audit import audit_runtime_boundaries, boundary_violations
 from runtime.derived_purity import audit_runtime_derived_purity, derived_purity_violations
+from runtime.authority_policy import runtime_authority_transition_state
 from runtime.event_ledger import evaluate_ledger_canary_readiness, evaluate_ledger_default_readiness, ledger_authoritative_enabled, ledger_canary_enabled
 from runtime.ledger_corruption import classify_ledger_corruption
 from runtime.ledger_drift import compare_trace_and_ledger, drift_detected
@@ -42,26 +43,18 @@ def _resolve_target(run_or_path: str | Path | None, runs_root: Path) -> Path:
 
 
 def _authority_transition() -> dict[str, Any]:
-    return {
-        'current_default': 'trace',
-        'ledger_authoritative_available': True,
-        'canary_available': True,
-        'default_cutover_performed': False,
-    }
+    return runtime_authority_transition_state()
 
 
 def _rollback_payload() -> dict[str, Any]:
-    commands = [
-        'unset RUNTIME_LEDGER_CANARY',
-        'unset RUNTIME_LEDGER_AUTHORITATIVE',
-        'unset RUNTIME_LEDGER_PARITY_REQUIRED',
-        'unset RUNTIME_LEDGER_CANARY_PARITY_REQUIRED',
-    ]
+    transition = runtime_authority_transition_state()
+    unset = list(transition.get('rollback_unset', []))
+    commands = [f'unset {name}' for name in unset]
     return {
-        'supported': True,
-        'method': 'env_unset',
+        'supported': bool(transition.get('rollback_supported', False)),
+        'method': transition.get('rollback_method', 'env_unset'),
         'commands': commands,
-        'unset': [cmd.split(' ', 1)[1] for cmd in commands],
+        'unset': unset,
     }
 
 

@@ -7,7 +7,8 @@ from pathlib import Path
 from typing import Any, Iterable, Literal
 
 from runtime.evals import evaluate_events
-from runtime.event_loader import load_runtime_events, resolve_runtime_event_source, runtime_event_source
+from runtime.authority_policy import effective_runtime_event_source
+from runtime.event_loader import load_runtime_events
 from runtime.loader import get_run_path, list_runs as list_run_ids, load_result, load_run
 from runtime.schemas import EvalSummary, RunQueryResult, RunSummary, TraceEvent
 
@@ -16,9 +17,7 @@ RegistrySource = Literal["trace", "ledger"]
 
 def registry_source(default: RegistrySource = "trace") -> RegistrySource:
     raw = os.getenv("RUNTIME_REGISTRY_SOURCE")
-    if raw:
-        return resolve_runtime_event_source(raw, default=default)  # type: ignore[return-value]
-    return runtime_event_source(default=default)  # type: ignore[return-value]
+    return effective_runtime_event_source(source=raw, default=default)  # type: ignore[return-value]
 
 
 def _registry_path_for_source(run_path: Path, source: RegistrySource) -> Path:

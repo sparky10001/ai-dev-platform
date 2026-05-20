@@ -1,17 +1,11 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
-import os
 from pathlib import Path
 from typing import Any, Iterator, Literal
 
-from runtime.event_ledger import (
-    enforce_trace_ledger_parity_if_required,
-    iter_ledger_events,
-    ledger_authoritative_enabled,
-    ledger_canary_enabled,
-    load_ledger,
-)
+from runtime.authority_policy import effective_runtime_event_source
+from runtime.event_ledger import enforce_trace_ledger_parity_if_required, iter_ledger_events, load_ledger
 from runtime.trace_pipeline import iter_trace_events, load_trace
 
 RuntimeEventSource = Literal["trace", "ledger"]
@@ -25,21 +19,7 @@ def resolve_runtime_event_source(
     source: RuntimeEventSource | str | None = None,
     default: RuntimeEventSource = "trace",
 ) -> RuntimeEventSource:
-    fallback: RuntimeEventSource = "ledger" if (ledger_authoritative_enabled() or ledger_canary_enabled()) else default
-
-    if source is not None:
-        normalized = str(source).strip().lower()
-        if normalized in ("trace", "ledger"):
-            return normalized  # type: ignore[return-value]
-        return fallback
-
-    env = os.getenv("RUNTIME_EVENT_SOURCE")
-    if env:
-        normalized = env.strip().lower()
-        if normalized in ("trace", "ledger"):
-            return normalized  # type: ignore[return-value]
-
-    return fallback
+    return effective_runtime_event_source(source=source, default=default)
 
 
 def _source_path(path_or_run: str | Path, source: RuntimeEventSource) -> Path:

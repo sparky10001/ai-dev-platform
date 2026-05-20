@@ -5,7 +5,8 @@ from pathlib import Path
 from typing import Any, Iterable, Literal
 import os
 
-from runtime.event_loader import load_runtime_events, resolve_runtime_event_source, runtime_event_source
+from runtime.authority_policy import effective_runtime_event_source
+from runtime.event_loader import load_runtime_events
 from runtime.loader import get_run_path, load_result, load_run
 from runtime.replay import ReplayState, load_replay_events, replay_events
 from runtime.schemas import EvalComparison, EvalSummary, TraceEvent
@@ -15,9 +16,7 @@ EvalSource = Literal["trace", "ledger"]
 
 def eval_source(default: EvalSource = "trace") -> EvalSource:
     raw = os.getenv("RUNTIME_EVAL_SOURCE")
-    if raw:
-        return resolve_runtime_event_source(raw, default=default)  # type: ignore[return-value]
-    return runtime_event_source(default=default)  # type: ignore[return-value]
+    return effective_runtime_event_source(source=raw, default=default)  # type: ignore[return-value]
 
 
 def _eval_path_for_source(run_path: Path, source: EvalSource) -> Path:

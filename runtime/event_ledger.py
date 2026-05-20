@@ -7,6 +7,11 @@ import os
 from pathlib import Path
 from typing import Any, Iterator
 
+from runtime.authority_policy import (
+    ledger_authoritative_enabled as authority_policy_ledger_authoritative_enabled,
+    ledger_canary_enabled as authority_policy_ledger_canary_enabled,
+    ledger_default_dry_run_enabled as authority_policy_ledger_default_dry_run_enabled,
+)
 from runtime.errors import EventLedgerError, NDJSONIntegrityError, TraceValidationError
 from runtime.validator import validate_event
 
@@ -15,15 +20,15 @@ LEDGER_INDEX_SCHEMA_VERSION = 1
 
 
 def ledger_authoritative_enabled() -> bool:
-    return os.getenv("RUNTIME_LEDGER_AUTHORITATIVE") == "1"
+    return authority_policy_ledger_authoritative_enabled()
 
 
 def ledger_default_dry_run_enabled() -> bool:
-    return os.getenv("RUNTIME_LEDGER_DRY_RUN_DEFAULT") == "1"
+    return authority_policy_ledger_default_dry_run_enabled()
 
 
 def ledger_canary_enabled() -> bool:
-    return os.getenv("RUNTIME_LEDGER_CANARY") == "1"
+    return authority_policy_ledger_canary_enabled()
 
 
 def ledger_canary_parity_required() -> bool:

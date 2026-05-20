@@ -10,7 +10,8 @@ from typing import Any, Iterable, Literal
 import os
 import re
 
-from runtime.event_loader import load_runtime_events, resolve_runtime_event_source, runtime_event_source
+from runtime.authority_policy import effective_runtime_event_source
+from runtime.event_loader import load_runtime_events
 from runtime.schemas import TraceEvent
 
 ReplaySource = Literal["trace", "ledger"]
@@ -40,9 +41,7 @@ class ReplayState:
 
 def replay_source(default: ReplaySource = "trace") -> ReplaySource:
     raw = os.getenv("RUNTIME_REPLAY_SOURCE")
-    if raw:
-        return resolve_runtime_event_source(raw, default=default)  # type: ignore[return-value]
-    return runtime_event_source(default=default)  # type: ignore[return-value]
+    return effective_runtime_event_source(source=raw, default=default)  # type: ignore[return-value]
 
 
 def _source_path_for_replay(path_or_run: str | Path, source: ReplaySource) -> Path:

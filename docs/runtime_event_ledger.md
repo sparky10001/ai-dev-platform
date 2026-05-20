@@ -730,6 +730,29 @@ This layer is observational-only:
 
 ---
 
+## Phase 3.9B Authority Policy Layer
+
+Runtime authority semantics are centralized in `runtime/authority_policy.py`.
+
+Canonical APIs:
+
+* `runtime_authority_mode()` -> `trace|canary|authoritative`
+* `effective_runtime_event_source(source=None, default="trace")`
+* `runtime_authority_policy()`
+* `runtime_authority_transition_state()`
+
+Rules are deterministic and unchanged:
+
+* trace-first remains default
+* canary remains explicit opt-in
+* authoritative remains explicit opt-in
+* authoritative overrides canary
+* explicit source override still wins
+
+No default authority cutover is performed in this phase.
+
+---
+
 # Future Cutover Direction
 
 Future cutover phases may:

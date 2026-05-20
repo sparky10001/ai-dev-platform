@@ -504,6 +504,18 @@ The matrix does not mutate runtime artifacts and does not perform authority cuto
 
 ---
 
+## Phase 3.9B Authority Policy Consolidation
+
+Authority/source resolution now flows through `runtime/authority_policy.py`.
+
+* `runtime/event_loader.py` delegates event source resolution to policy helpers.
+* replay/eval/registry source helpers delegate to the same policy semantics.
+* control-plane runtime-event bridge remains read-only and compatible via event loader.
+
+This is a behavior-preserving consolidation; no authority cutover is performed.
+
+---
+
 # Future Cutover Model
 
 The runtime currently operates in compatibility mode.

@@ -823,6 +823,25 @@ Suite:
 
 ---
 
+## runtime_authority_policy_tests.sh
+
+Validates:
+
+* default/canary/authoritative authority modes
+* authoritative precedence over canary
+* dry-run policy flag behavior
+* explicit source override and deterministic invalid-source fallback
+* transition/policy payload determinism
+* replay/eval/registry and control-plane bridge source consistency
+* no runtime mutation and no default cutover behavior
+
+Run:
+
+* `./scripts/tests/runtime_authority_policy_tests.sh`
+* `make runtime-authority-policy-tests`
+
+---
+
 # Running Tests
 
 Run all runtime suites individually:
@@ -863,6 +882,7 @@ Run all runtime suites individually:
 ./scripts/tests/runtime_event_loader_tests.sh
 ./scripts/tests/runtime_projection_purity_tests.sh
 ./scripts/tests/runtime_ledger_authority_matrix_tests.sh
+./scripts/tests/runtime_authority_policy_tests.sh
 ```
 
 Run the full runtime ladder:
@@ -916,6 +936,7 @@ make validate
 | canonical runtime event loader    | runtime_event_loader_tests.sh            |
 | runtime projection purity         | runtime_projection_purity_tests.sh       |
 | ledger authority readiness matrix | runtime_ledger_authority_matrix_tests.sh |
+| runtime authority policy          | runtime_authority_policy_tests.sh        |
 ---
 
 # CI Expectations
