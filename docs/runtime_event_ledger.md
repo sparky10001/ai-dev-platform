@@ -775,6 +775,16 @@ This phase is observational only and does not change runtime defaults or authori
 
 ---
 
+## Phase 3.9D Trace Deprecation Inventory
+
+`runtime/trace_deprecation_inventory.py` provides an informational-only inventory for remaining trace references.
+
+It classifies references into retained compatibility, operational dependencies, legacy runtime paths, and future deprecation/removal candidates.
+
+This inventory does not remove trace support, does not alter runtime authority, and does not change EventLedger behavior.
+
+---
+
 # Future Cutover Direction
 
 Future cutover phases may:

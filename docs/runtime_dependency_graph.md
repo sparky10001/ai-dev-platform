@@ -530,6 +530,20 @@ It does not mutate runtime artifacts and does not switch authority modes.
 
 ---
 
+## Phase 3.9D Trace Compatibility Inventory Layer
+
+`runtime/trace_deprecation_inventory.py` is a read-only governance layer that inventories trace references for planning.
+
+It complements:
+
+* trace compatibility blockers (`runtime/trace_compatibility.py`)
+* authority matrix governance
+* dual-authority validation window
+
+It does not change runtime dependency direction or runtime authority behavior.
+
+---
+
 # Future Cutover Model
 
 The runtime currently operates in compatibility mode.

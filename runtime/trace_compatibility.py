@@ -227,3 +227,17 @@ def validate_trace_cutover_readiness() -> None:
     if blockers:
         paths = ", ".join(item.get("path", "<unknown>") for item in blockers)
         raise RuntimeError(f"Trace cutover blockers detected: {paths}")
+
+
+def trace_deprecation_inventory_summary(root: str | Path = '.') -> dict[str, Any]:
+    # Lazy import avoids import cycles; this is informational only.
+    from runtime.trace_deprecation_inventory import build_trace_deprecation_inventory
+
+    inventory = build_trace_deprecation_inventory(root)
+    return {
+        'status': inventory.get('status', 'informational'),
+        'summary': dict(inventory.get('summary', {})),
+        'candidate_count': len(inventory.get('candidates', [])),
+        'retained_count': len(inventory.get('retained', [])),
+        'operational_count': len(inventory.get('operational', [])),
+    }

@@ -860,6 +860,24 @@ Run:
 
 ---
 
+## runtime_trace_deprecation_inventory_tests.sh
+
+Validates:
+
+* deterministic trace deprecation inventory generation
+* retained/operational/candidate classification paths
+* documentation/test/historical classification
+* informational strict behavior (no candidate-based failure)
+* CLI summary/json/candidates/retained/operational behavior
+* deterministic ordering and no runtime mutation
+
+Run:
+
+* `./scripts/tests/runtime_trace_deprecation_inventory_tests.sh`
+* `make runtime-trace-deprecation-inventory-tests`
+
+---
+
 # Running Tests
 
 Run all runtime suites individually:
@@ -902,6 +920,7 @@ Run all runtime suites individually:
 ./scripts/tests/runtime_ledger_authority_matrix_tests.sh
 ./scripts/tests/runtime_authority_policy_tests.sh
 ./scripts/tests/runtime_dual_authority_validation_tests.sh
+./scripts/tests/runtime_trace_deprecation_inventory_tests.sh
 ```
 
 Run the full runtime ladder:
@@ -920,43 +939,44 @@ make validate
 
 # Validation Coverage Matrix
 
-| Capability                        | Covered By                                 |
-| --------------------------------- | ------------------------------------------ |
-| response contracts                | runtime_tests.sh                           |
-| replay safety                     | replayability_smoke_test.sh                |
-| lifecycle ordering                | event_ordering_tests.sh                    |
-| crash durability                  | failure_tests.sh                           |
-| NDJSON integrity                  | ndjson_integrity_tests.sh                  |
-| replay reconstruction             | resume_from_trace_tests.sh                 |
-| loader correctness                | loader_replay_tests.sh                     |
-| evaluation correctness            | runtime_eval_tests.sh                      |
-| registry correctness              | runtime_registry_tests.sh                  |
-| dataset determinism               | runtime_dataset_tests.sh                   |
-| contract enforcement              | runtime_contract_tests.sh                  |
-| isolation guarantees              | parallel_run_isolation_test.sh             |
-| runtime snapshot stability        | runtime_snapshot_tests.sh                  |
-| adapter gateway boundary          | runtime_adapter_gateway_tests.sh           |
-| lifecycle orchestration boundary  | runtime_run_lifecycle_tests.sh             |
-| trace pipeline boundary           | runtime_trace_pipeline_tests.sh            |
-| event ledger boundary             | runtime_event_ledger_tests.sh              |
-| replay ledger boundary            | runtime_replay_ledger_tests.sh             |
-| eval ledger boundary              | runtime_eval_ledger_tests.sh               |
-| registry ledger boundary          | runtime_registry_ledger_tests.sh           |
-| ledger authoritative boundary     | runtime_ledger_authoritative_tests.sh      |  
-| ledger readiness boundary         | runtime_ledger_readiness_tests.sh          |
-| ledger/trace drift auditing       | runtime_ledger_drift_tests.sh              |
-| derived-system purity             | runtime_derived_purity_tests.sh            |
-| runtime boundary enforcement      | runtime_boundary_audit_tests.sh            |
-| ledger corruption detection       | runtime_ledger_corruption_tests.sh         |
-| ledger health observability       | runtime_ledger_health_tests.sh             |
-| trace compatibility auditing      | runtime_trace_compatibility_tests.sh       |
-| ledger-default dry-run readiness  | runtime_ledger_default_dry_run_tests.sh    |
-| ledger authoritative canary       | runtime_ledger_canary_tests.sh             |
-| canonical runtime event loader    | runtime_event_loader_tests.sh              |
-| runtime projection purity         | runtime_projection_purity_tests.sh         |
-| ledger authority readiness matrix | runtime_ledger_authority_matrix_tests.sh   |
-| runtime authority policy          | runtime_authority_policy_tests.sh          |
-| dual-authority validation window  | runtime_dual_authority_validation_tests.sh |
+| Capability                        | Covered By                                   |
+| --------------------------------- | -------------------------------------------- |
+| response contracts                | runtime_tests.sh                             |
+| replay safety                     | replayability_smoke_test.sh                  |
+| lifecycle ordering                | event_ordering_tests.sh                      |
+| crash durability                  | failure_tests.sh                             |
+| NDJSON integrity                  | ndjson_integrity_tests.sh                    |
+| replay reconstruction             | resume_from_trace_tests.sh                   |
+| loader correctness                | loader_replay_tests.sh                       |
+| evaluation correctness            | runtime_eval_tests.sh                        |
+| registry correctness              | runtime_registry_tests.sh                    |
+| dataset determinism               | runtime_dataset_tests.sh                     |
+| contract enforcement              | runtime_contract_tests.sh                    |
+| isolation guarantees              | parallel_run_isolation_test.sh               |
+| runtime snapshot stability        | runtime_snapshot_tests.sh                    |
+| adapter gateway boundary          | runtime_adapter_gateway_tests.sh             |
+| lifecycle orchestration boundary  | runtime_run_lifecycle_tests.sh               |
+| trace pipeline boundary           | runtime_trace_pipeline_tests.sh              |
+| event ledger boundary             | runtime_event_ledger_tests.sh                |
+| replay ledger boundary            | runtime_replay_ledger_tests.sh               |
+| eval ledger boundary              | runtime_eval_ledger_tests.sh                 |
+| registry ledger boundary          | runtime_registry_ledger_tests.sh             |
+| ledger authoritative boundary     | runtime_ledger_authoritative_tests.sh        |    
+| ledger readiness boundary         | runtime_ledger_readiness_tests.sh            |
+| ledger/trace drift auditing       | runtime_ledger_drift_tests.sh                |
+| derived-system purity             | runtime_derived_purity_tests.sh              |
+| runtime boundary enforcement      | runtime_boundary_audit_tests.sh              |
+| ledger corruption detection       | runtime_ledger_corruption_tests.sh           |
+| ledger health observability       | runtime_ledger_health_tests.sh               |
+| trace compatibility auditing      | runtime_trace_compatibility_tests.sh         |
+| ledger-default dry-run readiness  | runtime_ledger_default_dry_run_tests.sh      |
+| ledger authoritative canary       | runtime_ledger_canary_tests.sh               |
+| canonical runtime event loader    | runtime_event_loader_tests.sh                |
+| runtime projection purity         | runtime_projection_purity_tests.sh           |
+| ledger authority readiness matrix | runtime_ledger_authority_matrix_tests.sh     |
+| runtime authority policy          | runtime_authority_policy_tests.sh            |
+| dual-authority validation window  | runtime_dual_authority_validation_tests.sh   |
+| trace deprecation inventory       | runtime_trace_deprecation_inventory_tests.sh |
 ---
 
 # CI Expectations

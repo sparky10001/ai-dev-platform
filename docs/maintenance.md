@@ -371,6 +371,20 @@ Use this window during `canary` or `authoritative` operation to continuously val
 
 ---
 
+## Trace Deprecation Inventory
+
+Maintenance CLI:
+
+* `python3 scripts/maintenance/trace_deprecation_inventory.py --summary`
+* `python3 scripts/maintenance/trace_deprecation_inventory.py --json`
+* `python3 scripts/maintenance/trace_deprecation_inventory.py --candidates`
+* `python3 scripts/maintenance/trace_deprecation_inventory.py --retained`
+* `python3 scripts/maintenance/trace_deprecation_inventory.py --operational`
+
+This inventory is informational and planning-oriented only. It does not enforce deprecation and does not remove trace compatibility.
+
+---
+
 ## Recommended Operational Commands
 
 Current runtime health:
