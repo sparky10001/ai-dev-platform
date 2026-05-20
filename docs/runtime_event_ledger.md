@@ -801,6 +801,20 @@ It aggregates authority matrix, dual-authority validation, trace compatibility, 
 
 ---
 
+## Phase 3.9F Ledger Cutover Decision Gate
+
+`runtime/ledger_cutover_decision_gate.py` adds a governance-only operational decision gate.
+
+It evaluates readiness, validation, simulation, compatibility, deprecation inventory, and rollback confidence to produce:
+
+* `eligible`
+* `conditional`
+* `blocked`
+
+This gate is observational only: no cutover is performed, authority is not switched, trace emission remains preserved, and runtime artifacts are not mutated.
+
+---
+
 # Future Cutover Direction
 
 Future cutover phases may:

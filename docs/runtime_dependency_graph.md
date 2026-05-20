@@ -561,6 +561,20 @@ This keeps trace-first runtime behavior intact while enabling bounded cutover-ri
 
 ---
 
+## Phase 3.9F Decision Gate Layer
+
+`runtime/ledger_cutover_decision_gate.py` is a read-only governance aggregator that depends on:
+
+* `runtime/ledger_authority_matrix.py`
+* `runtime/dual_authority_validation.py`
+* `runtime/default_authority_simulation.py`
+* `runtime/trace_compatibility.py`
+* `runtime/trace_deprecation_inventory.py`
+
+It does not perform authority changes, does not mutate runtime artifacts, and preserves trace-first execution defaults.
+
+---
+
 # Future Cutover Model
 
 The runtime currently operates in compatibility mode.

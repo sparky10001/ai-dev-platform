@@ -896,6 +896,23 @@ Run:
 
 ---
 
+## runtime_ledger_cutover_decision_gate_tests.sh
+
+Validates:
+
+* eligible / conditional / blocked decision-gate semantics
+* deterministic blocker and condition ordering
+* governance propagation from matrix, dual validation, simulation, compatibility, and deprecation inventory
+* CLI json/strict behavior
+* no authority mutation and no runtime mutation
+
+Run:
+
+* `./scripts/tests/runtime_ledger_cutover_decision_gate_tests.sh`
+* `make runtime-ledger-cutover-decision-gate-tests`
+
+---
+
 # Running Tests
 
 Run all runtime suites individually:
@@ -940,6 +957,7 @@ Run all runtime suites individually:
 ./scripts/tests/runtime_dual_authority_validation_tests.sh
 ./scripts/tests/runtime_trace_deprecation_inventory_tests.sh
 ./scripts/tests/runtime_default_authority_simulation_tests.sh
+./scripts/tests/runtime_ledger_cutover_decision_gate_tests.sh
 ```
 
 Run the full runtime ladder:
@@ -997,6 +1015,7 @@ make validate
 | dual-authority validation window  | runtime_dual_authority_validation_tests.sh    |
 | trace deprecation inventory       | runtime_trace_deprecation_inventory_tests.sh  |
 | default authority simulation      | runtime_default_authority_simulation_tests.sh |
+| ledger cutover decision gate      | runtime_ledger_cutover_decision_gate_tests.sh |
 ---
 
 # CI Expectations

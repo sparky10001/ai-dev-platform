@@ -182,6 +182,191 @@ EventLedger provides:
 
 ---
 
+# Runtime Governance & Authority Model
+
+The runtime now includes a governance-oriented authority transition framework designed to support future ledger-authoritative operation without compromising replay safety or rollback guarantees.
+
+Governance systems are intentionally:
+
+* observational-first
+* deterministic
+* replay-safe
+* compatibility-preserving
+* rollback-oriented
+
+Governance systems must never:
+
+* implicitly switch runtime authority
+* mutate runtime history
+* disable trace emission
+* bypass replay validation
+* weaken compatibility guarantees
+
+---
+
+## Current Authority State
+
+Current operational behavior:
+
+* `trace.jsonl` remains the active runtime default
+* `ledger.jsonl` remains additive unless explicitly enabled
+* authoritative ledger mode remains opt-in
+* canary mode remains opt-in
+* explicit trace override behavior remains supported
+* rollback remains immediate and deterministic
+
+No default authority cutover has been performed.
+
+---
+
+## Governance Layers
+
+The governance stack is intentionally layered:
+
+```text
+authority_policy
+        ↓
+authority_matrix
+        ↓
+dual_authority_validation
+        ↓
+default_authority_simulation
+        ↓
+cutover_decision_gate
+```
+
+Responsibilities:
+
+| Layer                             | Responsibility                    |
+| --------------------------------- | --------------------------------- |
+| `authority_policy.py`             | canonical authority semantics     |
+| `ledger_authority_matrix.py`      | readiness aggregation             |
+| `dual_authority_validation.py`    | continuous parity validation      |
+| `default_authority_simulation.py` | simulated ledger-default analysis |
+| `ledger_cutover_decision_gate.py` | governance eligibility evaluation |
+
+---
+
+## Authority Modes
+
+Supported authority modes:
+
+| Mode            | Behavior                                |
+| --------------- | --------------------------------------- |
+| `trace`         | trace-first default runtime mode        |
+| `canary`        | ledger-backed compatibility validation  |
+| `authoritative` | explicit ledger-authoritative operation |
+
+Authority mode selection remains explicit and environment-controlled.
+
+The runtime never performs implicit authority transitions.
+
+---
+
+## Governance & Validation Systems
+
+Governance validation includes:
+
+* ledger readiness validation
+* parity validation
+* corruption detection
+* drift auditing
+* compatibility auditing
+* deprecation inventory analysis
+* rollback validation
+* control-plane compatibility auditing
+
+Core governance modules include:
+
+```text
+runtime/authority_policy.py
+runtime/ledger_authority_matrix.py
+runtime/dual_authority_validation.py
+runtime/default_authority_simulation.py
+runtime/ledger_cutover_decision_gate.py
+runtime/trace_deprecation_inventory.py
+```
+
+These systems are intentionally:
+
+* read-only
+* deterministic
+* replay-safe
+* compatibility-preserving
+* governance-oriented
+
+---
+
+## Simulation & Decision Layers
+
+The runtime supports simulation-only governance analysis.
+
+Simulation systems evaluate:
+
+```text
+"What would happen if ledger became the default authority?"
+```
+
+without:
+
+* changing runtime defaults
+* switching authority
+* mutating runtime artifacts
+* disabling trace compatibility
+
+Decision-gate systems evaluate:
+
+```text
+"Would future ledger-default cutover be operationally safe?"
+```
+
+without approving or performing cutover automatically.
+
+---
+
+## Rollback Guarantees
+
+Rollback safety is treated as a core runtime invariant.
+
+Governance systems must preserve:
+
+* immediate authority rollback
+* explicit trace override behavior
+* dual-source compatibility
+* replay-safe recovery
+* deterministic authority semantics
+
+Rollback remains environment-controlled and non-destructive.
+
+---
+
+## Governance Testing
+
+Governance-oriented validation is intentionally separated from the primary runtime correctness ladder.
+
+Primary runtime ladder:
+
+```bash
+make runtime-tests
+```
+
+Governance/runtime-readiness ladder:
+
+```bash
+make runtime-governance-tests
+```
+
+Governance suites aggregate broader operational state and may perform bounded historical scans, authority simulations, compatibility analysis, and cutover readiness evaluation.
+
+These suites are intentionally heavier and are typically run before:
+
+* release tagging
+* governance review
+* cutover planning
+* operational readiness evaluation
+
+---
+
 # Runtime Lifecycle
 
 Canonical lifecycle:

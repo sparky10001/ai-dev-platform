@@ -404,6 +404,24 @@ Semantics:
 
 ---
 
+## Ledger Cutover Decision Gate
+
+Maintenance CLI:
+
+* `python3 scripts/maintenance/ledger_cutover_decision_gate.py --latest`
+* `python3 scripts/maintenance/ledger_cutover_decision_gate.py --summary --recent 50`
+* `python3 scripts/maintenance/ledger_cutover_decision_gate.py --json`
+* `python3 scripts/maintenance/ledger_cutover_decision_gate.py --strict`
+
+Semantics:
+
+* governance-only eligibility classification (`eligible` / `conditional` / `blocked`)
+* decision-gate-only output (no authority switch)
+* complements authority matrix, dual validation, and default-authority simulation
+* rollback guarantees surfaced explicitly
+
+---
+
 ## Recommended Operational Commands
 
 Current runtime health:
