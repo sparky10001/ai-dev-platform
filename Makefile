@@ -295,7 +295,7 @@ runtime-boundary-audit:
 ledger-corruption-audit:
 	@python3 scripts/maintenance/ledger_corruption_audit.py --latest
 ledger-health-report:
-	@python3 scripts/maintenance/ledger_health_report.py --summary
+	@python3 scripts/maintenance/ledger_health_report.py --summary --recent 50
 trace-compatibility-audit:
 	@python3 scripts/maintenance/trace_compatibility_audit.py --summary
 ledger-default-dry-run:

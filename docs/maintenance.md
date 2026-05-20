@@ -52,7 +52,7 @@ make log-maintenance-tests
 Run ledger health summary:
 
 ```bash
-python3 scripts/maintenance/ledger_health_report.py --summary
+python3 scripts/maintenance/ledger_health_report.py --summary --recent 50
 ```
 
 Run ledger-default dry-run readiness summary:
@@ -211,7 +211,7 @@ python3 scripts/maintenance/ledger_health_report.py --latest
 ```
 
 ```bash
-python3 scripts/maintenance/ledger_health_report.py --summary
+python3 scripts/maintenance/ledger_health_report.py --summary --recent 50
 ```
 
 ```bash
@@ -343,6 +343,10 @@ Current runtime health:
 
 ```bash
 python3 scripts/maintenance/ledger_health_report.py --latest
+```
+
+```bash
+python3 scripts/maintenance/ledger_health_report.py --summary --recent 50
 ```
 
 Recent readiness snapshot:

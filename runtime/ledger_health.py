@@ -331,16 +331,33 @@ def ledger_health_report(run_or_path: str | Path) -> dict[str, Any]:
     return report
 
 
-def aggregate_ledger_health(runs_root: str | Path = "runs") -> dict[str, Any]:
+def recent_run_paths(runs_root: str | Path, limit: int | None = None) -> list[Path]:
     runs_dir = Path(runs_root)
     if not runs_dir.is_absolute():
         runs_dir = Path(__file__).resolve().parent.parent / runs_dir
 
     if not runs_dir.exists():
-        reports: list[dict[str, Any]] = []
-    else:
-        run_dirs = sorted([p for p in runs_dir.iterdir() if p.is_dir()], key=lambda p: p.name)
-        reports = [ledger_health_report(p) for p in run_dirs]
+        return []
+
+    run_dirs = [p for p in runs_dir.iterdir() if p.is_dir()]
+    run_dirs = sorted(run_dirs, key=lambda p: (-p.stat().st_mtime, p.name))
+
+    if limit is not None:
+        run_dirs = run_dirs[: max(0, limit)]
+
+    return run_dirs
+
+
+def aggregate_ledger_health(runs_root: str | Path = "runs", recent: int | None = None) -> dict[str, Any]:
+    runs_dir = Path(runs_root)
+    if not runs_dir.is_absolute():
+        runs_dir = Path(__file__).resolve().parent.parent / runs_dir
+
+    if recent is not None and recent < 0:
+        raise ValueError("recent must be >= 0")
+
+    run_dirs = recent_run_paths(runs_dir, limit=recent)
+    reports = [ledger_health_report(p) for p in run_dirs]
 
     summary_categories: dict[str, int] = {}
     for report in reports:

@@ -696,7 +696,8 @@ Expected result:
 
 ```text
 unit test pass / 0 failed
-```
+
+Operational recommendation: use `python3 scripts/maintenance/ledger_health_report.py --summary --recent 50` for bounded recent health visibility.```
 
 This suite validates Phase 3.7E operational observability for ledger health.
 

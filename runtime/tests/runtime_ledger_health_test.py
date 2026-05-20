@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
 import tempfile
@@ -226,6 +227,109 @@ class RuntimeLedgerHealthTests(unittest.TestCase):
             self.assertEqual(summary_proc.returncode, 0)
             payload = json.loads(summary_proc.stdout)
             self.assertIn("runs_scanned", payload)
+
+    def test_summary_recent_limits_scan_deterministically(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            runs_root = Path(td)
+            run_ids = ["run_recent_a", "run_recent_b", "run_recent_c"]
+            base = time.time() - 100
+            for idx, run_id in enumerate(run_ids):
+                run_dir = runs_root / run_id
+                run_dir.mkdir(parents=True, exist_ok=False)
+                self._write_dual(run_dir, run_id)
+                self._write_run_meta(run_dir, run_id)
+                ts = base + idx
+                os.utime(run_dir, (ts, ts))
+
+            proc = subprocess.run(
+                [
+                    "python3",
+                    "scripts/maintenance/ledger_health_report.py",
+                    "--summary",
+                    "--json",
+                    "--recent",
+                    "2",
+                    "--runs-root",
+                    str(runs_root),
+                ],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(proc.returncode, 0)
+            payload = json.loads(proc.stdout)
+            self.assertEqual(payload.get("runs_scanned"), 2)
+            ids = [item.get("run_id") for item in payload.get("reports", [])]
+            self.assertEqual(ids, ["run_recent_c", "run_recent_b"])
+
+    def test_summary_recent_zero_scans_zero_runs(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            runs_root = Path(td)
+            run_dir = runs_root / "run_zero"
+            run_dir.mkdir(parents=True, exist_ok=False)
+            self._write_dual(run_dir, "run_zero")
+            self._write_run_meta(run_dir, "run_zero")
+
+            proc = subprocess.run(
+                [
+                    "python3",
+                    "scripts/maintenance/ledger_health_report.py",
+                    "--summary",
+                    "--json",
+                    "--recent",
+                    "0",
+                    "--runs-root",
+                    str(runs_root),
+                ],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(proc.returncode, 0)
+            payload = json.loads(proc.stdout)
+            self.assertEqual(payload.get("runs_scanned"), 0)
+            self.assertEqual(payload.get("reports"), [])
+
+    def test_summary_recent_negative_rejected(self) -> None:
+        proc = subprocess.run(
+            [
+                "python3",
+                "scripts/maintenance/ledger_health_report.py",
+                "--summary",
+                "--recent",
+                "-1",
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(proc.returncode, 2)
+
+    def test_latest_unaffected_by_recent(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            runs_root = Path(td)
+            run_dir = runs_root / "run_latest_recent"
+            run_dir.mkdir(parents=True, exist_ok=False)
+            self._write_dual(run_dir, "run_latest_recent")
+            self._write_run_meta(run_dir, "run_latest_recent")
+
+            proc = subprocess.run(
+                [
+                    "python3",
+                    "scripts/maintenance/ledger_health_report.py",
+                    "--latest",
+                    "--recent",
+                    "0",
+                    "--runs-root",
+                    str(runs_root),
+                ],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(proc.returncode, 0)
+            self.assertIn("run_latest_recent", proc.stdout)
+
 
 
 if __name__ == "__main__":

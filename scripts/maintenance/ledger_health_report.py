@@ -46,6 +46,7 @@ def main() -> int:
     parser.add_argument("--json", action="store_true", help="Emit JSON output")
     parser.add_argument("--runs-root", default=str(RUNS_DIR), help="Runs root for --all/--summary/--latest")
     parser.add_argument("--strict", action="store_true", help="Exit 1 when unhealthy")
+    parser.add_argument("--recent", type=int, default=None, help="Limit --all/--summary scan to most recent N runs by mtime")
     args = parser.parse_args()
 
     mode_count = int(bool(args.run_or_path)) + int(args.latest) + int(args.all)
@@ -57,7 +58,10 @@ def main() -> int:
 
     try:
         if args.summary or args.all:
-            payload = aggregate_ledger_health(runs_root)
+            recent = args.recent
+            if recent is not None and recent < 0:
+                raise ValueError("--recent must be >= 0")
+            payload = aggregate_ledger_health(runs_root, recent=recent)
             unhealthy = payload.get("status") == "unhealthy"
             if args.json:
                 print(json.dumps(payload, sort_keys=True))

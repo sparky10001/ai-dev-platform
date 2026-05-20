@@ -502,7 +502,7 @@ Health status semantics:
 CLI usage:
 
 * `python3 scripts/maintenance/ledger_health_report.py --latest`
-* `python3 scripts/maintenance/ledger_health_report.py --summary`
+* `python3 scripts/maintenance/ledger_health_report.py --summary --recent 50`
 * `python3 scripts/maintenance/ledger_health_report.py --latest --json`
 * `python3 scripts/maintenance/ledger_health_report.py --latest --strict`
 
