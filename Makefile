@@ -18,7 +18,7 @@
         profile-fast profile-agent profile-offline profile-local profile \
         litellm-fast litellm-code litellm-claude \
         health status validate \
-        runtime-tests runtime-test-core runtime-test-phase3 runtime-test-all runtime-snapshot-tests runtime-adapter-gateway-tests runtime-run-lifecycle-tests runtime-trace-pipeline-tests runtime-replay-ledger-tests runtime-eval-ledger-tests runtime-registry-ledger-tests runtime-ledger-authoritative-tests runtime-ledger-readiness-tests runtime-ledger-drift-tests runtime-derived-purity-tests runtime-boundary-audit-tests runtime-ledger-corruption-tests runtime-ledger-health-tests runtime-trace-compatibility-tests runtime-ledger-default-dry-run-tests runtime-ledger-canary-tests runtime-ledger-authority-matrix-tests runtime-authority-policy-tests runtime-event-loader-tests runtime-projection-purity-tests runtime-scenario-runner-tests mock-adapter-tool-tests log-maintenance-tests log-maintenance log-maintenance-dry-run ledger-drift-audit derived-purity-audit runtime-boundary-audit ledger-corruption-audit ledger-health-report trace-compatibility-audit ledger-default-dry-run ledger-canary ledger-canary-summary ledger-canary-env \
+        runtime-tests runtime-test-core runtime-test-phase3 runtime-test-all runtime-snapshot-tests runtime-adapter-gateway-tests runtime-run-lifecycle-tests runtime-trace-pipeline-tests runtime-replay-ledger-tests runtime-eval-ledger-tests runtime-registry-ledger-tests runtime-ledger-authoritative-tests runtime-ledger-readiness-tests runtime-ledger-drift-tests runtime-derived-purity-tests runtime-boundary-audit-tests runtime-ledger-corruption-tests runtime-ledger-health-tests runtime-trace-compatibility-tests runtime-ledger-default-dry-run-tests runtime-ledger-canary-tests runtime-ledger-authority-matrix-tests runtime-authority-policy-tests runtime-dual-authority-validation-tests runtime-event-loader-tests runtime-projection-purity-tests runtime-scenario-runner-tests mock-adapter-tool-tests log-maintenance-tests log-maintenance log-maintenance-dry-run ledger-drift-audit derived-purity-audit runtime-boundary-audit ledger-corruption-audit ledger-health-report trace-compatibility-audit ledger-default-dry-run ledger-canary ledger-canary-summary ledger-canary-env \
         control-plane-dag-tests control-plane-tool-tests control-plane-executor-tests control-plane-trace-tests control-plane-runtime-event-bridge-tests control-plane-planner-tests control-plane-orchestrator-tests control-plane-cli-tests control-plane-policy-tests control-plane-scenario-tests control-plane-replay-tests control-plane-eval-tests control-plane-experiment-tests control-plane-benchmark-tests control-plane-strategy-tests control-plane-heuristic-tests control-plane-memory-tests control-plane-tests \
         ai-run ai-fix ai-explain ai-refactor ai-query \
         ctx-agent-sim ctx-arb ctx-ai-stack \
@@ -276,6 +276,8 @@ runtime-ledger-authority-matrix-tests:
 	@./scripts/tests/runtime_ledger_authority_matrix_tests.sh
 runtime-authority-policy-tests:
 	@./scripts/tests/runtime_authority_policy_tests.sh
+runtime-dual-authority-validation-tests:
+	@./scripts/tests/runtime_dual_authority_validation_tests.sh
 runtime-event-loader-tests:
 	@./scripts/tests/runtime_event_loader_tests.sh
 runtime-projection-purity-tests:
@@ -312,6 +314,8 @@ ledger-canary-env:
 	@python3 scripts/maintenance/ledger_canary.py --print-env
 ledger-authority-matrix:
 	@python3 scripts/maintenance/ledger_authority_matrix.py --summary --recent 50
+dual-authority-validation:
+	@python3 scripts/maintenance/dual_authority_validation.py --summary --recent 50
 
 
 runtime-test-phase3:
@@ -341,6 +345,7 @@ runtime-test-phase3:
 	@$(MAKE) runtime-ledger-canary-tests --no-print-directory
 	@$(MAKE) runtime-ledger-authority-matrix-tests --no-print-directory
 	@$(MAKE) runtime-authority-policy-tests --no-print-directory
+	@$(MAKE) runtime-dual-authority-validation-tests --no-print-directory
 	@$(MAKE) runtime-event-loader-tests --no-print-directory
 	@$(MAKE) runtime-projection-purity-tests --no-print-directory
 	@$(MAKE) runtime-adapter-gateway-tests --no-print-directory

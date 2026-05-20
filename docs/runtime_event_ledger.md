@@ -753,6 +753,28 @@ No default authority cutover is performed in this phase.
 
 ---
 
+## Phase 3.9C Dual-Authority Validation Window
+
+`runtime/dual_authority_validation.py` adds a deterministic, read-only validation window for ledger-backed authority modes.
+
+It aggregates:
+
+* drift state
+* corruption state
+* replay/eval/registry parity state
+* compatibility blockers
+* rollback readiness
+* authority transition state
+
+Activation semantics:
+
+* active only when authority mode is `canary` or `authoritative`
+* available but inactive in `trace` mode
+
+This phase is observational only and does not change runtime defaults or authority behavior.
+
+---
+
 # Future Cutover Direction
 
 Future cutover phases may:

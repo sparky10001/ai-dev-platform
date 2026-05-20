@@ -516,6 +516,20 @@ This is a behavior-preserving consolidation; no authority cutover is performed.
 
 ---
 
+## Phase 3.9C Dual-Authority Validation Layer
+
+`runtime/dual_authority_validation.py` is a read-side governance layer built on:
+
+* `runtime/authority_policy.py`
+* `runtime/ledger_drift.py`
+* `runtime/ledger_corruption.py`
+* `runtime/ledger_health.py`
+* `runtime/trace_compatibility.py`
+
+It does not mutate runtime artifacts and does not switch authority modes.
+
+---
+
 # Future Cutover Model
 
 The runtime currently operates in compatibility mode.

@@ -359,6 +359,18 @@ Rollback is explicit and deterministic via env unsets.
 
 ---
 
+## Dual-Authority Validation
+
+Maintenance CLI:
+
+* `python3 scripts/maintenance/dual_authority_validation.py --latest`
+* `python3 scripts/maintenance/dual_authority_validation.py --summary --recent 50`
+* `python3 scripts/maintenance/dual_authority_validation.py --strict`
+
+Use this window during `canary` or `authoritative` operation to continuously validate parity/drift/corruption safety without changing runtime authority.
+
+---
+
 ## Recommended Operational Commands
 
 Current runtime health:
