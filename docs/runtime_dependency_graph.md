@@ -544,6 +544,23 @@ It does not change runtime dependency direction or runtime authority behavior.
 
 ---
 
+## Phase 3.9E Default Authority Simulation Layer
+
+`runtime/default_authority_simulation.py` is a read-only governance consumer.
+
+Dependency intent:
+
+* consumes `runtime/ledger_authority_matrix.py`
+* consumes `runtime/dual_authority_validation.py`
+* consumes `runtime/trace_compatibility.py`
+* consumes `runtime/trace_deprecation_inventory.py`
+* does not import runtime execution modules
+* does not mutate artifacts or switch authority
+
+This keeps trace-first runtime behavior intact while enabling bounded cutover-risk simulation.
+
+---
+
 # Future Cutover Model
 
 The runtime currently operates in compatibility mode.

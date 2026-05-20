@@ -385,6 +385,25 @@ This inventory is informational and planning-oriented only. It does not enforce 
 
 ---
 
+## Default Authority Simulation
+
+Maintenance CLI:
+
+* `python3 scripts/maintenance/default_authority_simulation.py --latest`
+* `python3 scripts/maintenance/default_authority_simulation.py --summary --recent 50`
+* `python3 scripts/maintenance/default_authority_simulation.py --json`
+* `python3 scripts/maintenance/default_authority_simulation.py --strict`
+
+Semantics:
+
+* simulation-only (`simulated_default=ledger`)
+* no cutover performed (`actual_default=trace` remains)
+* rollback capability is surfaced explicitly
+* complements authority matrix, dual-authority validation, and trace deprecation inventory
+* no runtime mutation or trace removal
+
+---
+
 ## Recommended Operational Commands
 
 Current runtime health:

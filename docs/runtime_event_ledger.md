@@ -785,6 +785,22 @@ This inventory does not remove trace support, does not alter runtime authority, 
 
 ---
 
+## Phase 3.9E Default Authority Simulation
+
+`runtime/default_authority_simulation.py` adds an observational simulation layer for "what if ledger were the global default authority now?"
+
+It is simulation-only and deterministic:
+
+* actual default remains `trace`
+* simulated default is reported as `ledger`
+* no authority switch is performed
+* trace emission remains preserved
+* rollback semantics are carried through unchanged
+
+It aggregates authority matrix, dual-authority validation, trace compatibility, and trace deprecation inventory for governance planning without runtime mutation.
+
+---
+
 # Future Cutover Direction
 
 Future cutover phases may:
