@@ -702,6 +702,34 @@ Compatibility guarantees remain unchanged:
 
 ---
 
+# Phase 3.9A Ledger Authority Readiness Matrix
+
+Ledger default-authority governance is now formalized via:
+
+* `runtime/ledger_authority_matrix.py`
+* `scripts/maintenance/ledger_authority_matrix.py`
+
+Matrix goals:
+
+* deterministic readiness assessment
+* explicit cutover blockers
+* structured warnings/recommendations
+* rollback guarantee visibility
+
+Operational usage:
+
+* `python3 scripts/maintenance/ledger_authority_matrix.py --latest`
+* `python3 scripts/maintenance/ledger_authority_matrix.py --summary --recent 50`
+
+This layer is observational-only:
+
+* no runtime default changes
+* no authority auto-switching
+* no trace removal
+* no schema changes
+
+---
+
 # Future Cutover Direction
 
 Future cutover phases may:

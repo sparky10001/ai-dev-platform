@@ -337,6 +337,28 @@ Canary mode preserves:
 
 ---
 
+# Ledger Authority Matrix
+
+Use the authority matrix to evaluate ledger-default cutover readiness without changing runtime behavior.
+
+Commands:
+
+```bash
+python3 scripts/maintenance/ledger_authority_matrix.py --latest
+python3 scripts/maintenance/ledger_authority_matrix.py --summary --recent 50
+python3 scripts/maintenance/ledger_authority_matrix.py --latest --strict
+```
+
+Interpretation:
+
+* `ready`: safe for authoritative testing (not automatic cutover)
+* `warning`: remain trace-first, prefer canary validation
+* `blocked`: explicit cutover blockers present
+
+Rollback is explicit and deterministic via env unsets.
+
+---
+
 ## Recommended Operational Commands
 
 Current runtime health:

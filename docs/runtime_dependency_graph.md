@@ -487,6 +487,23 @@ The decoupling is behavior-preserving and does not change runtime schemas or CLI
 
 ---
 
+# Phase 3.9A Governance Layer
+
+A read-only governance layer now composes existing audits/readiness systems into a canonical authority matrix.
+
+`runtime/ledger_authority_matrix.py` aggregates:
+
+* drift, corruption, health, compatibility
+* boundary and purity audits
+* canary and dry-run readiness
+* replay/eval/registry readiness
+* control-plane compatibility
+* rollback capability
+
+The matrix does not mutate runtime artifacts and does not perform authority cutover.
+
+---
+
 # Future Cutover Model
 
 The runtime currently operates in compatibility mode.
